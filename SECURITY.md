@@ -14,7 +14,7 @@ The following table lists the versions of ASynX that currently receive security 
 We take the security of ASynX seriously. If you discover a security vulnerability or potential token exposure, please report it responsibly instead of opening a public GitHub issue.
 
 ### How to Submit a Vulnerability Report
-1. Email your report directly to **`jhayarcayabyab@gmail.com`** or open a private security advisory under GitHub's **Security** tab.
+1. Email your report directly to **`f30@outlook.ie`** or open a private security advisory under GitHub's **Security** tab.
 2. Provide a detailed description of the vulnerability, reproduction steps, and potential impact.
 3. Attach proof-of-concept (PoC) code or logs if applicable without exploiting the issue on external servers.
 
