@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  asynx:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      # Mount your SSL certificates here (Uncomment and map to enable strict TLS)
+      # - ./certs:/app/certs:ro
+    environment:
+      - NODE_ENV=production
+      - DATA_DIR=/app/data
+      
+      # Bind to 0.0.0.0 to allow external connections, or 127.0.0.1 for local only
+      - HOST=0.0.0.0
+      - PORT=3000
+      
+      # Define your custom API Key here so only your clients can sync
+      - REMOTE_SYNC_API_KEY=your_secure_api_key_123
+      
+      # --- SECURE NATIVE TLS / HTTPS CONFIGURATION ---
+      # To secure internet traffic, provide the paths to your mapped certificates
+      # - SSL_KEY_PATH=/app/certs/privkey.pem
+      # - SSL_CERT_PATH=/app/certs/fullchain.pem
+      
+      # - GEMINI_API_KEY=your_key_here
+    restart: unless-stopped

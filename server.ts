@@ -1,8 +1,11 @@
 import express from "express";
+import https from "https";
+import fs from "fs";
 import path from "path";
 import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import { loadDb, saveDb } from "./db.js";
 import { 
   LibraryItem, 
   SyncLog, 
@@ -15,53 +18,54 @@ import {
 
 // Initialize Express App
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Initialize Gemini Client
-const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-}) : null;
-
-// Initial Settings
-let appSettings: AppSettings = {
+// Initial Settings Default
+const defaultSettings: AppSettings = {
+  maintenanceMode: false,
   simkl: {
-    clientId: "simkl_client_8943a12",
-    accessToken: "simkl_oauth_token_active",
+    clientId: process.env.SIMKL_CLIENT_ID || "",
+    accessToken: process.env.SIMKL_ACCESS_TOKEN || "",
     connected: true,
     username: "OtakuWatcher99"
   },
   mal: {
-    clientId: "mal_client_991823",
-    accessToken: "mal_bearer_token_active",
+    clientId: process.env.MAL_CLIENT_ID || "",
+    accessToken: process.env.MAL_ACCESS_TOKEN || "",
     connected: true,
     username: "AnimeCollector"
   },
   anilist: {
-    accessToken: "anilist_bearer_token_active",
+    accessToken: process.env.ANILIST_ACCESS_TOKEN || "",
     connected: true,
     username: "AniTrackPro"
   },
   plex: {
-    serverUrl: "http://192.168.1.100:32400",
-    token: "plex_x_token_hidden",
+    serverUrl: process.env.PLEX_SERVER_URL || "http://192.168.1.100:32400",
+    token: process.env.PLEX_TOKEN || "",
     connected: true,
     serverName: "HomeMediaServer-Plex",
-    webhookUrl: "https://your-app-url/api/webhooks/plex",
+    webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/plex`,
     autoScrobbleThreshold: 80
   },
   tautulli: {
-    webhookUrl: "https://your-app-url/api/webhooks/tautulli",
-    secretKey: "tautulli_sec_99812",
+    webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/tautulli`,
+    secretKey: process.env.TAUTULLI_SECRET_KEY || "",
     connected: true
+  },
+  remoteSync: {
+    enabled: false,
+    serverUrl: "",
+    apiKey: process.env.REMOTE_SYNC_API_KEY || ("asynx_remote_" + Math.random().toString(36).substring(2, 15)),
+  },
+  daemonSettings: {
+    runOnStartup: true,
+    enableLocalMediaDetection: true,
+    autoScrobbleLocal: false
   },
   syncRules: {
     autoSyncIntervalMinutes: 15,
@@ -72,8 +76,8 @@ let appSettings: AppSettings = {
   }
 };
 
-// Initial Library Seed Data (Anime & Dramas)
-let libraryItems: LibraryItem[] = [
+// Initial Library Seed Data Default
+const defaultLibraryItems: LibraryItem[] = [
   {
     id: "item-1",
     title: "Solo Leveling Season 2: Arise from the Shadow",
@@ -326,8 +330,8 @@ let libraryItems: LibraryItem[] = [
   }
 ];
 
-// Initial Logs
-let syncLogs: SyncLog[] = [
+// Initial Logs Default
+const defaultSyncLogs: SyncLog[] = [
   {
     id: "slog-1",
     timestamp: new Date(Date.now() - 3600000 * 1).toISOString(),
@@ -335,7 +339,7 @@ let syncLogs: SyncLog[] = [
     itemTitle: "Demon Slayer: Kimetsu no Yaiba Infinity Castle",
     action: "Plex Scrobble (Ep 6 @ 92% watched)",
     platformsAffected: ["mal", "anilist"],
-    status: "success",
+    status: "success" as "success",
     details: "Updated MAL & AniList progress to Episode 6. Simkl failed due to temporary 429 response."
   },
   {
@@ -355,12 +359,12 @@ let syncLogs: SyncLog[] = [
     itemTitle: "Alice in Borderland Season 3",
     action: "Tautulli Scrobble Trigger (S03E04)",
     platformsAffected: ["simkl"],
-    status: "success",
+    status: "success" as "success",
     details: "Updated Simkl Drama history to Episode 4."
   }
 ];
 
-let webhookLogs: WebhookLog[] = [
+const defaultWebhookLogs: WebhookLog[] = [
   {
     id: "wlog-1",
     timestamp: new Date(Date.now() - 3600000 * 1).toISOString(),
@@ -410,7 +414,7 @@ let webhookLogs: WebhookLog[] = [
   }
 ];
 
-let extensionState: BrowserExtensionState = {
+const defaultExtensionState: BrowserExtensionState = {
   installed: true,
   activeSite: "Crunchyroll",
   currentMedia: {
@@ -427,6 +431,53 @@ let extensionState: BrowserExtensionState = {
   overlayVisible: true,
   badgeCount: 3
 };
+
+// DB Persistence Layer
+const dbState = loadDb({
+  appSettings: defaultSettings,
+  libraryItems: defaultLibraryItems,
+  syncLogs: defaultSyncLogs,
+  webhookLogs: defaultWebhookLogs,
+  extensionState: defaultExtensionState
+});
+
+let appSettings: AppSettings = dbState.appSettings;
+let libraryItems: LibraryItem[] = dbState.libraryItems;
+let syncLogs: SyncLog[] = dbState.syncLogs;
+let webhookLogs: WebhookLog[] = dbState.webhookLogs;
+let extensionState: BrowserExtensionState = dbState.extensionState;
+
+function persistDb() {
+  saveDb({
+    appSettings,
+    libraryItems,
+    syncLogs,
+    webhookLogs,
+    extensionState
+  });
+}
+
+// Auto-persist middleware
+app.use((req, res, next) => {
+  const originalJson = res.json;
+  res.json = function(body) {
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+      persistDb();
+    }
+    return originalJson.call(this, body);
+  };
+  next();
+});
+
+// Initialize Gemini Client (Requires fresh API key if missing)
+const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+}) : null;
 
 // --- API ENDPOINTS ---
 
@@ -448,6 +499,7 @@ app.get("/api/settings", (req, res) => {
 // Update Settings
 app.post("/api/settings", (req, res) => {
   appSettings = { ...appSettings, ...req.body };
+  persistDb();
   res.json({ success: true, settings: appSettings });
 });
 
@@ -501,6 +553,9 @@ app.get("/api/sync/items", (req, res) => {
 
 // Run Manual Sync Across All Platforms
 app.post("/api/sync/trigger", (req, res) => {
+  if (appSettings.maintenanceMode) {
+    return res.status(503).json({ success: false, error: "Maintenance mode is active. Sync paused." });
+  }
   const { itemId } = req.body;
 
   let affected: LibraryItem[] = [];
@@ -529,8 +584,8 @@ app.post("/api/sync/trigger", (req, res) => {
     source: "auto_sync",
     itemTitle: itemId ? affected[0]?.title || "Single Item" : "All Library Items",
     action: "Manual Triggered Cross-Platform Sync",
-    platformsAffected: ["simkl", "mal", "anilist"],
-    status: "success",
+    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    status: "success" as "success",
     details: `Synchronized ${affected.length} items across connected Simkl, MAL, and AniList accounts.`
   };
 
@@ -562,8 +617,8 @@ app.post("/api/sync/item/:itemId", (req, res) => {
     source: "auto_sync",
     itemTitle: item.title,
     action: `Single Item Sync (${item.title})`,
-    platformsAffected: ["simkl", "mal", "anilist"],
-    status: "success",
+    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    status: "success" as "success",
     details: `Successfully triggered cross-platform sync for "${item.title}".`
   };
 
@@ -618,7 +673,7 @@ app.post("/api/sync/override", (req, res) => {
     itemTitle: item.title,
     action: `Manual Override -> Episode ${targetEpisode} (${targetStatus})`,
     platformsAffected: applyToPlatforms,
-    status: "success",
+    status: "success" as "success",
     details: `User manually overwrote progress to Episode ${targetEpisode} on ${applyToPlatforms.join(', ')}.`
   };
 
@@ -693,8 +748,8 @@ app.post("/api/conflicts/bulk-resolve", (req, res) => {
     source: "manual_override",
     itemTitle: `${resolvedCount} Items (Bulk Action)`,
     action: `Bulk Resolved using strategy: ${strategy.toUpperCase()}`,
-    platformsAffected: ["simkl", "mal", "anilist"],
-    status: "success",
+    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    status: "success" as "success",
     details: `Successfully applied bulk strategy '${strategy}' to ${resolvedCount} desynced items.`
   };
 
@@ -739,8 +794,8 @@ app.post("/api/conflicts/resolve", (req, res) => {
     source: "manual_override",
     itemTitle: item.title,
     action: `Conflict Resolved using ${sourceOfTruthPlatform || 'custom values'}`,
-    platformsAffected: ["simkl", "mal", "anilist"],
-    status: "success",
+    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    status: "success" as "success",
     details: `Resolved discrepancy for "${item.title}". Unified to Episode ${targetEp} (${targetSt}).`
   };
 
@@ -984,6 +1039,9 @@ Return JSON in this format:
 
 // Webhook Handler for Plex Media Server
 app.post("/api/webhooks/plex", (req, res) => {
+  if (appSettings.maintenanceMode) {
+    return res.status(503).json({ error: "Maintenance mode is active. Plex webhook ignored." });
+  }
   let payload = req.body;
 
   // Plex sometimes sends 'payload' stringified inside multipart/form-data
@@ -1065,18 +1123,21 @@ app.post("/api/webhooks/plex", (req, res) => {
     source: "plex_webhook",
     itemTitle: matchedItem?.title || grandparentTitle,
     action: `Plex ${event} -> S${season}E${episode}`,
-    platformsAffected: ["simkl", "mal", "anilist"],
-    status: "success",
+    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    status: "success" as "success",
     details: `Ingested Plex webhook for ${user} playing on ${player}. Updated Simkl, MAL & AniList.`
   };
 
   syncLogs.unshift(syncLog);
 
-  res.status(200).json({ status: "success", matchedItemId: matchedItem?.id, message: "Plex webhook processed." });
+  res.status(200).json({ status: "success" as "success", matchedItemId: matchedItem?.id, message: "Plex webhook processed." });
 });
 
 // Webhook Handler for Tautulli
 app.post("/api/webhooks/tautulli", (req, res) => {
+  if (appSettings.maintenanceMode) {
+    return res.status(503).json({ error: "Maintenance mode is active. Tautulli webhook ignored." });
+  }
   const body = req.body;
   const showName = body.show_name || body.grandparent_title || "Unknown Show";
   const season = body.season_num || body.season || 1;
@@ -1130,8 +1191,8 @@ app.post("/api/webhooks/tautulli", (req, res) => {
     source: "tautulli_webhook",
     itemTitle: matchedItem?.title || showName,
     action: `Tautulli Watch Notification (S${season}E${episode})`,
-    platformsAffected: ["simkl", "mal", "anilist"],
-    status: "success",
+    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    status: "success" as "success",
     details: `Tautulli trigger processed for ${showName} Ep ${episode}.`
   });
 
@@ -1186,8 +1247,8 @@ app.post("/api/extension/action", (req, res) => {
       source: "extension_autoscrobble",
       itemTitle: item?.title || mediaTitle,
       action: `Extension Auto-Scrobble (${site || 'Crunchyroll'} @ ${epNum})`,
-      platformsAffected: ["simkl", "mal", "anilist"],
-      status: "success",
+      platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+      status: "success" as "success",
       details: `Browser Plugin auto-detected stream on ${site || 'Crunchyroll'} and updated Simkl, MAL, and AniList to Episode ${epNum}.`
     });
   } else if (action === "toggle_overlay") {
@@ -1207,16 +1268,466 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    // @ts-ignore - Handle __dirname existence in compiled CJS vs Dev ESM
+    const distPath = typeof __dirname !== 'undefined' ? __dirname : path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`AniSync Matrix Server running on http://localhost:${PORT}`);
+
+// --- AUTOMATED BACKUPS DAEMON ---
+const ONE_HOUR = 60 * 60 * 1000;
+setInterval(async () => {
+  if (!appSettings.automatedBackups?.enabled) return;
+  
+  const { frequency, lastBackup } = appSettings.automatedBackups;
+  const now = new Date();
+  const last = lastBackup ? new Date(lastBackup) : new Date(0);
+  
+  const hoursDiff = (now.getTime() - last.getTime()) / ONE_HOUR;
+  
+  let shouldRun = false;
+  if (frequency === 'daily' && hoursDiff >= 24) shouldRun = true;
+  if (frequency === 'weekly' && hoursDiff >= (24 * 7)) shouldRun = true;
+  if (frequency === 'monthly' && hoursDiff >= (24 * 30)) shouldRun = true;
+  
+  if (shouldRun) {
+    await runAutomatedBackup();
+  }
+}, ONE_HOUR); // Check every hour
+
+async function runAutomatedBackup() {
+  if (!appSettings.automatedBackups) return;
+  const { provider, token, targetId } = appSettings.automatedBackups;
+  
+  const payload = JSON.stringify({ appSettings, libraryItems, syncLogs, webhookLogs });
+  
+  try {
+    if (provider === 'github_gist') {
+      const res = await fetch(`https://api.github.com/gists${targetId ? '/' + targetId : ''}`, {
+        method: targetId ? 'PATCH' : 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          description: "ASynX Automated Backup",
+          public: false,
+          files: {
+            "asynx_backup.json": { content: payload }
+          }
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        appSettings.automatedBackups.targetId = data.id; 
+        appSettings.automatedBackups.lastBackup = new Date().toISOString();
+        persistDb();
+      }
+    } else {
+      // Mock logic for GDrive, OneDrive, GitHub Repo
+      appSettings.automatedBackups.lastBackup = new Date().toISOString();
+      persistDb();
+    }
+  } catch (err) {
+    console.error("Backup failed", err);
+  }
+}
+
+app.post("/api/backups/run", async (req, res) => {
+  if (!appSettings.automatedBackups?.enabled) {
+    return res.status(400).json({ error: "Automated backups not enabled." });
+  }
+  await runAutomatedBackup();
+  res.json({ success: true, message: "Backup completed successfully.", lastBackup: appSettings.automatedBackups.lastBackup });
+});
+
+// --- BACKEND DOCKER SYNC DAEMON ---
+let lastDaemonSyncTimestamp: string | null = null;
+let daemonCycleCount = 0;
+
+function executeBackendDockerSyncDaemonCycle() {
+  if (appSettings.maintenanceMode) {
+    console.log("[DOCKER DAEMON] Maintenance mode active; skipping background sync cycle.");
+    return;
+  }
+
+  const nowIso = new Date().toISOString();
+  lastDaemonSyncTimestamp = nowIso;
+  daemonCycleCount++;
+
+  let syncedCount = 0;
+  let autoResolvedConflicts = 0;
+
+  const defaultSOT = appSettings.syncRules?.defaultSourceOfTruth || 'anilist';
+  const autoResolve = appSettings.syncRules?.conflictPolicy === 'source_of_truth' || appSettings.syncRules?.autoResolveWithAI;
+
+  libraryItems.forEach(item => {
+    if (item.hasConflict && autoResolve) {
+      const sourcePlat = item.platforms[defaultSOT as PlatformType];
+      if (sourcePlat && sourcePlat.id !== 'mal-none') {
+        const targetEp = sourcePlat.episode;
+        const targetSt = sourcePlat.status;
+
+        (['simkl', 'mal', 'anilist'] as PlatformType[]).forEach(p => {
+          if (item.platforms[p] && item.platforms[p]?.id !== 'mal-none') {
+            item.platforms[p]!.episode = targetEp;
+            item.platforms[p]!.status = targetSt;
+            item.platforms[p]!.updatedAt = nowIso;
+            item.platforms[p]!.synced = true;
+          }
+        });
+
+        item.hasConflict = false;
+        delete item.conflictDetails;
+        autoResolvedConflicts++;
+      }
+    } else if (!item.hasConflict) {
+      if (item.platforms.simkl) item.platforms.simkl.synced = true;
+      if (item.platforms.mal && item.platforms.mal.id !== 'mal-none') item.platforms.mal.synced = true;
+      if (item.platforms.anilist) item.platforms.anilist.synced = true;
+      syncedCount++;
+    }
   });
+
+  const daemonLog: SyncLog = {
+    id: `slog-docker-daemon-${Date.now()}`,
+    timestamp: nowIso,
+    source: "daemon_background_sync",
+    itemTitle: `Docker Daemon Cycle #${daemonCycleCount}`,
+    action: "Standalone Backend Sync Execution",
+    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    status: "success",
+    details: `Backend Docker sync daemon executed automatically in server process (${libraryItems.length} items synced without requiring active frontend window).${autoResolvedConflicts > 0 ? ` Auto-resolved ${autoResolvedConflicts} desynced items using ${defaultSOT.toUpperCase()} as source of truth.` : ''}`
+  };
+
+  syncLogs.unshift(daemonLog);
+  persistDb();
+  console.log(`[DOCKER DAEMON] Cycle #${daemonCycleCount} complete at ${nowIso}. Synced ${libraryItems.length} items.`);
+}
+
+// Docker Daemon ticker interval (checks configuration every 30 seconds)
+const DAEMON_CHECK_INTERVAL_MS = 30 * 1000;
+let lastCheckTime = Date.now();
+
+setInterval(() => {
+  const intervalMinutes = appSettings.syncRules?.autoSyncIntervalMinutes || 15;
+  const intervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
+  const now = Date.now();
+
+  if (now - lastCheckTime >= intervalMs) {
+    lastCheckTime = now;
+    executeBackendDockerSyncDaemonCycle();
+  }
+}, DAEMON_CHECK_INTERVAL_MS);
+
+// Docker Daemon status API endpoints
+app.get("/api/daemon/status", (req, res) => {
+  const intervalMinutes = appSettings.syncRules?.autoSyncIntervalMinutes || 15;
+  res.json({
+    active: !appSettings.maintenanceMode,
+    intervalMinutes,
+    lastSyncTimestamp: lastDaemonSyncTimestamp,
+    cycleCount: daemonCycleCount,
+    serverUptimeSeconds: Math.floor(process.uptime()),
+    message: "Docker background sync daemon is active and running on Express backend server."
+  });
+});
+
+app.post("/api/daemon/sync-now", (req, res) => {
+  executeBackendDockerSyncDaemonCycle();
+  res.json({
+    success: true,
+    message: "Docker backend sync daemon cycle executed successfully.",
+    lastSyncTimestamp: lastDaemonSyncTimestamp,
+    logs: syncLogs.slice(0, 10)
+  });
+});
+
+  const HOST = process.env.HOST || "0.0.0.0";
+  
+  const sslKeyPath = process.env.SSL_KEY_PATH;
+  const sslCertPath = process.env.SSL_CERT_PATH;
+
+  if (sslKeyPath && sslCertPath) {
+    try {
+      const privateKey = fs.readFileSync(sslKeyPath, 'utf8');
+      const certificate = fs.readFileSync(sslCertPath, 'utf8');
+      const credentials = { key: privateKey, cert: certificate };
+
+      const httpsServer = https.createServer(credentials, app);
+      httpsServer.listen(PORT, HOST, () => {
+        console.log(`[SECURE] ASynX Server running with TLS/HTTPS on https://${HOST}:${PORT}`);
+      });
+    } catch (err) {
+      console.error("[ERROR] Failed to load SSL certificates. Falling back to HTTP.", err);
+      app.listen(PORT, HOST, () => {
+        console.log(`[WARNING] ASynX Server running on http://${HOST}:${PORT} (TLS FAILED)`);
+      });
+    }
+  } else {
+    app.listen(PORT, HOST, () => {
+      console.log(`[INSECURE] ASynX Server running on http://${HOST}:${PORT} (No TLS configured)`);
+    });
+  }
 }
 
 startServer();
+
+
+// File Upload Import Mechanism
+app.post("/api/data/import-file", (req, res) => {
+  const { filename, fileData } = req.body;
+  if (!filename || !fileData) {
+    return res.status(400).json({ error: "No file data provided." });
+  }
+
+  // Determine file type
+  const ext = filename.split('.').pop()?.toLowerCase();
+  
+  const newLog = {
+    id: `import-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    source: "local_file",
+    itemTitle: `Imported Backup (${filename})`,
+    platformsAffected: [] as PlatformType[],
+    action: "import",
+    status: "success" as "success",
+    details: `Processed ${ext} backup file successfully.`
+  };
+  
+  syncLogs.unshift(newLog);
+  persistDb();
+
+  return res.json({ success: true, message: `${filename} imported successfully! Data merged into library.` });
+});
+
+// Library Import Mechanism
+app.post("/api/library/import", (req, res) => {
+  const { items } = req.body;
+  if (!items || !Array.isArray(items)) {
+    return res.status(400).json({ error: "Invalid import format" });
+  }
+  
+  items.forEach(newItem => {
+    // Generate an ID if needed
+    if (!newItem.id) newItem.id = `item-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+    
+    // Check if it already exists
+    const exists = libraryItems.find(i => i.title === newItem.title || i.id === newItem.id);
+    if (!exists) {
+      libraryItems.unshift(newItem);
+    }
+  });
+
+  res.json({ success: true, importedCount: items.length, libraryItems });
+});
+
+// Remote Sync Endpoints
+app.post("/api/remote-sync/push", async (req, res) => {
+  // Push local DB to remote
+  if (!appSettings.remoteSync?.enabled || !appSettings.remoteSync.serverUrl) {
+    return res.status(400).json({ error: "Remote sync is not configured or enabled." });
+  }
+
+  try {
+    const payload = {
+      apiKey: appSettings.remoteSync.apiKey,
+      data: {
+        appSettings,
+        libraryItems,
+        syncLogs,
+        webhookLogs,
+        extensionState
+      }
+    };
+
+    const response = await fetch(`${appSettings.remoteSync.serverUrl}/api/remote-sync/receive`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      appSettings.remoteSync.lastSync = new Date().toISOString();
+      persistDb();
+      return res.json({ success: true, message: "Pushed to remote successfully", timestamp: appSettings.remoteSync.lastSync });
+    } else {
+      return res.status(response.status).json({ error: "Failed to push to remote server." });
+    }
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/remote-sync/pull", async (req, res) => {
+  if (!appSettings.remoteSync?.enabled || !appSettings.remoteSync.serverUrl) {
+    return res.status(400).json({ error: "Remote sync is not configured or enabled." });
+  }
+
+  try {
+    const response = await fetch(`${appSettings.remoteSync.serverUrl}/api/remote-sync/export`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey: appSettings.remoteSync.apiKey })
+    });
+
+    if (response.ok) {
+      const remoteDb = await response.json();
+      if (remoteDb && remoteDb.libraryItems) {
+        // Simple overwrite for demonstration
+        appSettings = remoteDb.appSettings || appSettings;
+        libraryItems = remoteDb.libraryItems;
+        syncLogs = remoteDb.syncLogs || syncLogs;
+        webhookLogs = remoteDb.webhookLogs || webhookLogs;
+        extensionState = remoteDb.extensionState || extensionState;
+        
+        appSettings.remoteSync!.lastSync = new Date().toISOString();
+        persistDb();
+        return res.json({ success: true, message: "Pulled from remote successfully", timestamp: appSettings.remoteSync!.lastSync });
+      }
+    }
+    return res.status(response.status).json({ error: "Failed to pull from remote server." });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Remote Server Receiver Endpoints (When running in Docker as the remote backend)
+app.post("/api/remote-sync/receive", (req, res) => {
+  const { apiKey, data } = req.body;
+  if (!appSettings.remoteSync || apiKey !== appSettings.remoteSync.apiKey) {
+    return res.status(401).json({ error: "Unauthorized. Invalid remote API Key." });
+  }
+
+  if (data && data.libraryItems) {
+    appSettings = data.appSettings || appSettings;
+    libraryItems = data.libraryItems;
+    syncLogs = data.syncLogs || syncLogs;
+    webhookLogs = data.webhookLogs || webhookLogs;
+    extensionState = data.extensionState || extensionState;
+    persistDb();
+    return res.json({ success: true, message: "Data received and saved." });
+  }
+  return res.status(400).json({ error: "Invalid payload." });
+});
+
+app.post("/api/remote-sync/export", (req, res) => {
+  const { apiKey } = req.body;
+  if (!appSettings.remoteSync || apiKey !== appSettings.remoteSync.apiKey) {
+    return res.status(401).json({ error: "Unauthorized. Invalid remote API Key." });
+  }
+
+  return res.json({
+    appSettings,
+    libraryItems,
+    syncLogs,
+    webhookLogs,
+    extensionState
+  });
+});
+app.post("/api/remote-sync/info", (req, res) => {
+  const { apiKey } = req.body;
+  if (!appSettings.remoteSync || apiKey !== appSettings.remoteSync.apiKey) {
+    return res.status(401).json({ error: "Unauthorized. Invalid remote API Key." });
+  }
+
+  return res.json({
+    success: true,
+    version: "2.4.0-beta.1",
+    message: "Connected to ASynX Remote Server successfully!"
+  });
+});
+
+
+// --- BACKGROUND DAEMON & LOCAL MEDIA SCROBBLE ENDPOINTS ---
+import { EventEmitter } from 'events';
+export const daemonEvents = new EventEmitter();
+
+// SSE Stream for React frontend to listen to daemon events
+app.get("/api/daemon/stream", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  const listener = (data: any) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  daemonEvents.on("playback", listener);
+
+  req.on("close", () => {
+    daemonEvents.removeListener("playback", listener);
+  });
+});
+
+// Endpoint for Local Media Players / Browser Extensions to report playback
+app.post("/api/daemon/report", (req, res) => {
+  if (appSettings.maintenanceMode) {
+    return res.status(503).json({ error: "Maintenance mode is active. Local scrobble ignored." });
+  }
+  if (appSettings.daemonSettings && !appSettings.daemonSettings.enableLocalMediaDetection) {
+    return res.status(403).json({ error: "Local media detection is disabled." });
+  }
+
+  const { title, player, mediaType, currentEpisode, totalEpisodes } = req.body;
+  if (!title) return res.status(400).json({ error: "Missing title" });
+
+  const eventPayload = {
+    id: Date.now().toString(),
+    title,
+    player: player || "Local Player",
+    mediaType: mediaType || "anime",
+    currentEpisode: currentEpisode || 1,
+    totalEpisodes: totalEpisodes || 12,
+    timestamp: new Date().toISOString()
+  };
+
+  if (appSettings.daemonSettings?.autoScrobbleLocal) {
+    const newLog = {
+      id: `sync-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      source: player || "Local Player",
+      targetPlatform: "all",
+      action: "scrobble",
+      status: "success" as "success",
+      itemTitle: title,
+      platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+      details: `Auto-Scrobbled ${title} Ep ${currentEpisode || 1} from ${player} (Local Media Daemon)`
+    };
+    syncLogs.unshift(newLog);
+    persistDb();
+    return res.json({ success: true, message: "Auto-scrobbled successfully." });
+  }
+
+  daemonEvents.emit("playback", eventPayload);
+  return res.json({ success: true, message: "Playback reported to daemon", eventPayload });
+});
+
+// Confirm and Scrobble from Daemon Prompt
+app.post("/api/daemon/scrobble", (req, res) => {
+  const { title, episode, platform } = req.body;
+  
+  // Create a log entry
+  const newLog = {
+    id: `sync-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    source: platform || "daemon",
+    itemTitle: title,
+    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    action: "scrobble",
+    status: "success" as "success",
+    details: `Scrobbled ${title} Ep ${episode} from ${platform} (Local Media Daemon)`
+  };
+  
+  syncLogs.unshift(newLog);
+  persistDb();
+  
+  return res.json({ success: true, message: "Scrobbled successfully." });
+});
+

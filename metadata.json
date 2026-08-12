@@ -1,5 +1,5 @@
 {
-  "name": "ASynx",
+  "name": "ASynX",
   "description": "Cross-platform anime & drama progress sync engine connecting Simkl, MyAnimeList, and AniList with real-time webhooks for Plex and Tautulli, conflict resolution, and browser extension integration.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

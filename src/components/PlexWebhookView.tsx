@@ -163,9 +163,9 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
             <span className="p-1.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30">
               <Tv className="w-5 h-5" />
             </span>
-            <h2 className="text-lg font-bold text-slate-100">Plex Media Server & Tautulli Automation Suite</h2>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Plex Media Server & Tautulli Automation Suite</h2>
           </div>
-          <p className="text-xs text-slate-300">
+          <p className="text-xs text-gray-700 dark:text-gray-300">
             Real-time webhook listener scrobbles watched progress directly to Simkl, MyAnimeList, and AniList.
           </p>
         </div>
@@ -183,15 +183,15 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
       </div>
 
       {/* AUTOMATED HEALTH CHECKER CARD */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-md space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 shadow-md space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-gray-200 dark:border-neutral-900 pb-3">
           <div className="flex items-center space-x-2.5">
             <div className="p-2 bg-indigo-500/20 rounded-xl border border-indigo-500/30 text-indigo-400">
               <Activity className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-100">Automated Webhook Health & Connection Status</h3>
-              <p className="text-xs text-slate-400">Pings configured webhooks and monitors active integration drops in real-time</p>
+              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Automated Webhook Health & Connection Status</h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Pings configured webhooks and monitors active integration drops in real-time</p>
             </div>
           </div>
 
@@ -231,13 +231,13 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
           {/* Plex Health Card */}
           <div className={`p-4 rounded-2xl border transition ${
             plexStatus === 'online' 
-              ? 'bg-slate-950/80 border-slate-800' 
+              ? 'bg-gray-50 dark:bg-black/80 border-gray-200 dark:border-neutral-900' 
               : 'bg-rose-950/20 border-rose-500/40'
           }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Server className="w-4 h-4 text-purple-400" />
-                <span className="font-bold text-slate-200 text-sm">Plex Media Server</span>
+                <span className="font-bold text-gray-800 dark:text-gray-200 text-sm">Plex Media Server</span>
               </div>
 
               {/* Connection Status Indicator */}
@@ -262,14 +262,14 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
               </div>
             </div>
 
-            <p className="text-xs text-slate-400 mt-2 line-clamp-1 font-mono">
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 line-clamp-1 font-mono">
               Endpoint: {healthData?.plex.endpoint || 'http://192.168.1.100:32400'}
             </p>
-            <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+            <p className="text-[11px] text-gray-700 dark:text-gray-300 mt-1 leading-relaxed">
               {healthData?.plex.details || 'Responding OK.'}
             </p>
 
-            <div className="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between text-[10px] text-slate-500">
+            <div className="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-500">
               <span>Last Checked: {healthData?.plex.lastChecked ? new Date(healthData.plex.lastChecked).toLocaleTimeString() : 'Just now'}</span>
               <button
                 onClick={() => handlePingWebhooks('plex')}
@@ -283,13 +283,13 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
           {/* Tautulli Health Card */}
           <div className={`p-4 rounded-2xl border transition ${
             tautulliStatus === 'online' 
-              ? 'bg-slate-950/80 border-slate-800' 
+              ? 'bg-gray-50 dark:bg-black/80 border-gray-200 dark:border-neutral-900' 
               : 'bg-rose-950/20 border-rose-500/40'
           }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Server className="w-4 h-4 text-cyan-400" />
-                <span className="font-bold text-slate-200 text-sm">Tautulli Integration</span>
+                <span className="font-bold text-gray-800 dark:text-gray-200 text-sm">Tautulli Integration</span>
               </div>
 
               {/* Connection Status Indicator */}
@@ -314,14 +314,14 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
               </div>
             </div>
 
-            <p className="text-xs text-slate-400 mt-2 line-clamp-1 font-mono">
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 line-clamp-1 font-mono">
               Endpoint: {healthData?.tautulli.endpoint || 'http://192.168.1.100:8181'}
             </p>
-            <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+            <p className="text-[11px] text-gray-700 dark:text-gray-300 mt-1 leading-relaxed">
               {healthData?.tautulli.details || 'Tautulli notification listener active.'}
             </p>
 
-            <div className="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between text-[10px] text-slate-500">
+            <div className="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-500">
               <span>Last Checked: {healthData?.tautulli.lastChecked ? new Date(healthData.tautulli.lastChecked).toLocaleTimeString() : 'Just now'}</span>
               <button
                 onClick={() => handlePingWebhooks('tautulli')}
@@ -336,19 +336,19 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Card 1: Webhook Endpoints & Setup */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-sm">
+        <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-5 shadow-sm">
           <div className="flex items-center space-x-2">
             <Radio className="w-5 h-5 text-purple-400" />
-            <h3 className="text-base font-bold text-slate-100">Webhook Receiver Endpoints</h3>
+            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Webhook Receiver Endpoints</h3>
           </div>
 
-          <p className="text-xs text-slate-400 leading-relaxed">
+          <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
             Copy these URL endpoints into your Plex Media Server (Settings → Webhooks) or Tautulli Webhook Notification settings.
           </p>
 
           {/* Plex URL */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+            <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
               <span>Plex Webhook Target URL</span>
               <span className="text-[10px] text-amber-400">Plex Pass Required</span>
             </label>
@@ -357,7 +357,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
                 type="text"
                 readOnly
                 value={plexUrl}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-purple-300 focus:outline-none"
+                className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-xs font-mono text-purple-300 focus:outline-none"
               />
               <button
                 onClick={() => handleCopy(plexUrl, 'plex')}
@@ -370,14 +370,14 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
           </div>
 
           {/* Tautulli URL */}
-          <div className="space-y-1.5 pt-2 border-t border-slate-800">
-            <label className="text-xs font-semibold text-slate-300">Tautulli Webhook Target URL</label>
+          <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-neutral-900">
+            <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Tautulli Webhook Target URL</label>
             <div className="flex items-center space-x-2">
               <input
                 type="text"
                 readOnly
                 value={tautulliUrl}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none"
+                className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none"
               />
               <button
                 onClick={() => handleCopy(tautulliUrl, 'tautulli')}
@@ -401,29 +401,29 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
         </div>
 
         {/* Card 2: Interactive Webhook Simulator */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-sm">
+        <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Play className="w-5 h-5 text-emerald-400" />
-              <h3 className="text-base font-bold text-slate-100">Live Webhook Simulator</h3>
+              <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Live Webhook Simulator</h3>
             </div>
             <span className="text-[10px] bg-emerald-500/10 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/20 font-mono">
               Test Payload
             </span>
           </div>
 
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-gray-600 dark:text-gray-400">
             Simulate a media playback event from your Plex client or Tautulli instance to test live auto-scrobbling across Simkl, MAL, and AniList.
           </p>
 
           <div className="grid grid-cols-2 gap-3">
             {/* Show Select */}
             <div className="col-span-2">
-              <label className="text-[11px] text-slate-400 font-medium">Select Anime / Drama Title</label>
+              <label className="text-[11px] text-gray-600 dark:text-gray-400 font-medium">Select Anime / Drama Title</label>
               <select
                 value={selectedItemTitle}
                 onChange={(e) => setSelectedItemTitle(e.target.value)}
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none"
+                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-1.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none"
               >
                 {libraryItems.map(item => (
                   <option key={item.id} value={item.title}>{item.title}</option>
@@ -433,44 +433,44 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
 
             {/* Season */}
             <div>
-              <label className="text-[11px] text-slate-400 font-medium">Season Number</label>
+              <label className="text-[11px] text-gray-600 dark:text-gray-400 font-medium">Season Number</label>
               <input
                 type="number"
                 value={testSeason}
                 onChange={(e) => setTestSeason(Number(e.target.value))}
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none"
+                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-1.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none"
               />
             </div>
 
             {/* Episode */}
             <div>
-              <label className="text-[11px] text-slate-400 font-medium">Episode Number</label>
+              <label className="text-[11px] text-gray-600 dark:text-gray-400 font-medium">Episode Number</label>
               <input
                 type="number"
                 value={testEpisode}
                 onChange={(e) => setTestEpisode(Number(e.target.value))}
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none"
+                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-1.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none"
               />
             </div>
 
             {/* User */}
             <div>
-              <label className="text-[11px] text-slate-400 font-medium">Plex Account User</label>
+              <label className="text-[11px] text-gray-600 dark:text-gray-400 font-medium">Plex Account User</label>
               <input
                 type="text"
                 value={testUser}
                 onChange={(e) => setTestUser(e.target.value)}
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none"
+                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-1.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none"
               />
             </div>
 
             {/* Source */}
             <div>
-              <label className="text-[11px] text-slate-400 font-medium">Payload Type</label>
+              <label className="text-[11px] text-gray-600 dark:text-gray-400 font-medium">Payload Type</label>
               <select
                 value={testSource}
                 onChange={(e) => setTestSource(e.target.value as any)}
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none"
+                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-1.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none"
               >
                 <option value="plex">Plex Standard Scrobble</option>
                 <option value="tautulli">Tautulli Watch Event</option>
@@ -489,12 +489,12 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
       </div>
 
       {/* AI Plex Filename Matcher Tool */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-sm">
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
         <div className="flex items-center space-x-2">
           <Sparkles className="w-5 h-5 text-indigo-400 animate-pulse" />
-          <h3 className="text-base font-bold text-slate-100">AI Plex Filename-to-Anime ID Parser</h3>
+          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">AI Plex Filename-to-Anime ID Parser</h3>
         </div>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-gray-600 dark:text-gray-400">
           Paste complex torrent release filenames (e.g., <code className="text-indigo-300 font-mono">[SubsPlease] Solo Leveling S2 - 11 [1080p].mkv</code>) to verify how Gemini parses raw titles into standard anime and drama IDs.
         </p>
 
@@ -503,7 +503,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
             type="text"
             value={customFilename}
             onChange={(e) => setCustomFilename(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500"
+            className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3.5 py-2 text-xs font-mono text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
           />
           <button
             onClick={handleRunAiMatch}
@@ -516,15 +516,15 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
         </div>
 
         {matchResult && (
-          <div className="p-4 bg-slate-950 rounded-2xl border border-indigo-500/30 text-xs space-y-2">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div className="p-4 bg-gray-50 dark:bg-black rounded-2xl border border-indigo-500/30 text-xs space-y-2">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-2">
               <span className="font-bold text-indigo-300">Parsed Title: "{matchResult.parsedTitle}"</span>
               <span className="text-emerald-400 font-bold">Confidence: {matchResult.confidenceScore}%</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-300 pt-1">
-              <div>Season: <strong className="text-slate-100">{matchResult.season}</strong></div>
-              <div>Episode: <strong className="text-slate-100">{matchResult.episode}</strong></div>
-              <div>Group: <strong className="text-slate-100">{matchResult.releaseGroup || 'Generic'}</strong></div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-gray-700 dark:text-gray-300 pt-1">
+              <div>Season: <strong className="text-gray-900 dark:text-gray-100">{matchResult.season}</strong></div>
+              <div>Episode: <strong className="text-gray-900 dark:text-gray-100">{matchResult.episode}</strong></div>
+              <div>Group: <strong className="text-gray-900 dark:text-gray-100">{matchResult.releaseGroup || 'Generic'}</strong></div>
               <div>Matched: <strong className="text-indigo-300">{matchResult.matchedItem?.title}</strong></div>
             </div>
           </div>
@@ -532,19 +532,19 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
       </div>
 
       {/* Webhook Logs History Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-sm">
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Terminal className="w-5 h-5 text-indigo-400" />
-            <h3 className="text-base font-bold text-slate-100">Ingested Webhook Event Stream</h3>
+            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Ingested Webhook Event Stream</h3>
           </div>
-          <span className="text-xs text-slate-400">{webhookLogs.length} Events Logged</span>
+          <span className="text-xs text-gray-600 dark:text-gray-400">{webhookLogs.length} Events Logged</span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-400 uppercase font-semibold">
+              <tr className="border-b border-gray-200 dark:border-neutral-900 text-gray-600 dark:text-gray-400 uppercase font-semibold">
                 <th className="py-2.5 px-3">Time</th>
                 <th className="py-2.5 px-3">Source</th>
                 <th className="py-2.5 px-3">Event</th>
@@ -556,14 +556,14 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
             <tbody className="divide-y divide-slate-800/60">
               {webhookLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-slate-500">
+                  <td colSpan={6} className="py-6 text-center text-gray-500 dark:text-gray-500">
                     No webhooks received yet. Send a test webhook above!
                   </td>
                 </tr>
               ) : (
                 webhookLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-950/60 transition">
-                    <td className="py-3 px-3 text-slate-400 font-mono text-[11px]">
+                  <tr key={log.id} className="hover:bg-gray-50 dark:bg-black/60 transition">
+                    <td className="py-3 px-3 text-gray-600 dark:text-gray-400 font-mono text-[11px]">
                       {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </td>
                     <td className="py-3 px-3">
@@ -575,10 +575,10 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
                         {log.source}
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-slate-200 font-medium">{log.event}</td>
-                    <td className="py-3 px-3 text-slate-100 font-semibold">{log.mediaTitle}</td>
-                    <td className="py-3 px-3 text-slate-300">{log.user}</td>
-                    <td className="py-3 px-3 text-slate-400">{log.player}</td>
+                    <td className="py-3 px-3 text-gray-800 dark:text-gray-200 font-medium">{log.event}</td>
+                    <td className="py-3 px-3 text-gray-900 dark:text-gray-100 font-semibold">{log.mediaTitle}</td>
+                    <td className="py-3 px-3 text-gray-700 dark:text-gray-300">{log.user}</td>
+                    <td className="py-3 px-3 text-gray-600 dark:text-gray-400">{log.player}</td>
                   </tr>
                 ))
               )}

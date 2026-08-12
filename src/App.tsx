@@ -17,12 +17,16 @@ import { PlexWebhookView } from './components/PlexWebhookView';
 import { ExtensionCompanionView } from './components/ExtensionCompanionView';
 import { SettingsView } from './components/SettingsView';
 import { OverrideModal } from './components/OverrideModal';
+import { ScrobblePrompt } from './components/ScrobblePrompt';
+import { ToastContainer, ToastMessage, ToastType } from './components/ToastContainer';
+import { useRef } from 'react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'matrix' | 'conflicts' | 'plex' | 'extension' | 'settings'>('matrix');
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [webhookLogs, setWebhookLogs] = useState<WebhookLog[]>([]);
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const [extensionState, setExtensionState] = useState<BrowserExtensionState>({
     installed: true,
     autoScrobbleEnabled: true,
@@ -30,11 +34,11 @@ export default function App() {
     badgeCount: 2
   });
   const [settings, setSettings] = useState<AppSettings>({
-    simkl: { connected: true, username: 'OtakuMatrix_2026', clientId: 'simkl_oauth_secret_key' },
+    simkl: { connected: true, username: 'OtakuMatrix_2026', clientId: '' },
     mal: { connected: true, username: 'MatrixAnimeMaster' },
     anilist: { connected: true, username: 'MatrixOtaku' },
     plex: { connected: true, serverIp: '192.168.1.100', port: 32400, autoScrobbleThreshold: 85 },
-    tautulli: { connected: true, url: 'http://192.168.1.100:8181', apiKey: 'tautulli_secret_token_x99' },
+    tautulli: { connected: true, url: 'http://192.168.1.100:8181', apiKey: '' },
     syncIntervalMinutes: 15,
     autoResolveConflicts: false,
     sourceOfTruth: 'anilist'
@@ -42,6 +46,53 @@ export default function App() {
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [overrideItem, setOverrideItem] = useState<LibraryItem | null>(null);
+
+  // --- Toasts State ---
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const lastSeenLogId = useRef<string | null>(null);
+
+  const addToast = (type: ToastType, title: string, message: string) => {
+    const id = Date.now().toString() + Math.random().toString();
+    setToasts(prev => [...prev, { id, type, title, message }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 6000); // Remove after 6 seconds
+  };
+
+  useEffect(() => {
+    if (syncLogs.length > 0) {
+      if (lastSeenLogId.current === null) {
+        // Initial load, just set the latest ID
+        lastSeenLogId.current = syncLogs[0].id;
+        return;
+      }
+      
+      // Check for new logs that are newer than lastSeenLogId
+      const newLogs = [];
+      for (const log of syncLogs) {
+        if (log.id === lastSeenLogId.current) break;
+        newLogs.push(log);
+      }
+      
+      if (newLogs.length > 0) {
+        lastSeenLogId.current = syncLogs[0].id;
+        
+        // Fire toasts for new logs
+        // Reverse so the oldest of the new logs appear first
+        newLogs.reverse().forEach(log => {
+          if (log.status === 'conflict') {
+            addToast('warning', 'Sync Conflict Detected', `Please resolve discrepancy for "${log.itemTitle}".`);
+          } else if (log.source === 'plex_webhook' || log.source === 'tautulli_webhook' || log.source === 'extension_autoscrobble') {
+            addToast('success', 'Media Scrobbled', log.details || `${log.itemTitle} was automatically synced.`);
+          } else if (log.action.toLowerCase().includes('sync') && log.status === 'success') {
+            addToast('success', 'Sync Completed', log.details || `Successfully synced ${log.itemTitle}.`);
+          } else if (log.status === 'failed') {
+            addToast('error', 'Sync Failed', log.details || `Action failed for ${log.itemTitle}.`);
+          }
+        });
+      }
+    }
+  }, [syncLogs]);
 
   // Helper to safely parse JSON or return null on invalid/HTML responses
   const safeFetchJson = async (url: string) => {
@@ -188,11 +239,11 @@ export default function App() {
   const conflictItems = items.filter(i => i.hasConflict);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white flex flex-col justify-between">
+    <div className={`min-h-screen font-sans antialiased selection:bg-indigo-500 selection:text-white flex flex-col justify-between ${isDarkMode ? 'dark bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
       <div>
         {/* Windows 11 Title Bar */}
         <Win11TitleBar
-          appName="ASynx — Cross-Platform Anime & Drama Sync Studio"
+          appName="ASynX — Cross-Platform Anime & Drama Sync Studio"
           isSyncing={isSyncing}
           onTriggerSync={handleTriggerSync}
         />
@@ -206,6 +257,8 @@ export default function App() {
           onTriggerSync={handleTriggerSync}
           settings={settings}
           extensionState={extensionState}
+          isDarkMode={isDarkMode}
+          toggleDarkMode={() => setIsDarkMode(!isDarkMode)}
         />
 
         {/* Main Content Body */}
@@ -214,6 +267,7 @@ export default function App() {
             <SyncMatrixView
               items={items}
               logs={syncLogs}
+              settings={settings}
               onOpenOverride={(item) => setOverrideItem(item)}
               onOpenConflictView={() => setActiveTab('conflicts')}
               onTriggerSyncItem={handleTriggerSyncItem}
@@ -225,6 +279,7 @@ export default function App() {
               conflicts={conflictItems}
               onResolveConflict={handleResolveConflict}
               onRefreshData={fetchData}
+              settings={settings}
             />
           )}
 
@@ -258,14 +313,19 @@ export default function App() {
       <Win11StatusBar
         itemCount={items.length}
         conflictCount={conflictItems.length}
+        isSyncing={isSyncing}
+        maintenanceMode={settings.maintenanceMode}
       />
 
-      {/* Override Modal */}
+            {/* Override Modal */}
       <OverrideModal
         item={overrideItem}
         onClose={() => setOverrideItem(null)}
         onSubmitOverride={handleSubmitOverride}
       />
+      
+      {/* Global Toast Alerts */}
+      <ToastContainer toasts={toasts} removeToast={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
     </div>
   );
 }

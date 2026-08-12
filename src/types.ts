@@ -48,7 +48,7 @@ export interface LibraryItem {
 export interface SyncLog {
   id: string;
   timestamp: string;
-  source: 'plex_webhook' | 'tautulli_webhook' | 'extension_autoscrobble' | 'manual_override' | 'auto_sync';
+  source: string;
   itemTitle: string;
   action: string;
   platformsAffected: PlatformType[];
@@ -120,6 +120,26 @@ export interface AppSettings {
     webhookUrl: string;
     secretKey: string;
     connected: boolean;
+  };
+  remoteSync?: {
+    enabled: boolean;
+    serverUrl: string;
+    apiKey: string;
+    lastSync?: string;
+  };
+  daemonSettings?: {
+    runOnStartup: boolean;
+    enableLocalMediaDetection: boolean;
+    autoScrobbleLocal: boolean; // if true, don't prompt, just scrobble
+  };
+  maintenanceMode?: boolean;
+  automatedBackups?: {
+    enabled: boolean;
+    provider: 'github_gist' | 'github_repo' | 'gdrive' | 'onedrive';
+    frequency: 'daily' | 'weekly' | 'monthly';
+    token: string;
+    targetId: string;
+    lastBackup?: string;
   };
   syncRules: {
     autoSyncIntervalMinutes: number;
