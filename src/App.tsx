@@ -192,7 +192,7 @@ export default function App() {
       <div>
         {/* Windows 11 Title Bar */}
         <Win11TitleBar
-          appName="AniSync Matrix — Cross-Platform Anime & Drama Sync Studio"
+          appName="ASynx — Cross-Platform Anime & Drama Sync Studio"
           isSyncing={isSyncing}
           onTriggerSync={handleTriggerSync}
         />

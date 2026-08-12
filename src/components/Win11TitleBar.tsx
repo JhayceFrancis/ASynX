@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Minus, Square, X, RefreshCw, Layers, Shield, Wifi } from 'lucide-react';
+import { ASynxLogo } from './ASynxLogo';
 
 interface Win11TitleBarProps {
   appName?: string;
@@ -8,7 +9,7 @@ interface Win11TitleBarProps {
 }
 
 export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
-  appName = "AniSync Matrix Studio",
+  appName = "ASynx Studio",
   isSyncing = false,
   onTriggerSync
 }) => {
@@ -18,9 +19,7 @@ export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
   if (!windowVisible) {
     return (
       <div className="fixed bottom-4 right-4 z-50 bg-slate-900 border border-indigo-500/40 text-slate-100 p-3 rounded-2xl shadow-2xl flex items-center space-x-3 backdrop-blur-lg">
-        <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-          <RefreshCw className="w-4 h-4 text-white animate-spin-slow" />
-        </div>
+        <ASynxLogo className="w-8 h-8 drop-shadow-[0_0_8px_rgba(99,102,241,0.6)]" animated={isSyncing} />
         <div>
           <p className="text-xs font-bold">{appName}</p>
           <p className="text-[10px] text-slate-400">Minimized to Windows System Tray</p>
@@ -39,9 +38,7 @@ export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
     <div className="bg-slate-950/90 backdrop-blur-md border-b border-slate-800/90 text-slate-300 select-none flex items-center justify-between px-3 py-1.5 text-xs font-sans rounded-t-2xl">
       {/* Left: Window Icon & Title */}
       <div className="flex items-center space-x-2.5">
-        <div className="w-5 h-5 rounded-md bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center shadow-sm">
-          <RefreshCw className="w-3 h-3 text-white" />
-        </div>
+        <ASynxLogo className="w-5 h-5 drop-shadow-[0_0_4px_rgba(99,102,241,0.5)]" animated={isSyncing} />
         <span className="font-semibold text-slate-200 tracking-tight text-[11px] sm:text-xs">
           {appName}
         </span>

@@ -1,0 +1,58 @@
+updates:
+  # Maintain GitHub Actions workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Dublin"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+  # Maintain Bun / Node.js dependencies
+  - package-ecosystem: "npm" 
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Dublin"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "bun"
+    
+    # Custom grouping based on your package.json architecture
+    groups:
+      core-ui-ecosystem:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "lucide-react"
+          - "motion"
+          - "recharts"
+          
+      build-and-styling:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "tailwindcss"
+          - "@tailwindcss/*"
+          - "autoprefixer"
+          - "esbuild"
+          
+      backend-and-types:
+        patterns:
+          - "express"
+          - "cors"
+          - "dotenv"
+          - "typescript"
+          - "tsx"
+          - "@types/*"
+          
+      ai-integration:
+        patterns:
+          - "@google/genai"

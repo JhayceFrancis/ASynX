@@ -1,6 +1,7 @@
 import React from 'react';
 import { RefreshCw, Radio, Chrome, ShieldAlert, Cpu, Settings, Layers, AlertTriangle, Tv, CheckCircle2, Monitor } from 'lucide-react';
 import { AppSettings, BrowserExtensionState } from '../types';
+import { ASynxLogo } from './ASynxLogo';
 
 interface NavbarProps {
   activeTab: 'matrix' | 'conflicts' | 'plex' | 'extension' | 'settings';
@@ -27,15 +28,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3">
         {/* Brand & App Info */}
         <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 p-0.5 shadow-md">
-            <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-              <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin-slow" />
-            </div>
+          <div className="flex items-center justify-center">
+            <ASynxLogo className="w-10 h-10 drop-shadow-[0_0_12px_rgba(99,102,241,0.4)]" animated={isSyncing} />
           </div>
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-lg font-bold tracking-tight text-white flex items-center space-x-1.5">
-                <span>AniSync Matrix</span>
+                <span>ASynx</span>
               </h1>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
                 Win11 App v2.4
