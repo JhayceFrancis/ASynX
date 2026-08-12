@@ -12,7 +12,7 @@ updates:
       - "dependencies"
       - "github-actions"
 
-  # Maintain Bun / Node.js dependencies
+  # Maintain Node.js / Bun dependencies
   - package-ecosystem: "npm" 
     directory: "/"
     schedule:
@@ -25,8 +25,15 @@ updates:
       - "dependencies"
       - "bun"
     
-    # Custom grouping based on your package.json architecture
+    # Custom grouping based on the ASynX architecture
     groups:
+      desktop-environment:
+        patterns:
+          - "electron"
+          - "electron-builder"
+          - "concurrently"
+          - "wait-on"
+          
       core-ui-ecosystem:
         patterns:
           - "react"
