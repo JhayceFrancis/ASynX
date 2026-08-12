@@ -1,1 +1,15 @@
-*
+# AI Studio Assets Git Ignore Rule
+*.tmp
+*.log
+*.cache
+.DS_Store
+
+# Preserve tracking for asset files and gitkeep
+!.gitignore
+!.gitkeep
+!*.png
+!*.jpg
+!*.jpeg
+!*.svg
+!*.webp
+!*.ico

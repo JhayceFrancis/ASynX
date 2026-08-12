@@ -12,7 +12,7 @@ updates:
       - "dependencies"
       - "github-actions"
 
-  # Maintain Node.js / Bun dependencies
+  # Maintain npm / Node.js & Desktop dependencies
   - package-ecosystem: "npm" 
     directory: "/"
     schedule:
@@ -23,17 +23,10 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "bun"
+      - "npm"
     
-    # Custom grouping based on the ASynX architecture
+    # Custom grouping based on ASynX package.json architecture
     groups:
-      desktop-environment:
-        patterns:
-          - "electron"
-          - "electron-builder"
-          - "concurrently"
-          - "wait-on"
-          
       core-ui-ecosystem:
         patterns:
           - "react"
@@ -59,6 +52,13 @@ updates:
           - "typescript"
           - "tsx"
           - "@types/*"
+
+      desktop-electron:
+        patterns:
+          - "electron"
+          - "electron-builder"
+          - "concurrently"
+          - "wait-on"
           
       ai-integration:
         patterns:
