@@ -40,7 +40,7 @@ Run ASynX on your local system with hot-reload development tools:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ASynX.git
+git clone https://github.com/JhayceFrancis/ASynX.git
 cd ASynX
 
 # Install dependencies
@@ -58,7 +58,7 @@ Package ASynX into a native Windows executable (`.exe`) installer using Electron
 
 ```bash
 # Clone and enter directory
-git clone https://github.com/yourusername/ASynX.git
+git clone https://github.com/JhayceFrancis/ASynX.git
 cd ASynX
 
 # Install dependencies
@@ -76,7 +76,7 @@ Deploy ASynX in a Docker container to act as a headless background sync server:
 
 ```bash
 # Clone repository on your server
-git clone https://github.com/yourusername/ASynX.git
+git clone https://github.com/JhayceFrancis/ASynX.git
 cd ASynX
 
 # Boot container in detached mode
