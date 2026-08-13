@@ -6,6 +6,7 @@ export interface ASynXLogoProps {
   onClick?: () => void;
   title?: string;
   interactive?: boolean;
+  useImageFallback?: boolean;
 }
 
 export const ASynXLogo: React.FC<ASynXLogoProps> = ({ 
@@ -13,7 +14,8 @@ export const ASynXLogo: React.FC<ASynXLogoProps> = ({
   animated = false,
   onClick,
   title = "ASynX Synchronization Engine — Click to trigger manual sync cycle",
-  interactive = true
+  interactive = true,
+  useImageFallback = false
 }) => {
   const [localActive, setLocalActive] = useState(false);
 
@@ -29,6 +31,23 @@ export const ASynXLogo: React.FC<ASynXLogoProps> = ({
   };
 
   const isAnimating = animated || localActive;
+
+  if (useImageFallback) {
+    return (
+      <div 
+        className={`inline-flex items-center justify-center transition-all duration-300 ${interactive ? 'cursor-pointer hover:scale-110 active:scale-95' : ''}`}
+        onClick={handleClick}
+        title={title}
+        role={onClick ? "button" : "img"}
+      >
+        <img 
+          src="/ASynX_logo.png" 
+          alt="ASynX Logo" 
+          className={`${className} object-contain ${isAnimating ? 'animate-spin' : ''}`}
+        />
+      </div>
+    );
+  }
 
   return (
     <div 
@@ -53,12 +72,12 @@ export const ASynXLogo: React.FC<ASynXLogoProps> = ({
         <style>
           {`
             @keyframes asynx-dash-flow {
-              0% { stroke-dashoffset: 600; }
+              0% { stroke-dashoffset: 400; }
               100% { stroke-dashoffset: 0; }
             }
             @keyframes asynx-pulse-glow {
-              0%, 100% { opacity: 0.85; filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.6)); }
-              50% { opacity: 1; filter: drop-shadow(0 0 16px rgba(168, 85, 247, 0.95)); }
+              0%, 100% { opacity: 0.9; filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.6)); }
+              50% { opacity: 1; filter: drop-shadow(0 0 18px rgba(236, 72, 153, 0.9)); }
             }
             @keyframes asynx-spin-sync {
               0% { transform: rotate(0deg); }
@@ -69,18 +88,18 @@ export const ASynXLogo: React.FC<ASynXLogoProps> = ({
               50% { transform: translateY(-3px) scale(1.02); }
             }
 
+            .asynx-ring-spin {
+              transform-origin: 200px 200px;
+              animation: asynx-spin-sync 10s linear infinite;
+            }
+
             .asynx-animated-flow {
-              stroke-dasharray: 250 80;
-              animation: asynx-dash-flow 2.5s linear infinite;
+              stroke-dasharray: 200 60;
+              animation: asynx-dash-flow 2.2s linear infinite;
             }
 
             .asynx-animated-glow {
               animation: asynx-pulse-glow 2s ease-in-out infinite;
-            }
-
-            .asynx-animated-spin {
-              transform-origin: 200px 200px;
-              animation: asynx-spin-sync 6s linear infinite;
             }
 
             .asynx-animated-float {
@@ -89,109 +108,140 @@ export const ASynXLogo: React.FC<ASynXLogoProps> = ({
             }
           `}
         </style>
+
         <defs>
-          {/* High compatibility Cross-Browser Energy Gradients */}
-          <linearGradient id="asynx-upper-grad" x1="0%" y1="100%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#7B2CBF" />
-            <stop offset="50%" stopColor="#38BDF8" />
-            <stop offset="100%" stopColor="#FF007F" />
+          {/* Ring Conic / Linear Multi-Stop Gradient matching attached ASynX_logo.png */}
+          <linearGradient id="asynx-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#38BDF8" />
+            <stop offset="30%" stopColor="#C084FC" />
+            <stop offset="60%" stopColor="#EC4899" />
+            <stop offset="85%" stopColor="#38BDF8" />
+            <stop offset="100%" stopColor="#818CF8" />
           </linearGradient>
 
-          <linearGradient id="asynx-lower-grad" x1="100%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#FF007F" />
+          {/* Left Leg Gradient: Deep Violet -> Bright Cyan-Blue */}
+          <linearGradient id="asynx-left-leg-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#6366F1" />
             <stop offset="50%" stopColor="#818CF8" />
-            <stop offset="100%" stopColor="#7B2CBF" />
+            <stop offset="100%" stopColor="#38BDF8" />
           </linearGradient>
 
-          <linearGradient id="asynx-main-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          {/* Right Leg Gradient: Soft Ice White/Purple -> Purple/Magenta */}
+          <linearGradient id="asynx-right-leg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#E0E7FF" />
-            <stop offset="50%" stopColor="#818CF8" />
-            <stop offset="100%" stopColor="#C084FC" />
+            <stop offset="50%" stopColor="#C084FC" />
+            <stop offset="100%" stopColor="#A855F7" />
           </linearGradient>
 
-          {/* Clean ambient drop blur */}
-          <filter id="asynx-glow-filter" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="6" result="blur" />
+          {/* Top Arc & Downward Arrow Gradient */}
+          <linearGradient id="asynx-top-arc-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#38BDF8" />
+            <stop offset="60%" stopColor="#C084FC" />
+            <stop offset="100%" stopColor="#EC4899" />
+          </linearGradient>
+
+          {/* Bottom Loop & Upward Arrow Gradient */}
+          <linearGradient id="asynx-bottom-loop-grad" x1="100%" y1="100%" x2="0%" y2="0%">
+            <stop offset="0%" stopColor="#6366F1" />
+            <stop offset="100%" stopColor="#A855F7" />
+          </linearGradient>
+
+          {/* Glow Filter */}
+          <filter id="asynx-glow-filter" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="5" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
         </defs>
 
-        {/* Outer Orbit Sync Energy Ring (Active when syncing or triggered) */}
-        {isAnimating && (
-          <circle 
-            cx="200" 
-            cy="200" 
-            r="185" 
-            stroke="url(#asynx-upper-grad)" 
-            strokeWidth="5" 
-            strokeDasharray="45 135" 
-            fill="none" 
-            opacity="0.8"
-            className="asynx-animated-spin"
-          />
-        )}
+        {/* 1. Outer Dashed Ring (Matching attached ASynX_logo.png ring design) */}
+        <circle 
+          cx="200" 
+          cy="200" 
+          r="178" 
+          stroke="url(#asynx-ring-grad)" 
+          strokeWidth="6" 
+          strokeDasharray="24 14" 
+          fill="none" 
+          opacity="0.9"
+          className={isAnimating ? "asynx-ring-spin" : ""}
+        />
 
-        {/* Main Logo Graphic Group */}
+        {/* 2. Main Logo Graphic Group */}
         <g className={isAnimating ? "asynx-animated-float" : ""}>
           
-          {/* Shadow / Base Structure Bar */}
+          {/* Dark Translucent Shadow Bar in Background */}
           <path 
-            d="M 180,380 L 280,130" 
-            stroke="#1E1B4B" 
+            d="M 192,82 L 235,355" 
+            stroke="#17153A" 
             strokeWidth="32" 
             strokeLinecap="round" 
-            opacity="0.35"
+            opacity="0.45"
           />
 
-          {/* Lower Loop / Sync Energy Arrow */}
+          {/* Main 'A' Left Leg */}
           <path 
-            d="M 200,320 C 170,320 130,310 100,290 L 100,260" 
-            stroke="url(#asynx-lower-grad)" 
-            strokeWidth="22" 
-            strokeLinecap="round" 
-            fill="none"
-            className={isAnimating ? "asynx-animated-flow" : ""}
-          />
-          <polygon 
-            points="100,250 122,275 78,275" 
-            fill="#818CF8" 
-            className={isAnimating ? "asynx-animated-glow" : ""}
-          />
-
-          {/* Main 'A' Structure - Left Bar */}
-          <path 
-            d="M 100,350 L 200,100" 
-            stroke="url(#asynx-main-grad)" 
+            d="M 98,348 L 192,82" 
+            stroke="url(#asynx-left-leg-grad)" 
             strokeWidth="28" 
             strokeLinecap="round" 
             className={isAnimating ? "asynx-animated-glow" : ""}
             filter="url(#asynx-glow-filter)"
           />
 
-          {/* Main 'A' Structure - Right Bar */}
+          {/* Main 'A' Right Leg */}
           <path 
-            d="M 200,100 L 300,350" 
-            stroke="url(#asynx-main-grad)" 
+            d="M 192,82 L 292,348" 
+            stroke="url(#asynx-right-leg-grad)" 
             strokeWidth="28" 
             strokeLinecap="round" 
             className={isAnimating ? "asynx-animated-glow" : ""}
             filter="url(#asynx-glow-filter)"
           />
 
-          {/* Upper Loop / Sync Energy Arrow */}
+          {/* Crossbar Curved Bridge */}
           <path 
-            d="M 200,80 C 230,80 270,90 300,110 L 300,140" 
-            stroke="url(#asynx-upper-grad)" 
+            d="M 112,295 C 145,310 185,318 210,312" 
+            stroke="url(#asynx-left-leg-grad)" 
             strokeWidth="22" 
+            strokeLinecap="round" 
+            fill="none"
+          />
+
+          {/* Bottom-Left Upward Arrow Loop */}
+          <path 
+            d="M 120,292 C 100,292 80,278 80,252 L 80,238" 
+            stroke="url(#asynx-bottom-loop-grad)" 
+            strokeWidth="18" 
             strokeLinecap="round" 
             fill="none"
             className={isAnimating ? "asynx-animated-flow" : ""}
           />
+          {/* Upward Arrowhead ▲ */}
           <polygon 
-            points="300,150 278,125 322,125" 
+            points="80,218 64,240 96,240" 
+            fill="#A855F7" 
+            className={isAnimating ? "asynx-animated-glow" : ""}
+          />
+          {/* Base Dot for Upward Arrow */}
+          <circle cx="80" cy="248" r="6" fill="#818CF8" />
+
+          {/* Top-Right Arc & Downward Arrow */}
+          <path 
+            d="M 188,82 C 225,80 282,85 288,105 L 288,120" 
+            stroke="url(#asynx-top-arc-grad)" 
+            strokeWidth="20" 
+            strokeLinecap="round" 
+            fill="none"
+            className={isAnimating ? "asynx-animated-flow" : ""}
+          />
+          {/* Downward Arrowhead ▼ */}
+          <polygon 
+            points="288,136 272,112 304,112" 
             fill="#FF007F" 
             className={isAnimating ? "asynx-animated-glow" : ""}
           />
+          {/* Cyan Dot beneath Downward Arrowhead */}
+          <circle cx="288" cy="146" r="7" fill="#38BDF8" />
 
         </g>
       </svg>

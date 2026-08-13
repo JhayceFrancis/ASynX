@@ -1,6 +1,12 @@
-const { app, BrowserWindow, net } = require('electron');
-const path = require('path');
-const http = require('http');
+import { app, BrowserWindow, net, nativeImage, Tray, Menu } from 'electron';
+import path, { dirname } from 'path';
+import http from 'http';
+import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const require = createRequire(import.meta.url);
 
 let mainWindow;
 
@@ -58,9 +64,7 @@ async function createWindow(port) {
   });
 
   // Tray Setup
-  const nativeImage = require('electron').nativeImage;
   const icon = nativeImage.createEmpty(); // Replace with actual icon if available
-  const { Tray, Menu } = require('electron');
   
   if (!tray) {
     tray = new Tray(icon);
