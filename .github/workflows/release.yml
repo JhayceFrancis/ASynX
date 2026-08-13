@@ -1,0 +1,34 @@
+name: Publish ASynX Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers workflow exclusively on version tags (e.g., v2.4.0-beta.1)
+
+permissions:
+  contents: write # Required for electron-builder to draft a GitHub Release
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Application
+        run: npm run build
+
+      - name: Package and Publish with Electron Builder
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --publish always
