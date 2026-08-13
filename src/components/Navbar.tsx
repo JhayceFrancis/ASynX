@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCw, Radio, Chrome, ShieldAlert, Cpu, Settings, Layers, AlertTriangle, Tv, CheckCircle2, Monitor, Sun, Moon } from 'lucide-react';
+import { RefreshCw, Radio, Compass, ShieldAlert, Cpu, Settings, Layers, AlertTriangle, Tv, CheckCircle2, Monitor, Sun, Moon } from 'lucide-react';
 import { AppSettings, BrowserExtensionState } from '../types';
 import { ASynXLogo } from './ASynXLogo';
 import { Tooltip } from './Tooltip';
@@ -34,7 +34,12 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Brand & App Info */}
         <div className="flex items-center space-x-3">
           <div className="flex items-center justify-center">
-            <ASynXLogo className="w-10 h-10 drop-shadow-[0_0_12px_rgba(99,102,241,0.4)]" animated={isSyncing} />
+            <ASynXLogo 
+              className="w-10 h-10 drop-shadow-[0_0_12px_rgba(99,102,241,0.4)]" 
+              animated={isSyncing} 
+              onClick={onTriggerSync}
+              title="Click logo to trigger manual ASynX sync"
+            />
           </div>
           <div>
             <div className="flex items-center space-x-2">
@@ -105,7 +110,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'bg-gray-100 dark:bg-[#111]/40 border-gray-300 dark:border-neutral-800 text-gray-600 dark:text-gray-400'
               }`}
             >
-              <Chrome className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+              <Compass className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
               <span>Browser Overlay</span>
               {extensionState.currentMedia?.isPlaying && (
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
@@ -186,7 +191,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#111]/50'
               }`}
             >
-              <Chrome className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
+              <Compass className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
               <span className={`overflow-hidden transition-all duration-300 ease-in-out ${activeTab === 'extension' ? 'max-w-[200px] ml-2 opacity-100' : 'max-w-0 opacity-0'}`}>Browser Overlay Companion</span>
             </button>
           </Tooltip>

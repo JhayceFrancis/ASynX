@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BrowserExtensionState, LibraryItem } from '../types';
 import { 
-  Chrome, 
+  Compass, 
   Play, 
   Pause, 
   CheckCircle2, 
@@ -58,7 +58,7 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
             <span className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-              <Chrome className="w-5 h-5" />
+              <Compass className="w-5 h-5" />
             </span>
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">AniSync Matrix Browser Plugin Companion</h2>
           </div>

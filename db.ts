@@ -12,7 +12,7 @@ export function getOrCreateEncryptionKey(): Buffer {
     return fs.readFileSync(KEY_FILE);
   }
   const key = crypto.randomBytes(32);
-  fs.writeFileSync(KEY_FILE, key);
+  fs.writeFileSync(KEY_FILE, key, { mode: 0o600 });
   return key;
 }
 

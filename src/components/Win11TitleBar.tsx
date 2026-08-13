@@ -19,7 +19,7 @@ export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
   if (!windowVisible) {
     return (
       <div className="fixed bottom-4 right-4 z-50 bg-white dark:bg-[#0a0a0a] border border-indigo-500/40 text-gray-900 dark:text-gray-100 p-3 rounded-2xl shadow-2xl flex items-center space-x-3 backdrop-blur-lg">
-        <ASynXLogo className="w-8 h-8 drop-shadow-[0_0_8px_rgba(99,102,241,0.6)]" animated={isSyncing} />
+        <ASynXLogo className="w-8 h-8 drop-shadow-[0_0_8px_rgba(99,102,241,0.6)]" animated={isSyncing} onClick={onTriggerSync} />
         <div>
           <p className="text-xs font-bold">{appName}</p>
           <p className="text-[10px] text-gray-600 dark:text-gray-400">Minimized to Windows System Tray</p>
@@ -38,7 +38,7 @@ export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
     <div className="bg-gray-50 dark:bg-black/90 backdrop-blur-md border-b border-gray-200 dark:border-neutral-900/90 text-gray-700 dark:text-gray-300 select-none flex items-center justify-between px-3 py-1.5 text-xs font-sans rounded-t-2xl">
       {/* Left: Window Icon & Title */}
       <div className="flex items-center space-x-2.5">
-        <ASynXLogo className="w-5 h-5 drop-shadow-[0_0_4px_rgba(99,102,241,0.5)]" animated={isSyncing} />
+        <ASynXLogo className="w-5 h-5 drop-shadow-[0_0_4px_rgba(99,102,241,0.5)]" animated={isSyncing} onClick={onTriggerSync} />
         <span className="font-semibold text-gray-800 dark:text-gray-200 tracking-tight text-[11px] sm:text-xs">
           {appName}
         </span>
