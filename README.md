@@ -42,139 +42,22 @@ git clone [https://github.com/JhayceFrancis/ASynX.wiki.git](https://github.com/J
 ```
 
 ---
-## ⚙️ Quick Start & Installation
-## 💻 Download & Installation Guide (Windows Client)
 
-Follow these steps to download and install the latest version of ASynX for Windows:
+## 
+## Screenshots of Windows 11 App
+<details>
+<summary>🖼️ <b>Click to view application gallery</b></summary>
+<br>
 
-### 1. Download the Installer
-1. Navigate to the [ASynX Releases page](https://github.com/JhayceFrancis/ASynX/releases) on GitHub.
-2. Locate the most recent release, which will be marked with a green **Latest** badge.
-3. Scroll to the bottom of the release notes and click to expand the **Assets** dropdown menu.
-4. Click on the Windows executable file (e.g., `ASynX Setup 2.4.0-beta.8.exe`) to download the installer directly to your machine.
+| Sync Matrix & Dashboard (Cyberpunk Black Mode) | Sync Matrix & Dashboard (Light Mode) |
+| :---: | :---: |
+| <img width="100%" src="https://github.com/user-attachments/assets/47f1e632-902f-43a0-93f0-899697cc670c" alt="ASynX App Dashboard in Cyberpunk Black Theme"> | <img width="100%" src="https://github.com/user-attachments/assets/1d02b51c-2046-4036-ab53-f355194ce521" alt="ASynX Dashboard in Light Theme"> |
+| **Conflict Resolution Tab** | **Plex Media Server & Tautulli Automation Suite** |
+| <img width="100%" src="https://github.com/user-attachments/assets/4fdd84d4-aed0-40a7-8c05-085d89f60e53" alt="ASynX Resolve mismatches between Simkl, MAL, and AniList."> | <img width="100%" src="https://github.com/user-attachments/assets/efe9a74b-497e-4f7c-b974-4b1436f822c3" alt="ASynX Plex & Tautulli Webhooks"> |
+| **Browser Plugin Companion** | **Settings, Remote, & Credentials** |
+| <img width="100%" src="https://github.com/user-attachments/assets/a9eef8b4-dbdf-4672-930b-957b17f090a4" alt="ASynX Browser Plugin Companion"> | <img width="100%" src="https://github.com/user-attachments/assets/59da8753-9a6c-4507-97ca-8e6cdf916eb8" alt="ASynX Settings, Remote Docker Configurator & API Keys"> |
 
-### 2. Run the Setup
-1. Open your Windows **Downloads** folder (or wherever your browser saves downloaded files).
-2. Double-click the downloaded `.exe` file to launch the setup process.
-
-### 3. Bypass Windows SmartScreen (If Prompted)
-Because ASynX does not currently utilise a paid enterprise code-signing certificate, Windows Defender SmartScreen may temporarily flag the programme as unrecognised upon launching the installer. To proceed securely:
-1. Click on the **More info** text link within the blue SmartScreen popup window.
-2. A new button will appear at the bottom right. Click **Run anyway** to authorise the installation.
-
-### 4. Launch the Application
-1. The installer will automatically unpack the files, configure the required dependencies, and complete the installation without requiring any further input.
-2. Once finished, ASynX will automatically launch. Desktop and Start Menu shortcuts will be generated for quick access.
-
----
-### 1. Local Web Application
-Run ASynX on your local system with hot-reload development tools:
-
-```bash
-# Clone the repository
-git clone ahttps://github.com/JhayceFrancis/ASynX.git
-cd ASynX
-
-# Install dependencies
-npm install
-
-# Start development server (React + Express)
-npm run dev
-```
-Open `http://localhost:3000` in your browser.
-
----
-
-### 2. Standalone Windows Desktop Installer (.exe)
-Package ASynX into a native Windows executable (`.exe`) installer using Electron and NSIS:
-
-```bash
-# Clone and enter directory
-git clone https://github.com/JhayceFrancis/ASynX.git
-cd ASynX
-
-# Install dependencies
-npm install
-
-# Build frontend, server bundle, and package NSIS installer
-npm run build:exe
-```
-The generated setup file will be created in the `release/` directory (e.g., `release/ASynX Setup 2.4.0-beta.1.exe`).
-
----
-
-### 3. Self-Hosted Docker Backend & Sync Daemon
-Deploy ASynX in a Docker container to act as a headless background sync server:
-
-```bash
-# Clone repository on your server
-git clone https://github.com/JhayceFrancis/ASynX.git
-cd ASynX
-
-# Boot container in detached mode
-docker-compose up -d
-```
-
-#### Environment Configuration (`.env` or `docker-compose.yml`):
-```yaml
-environment:
-  - PORT=3000
-  - HOST=0.0.0.0
-  - REMOTE_SYNC_API_KEY=your_secure_random_key_here
-  - GEMINI_API_KEY=your_optional_gemini_key
-  # Optional initial credentials
-  - ANILIST_ACCESS_TOKEN=
-  - SIMKL_CLIENT_ID=
-  - MAL_CLIENT_ID=
-```
-
----
-
-## 🔐 Environment Variables (`.env.example`)
-
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `PORT` | Web server listening port | `3000` |
-| `HOST` | Bind address for Express server | `0.0.0.0` |
-| `APP_URL` | Base URL used for generating webhooks | `http://localhost:3000` |
-| `DATA_DIR` | Custom directory for encrypted DB file | Project root / userData |
-| `REMOTE_SYNC_API_KEY` | API Key required for remote sync server endpoints | Auto-generated |
-| `GEMINI_API_KEY` | Optional key for AI-assisted conflict resolution | None |
-| `SSL_KEY_PATH` / `SSL_CERT_PATH` | Path to TLS private key / certificate for HTTPS | None |
-
----
-## 💻 Download & Installation Guide (Windows Client)
-
-Follow these steps to download and install the latest version of ASynX for Windows:
-
-### 1. Download the Installer
-1. Navigate to the [ASynX Releases page](https://github.com/JhayceFrancis/ASynX/releases) on GitHub.
-2. Locate the most recent release, which will be marked with a green **Latest** badge.
-3. Scroll to the bottom of the release notes and click to expand the **Assets** dropdown menu.
-4. Click on the Windows executable file (e.g., `ASynX Setup 2.4.0-beta.8.exe`) to download the installer directly to your machine.
-
-### 2. Run the Setup
-1. Open your Windows **Downloads** folder (or wherever your browser saves downloaded files).
-2. Double-click the downloaded `.exe` file to launch the setup process.
-
-### 3. Bypass Windows SmartScreen (If Prompted)
-Because ASynX does not currently utilise a paid enterprise code-signing certificate, Windows Defender SmartScreen may temporarily flag the programme as unrecognised upon launching the installer. To proceed securely:
-1. Click on the **More info** text link within the blue SmartScreen popup window.
-2. A new button will appear at the bottom right. Click **Run anyway** to authorise the installation.
-
-### 4. Launch the Application
-1. The installer will automatically unpack the files, configure the required dependencies, and complete the installation without requiring any further input.
-2. Once finished, ASynX will automatically launch. Desktop and Start Menu shortcuts will be generated for quick access.
-
----
-
-## 📜 Available Scripts
-
-- `npm run dev` - Start local development server with Vite middleware.
-- `npm run build` - Compile React frontend and bundle Express server into `dist/`.
-- `npm start` - Launch bundled production Node server (`dist/server.cjs`).
-- `npm run build:exe` - Generate standalone Windows `.exe` installer.
-- `npm run lint` - Perform TypeScript type validation.
+</details>
 
 ---
 
