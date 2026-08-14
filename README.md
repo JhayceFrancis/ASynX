@@ -32,15 +32,47 @@ Packed into a modern Windows 11 Fluent dark-themed UI, ASynX acts as your unifie
 - **100% Open Source (MIT License)**: Safe for public distribution, fork, and self-hosting.
 
 ---
+## 📖 Documentation & Wiki
 
+For comprehensive guides, advanced configurations, and troubleshooting, please visit the official [ASynX Wiki](https://github.com/JhayceFrancis/ASynX/wiki). 
+
+If you prefer to read or contribute to the documentation offline, you can clone the wiki repository locally to your machine:
+```bash
+git clone [https://github.com/JhayceFrancis/ASynX.wiki.git](https://github.com/JhayceFrancis/ASynX.wiki.git)
+```
+
+---
 ## ⚙️ Quick Start & Installation
+## 💻 Download & Installation Guide (Windows Client)
 
+Follow these steps to download and install the latest version of ASynX for Windows:
+
+### 1. Download the Installer
+1. Navigate to the [ASynX Releases page](https://github.com/JhayceFrancis/ASynX/releases) on GitHub.
+2. Locate the most recent release, which will be marked with a green **Latest** badge.
+3. Scroll to the bottom of the release notes and click to expand the **Assets** dropdown menu.
+4. Click on the Windows executable file (e.g., `ASynX Setup 2.4.0-beta.8.exe`) to download the installer directly to your machine.
+
+### 2. Run the Setup
+1. Open your Windows **Downloads** folder (or wherever your browser saves downloaded files).
+2. Double-click the downloaded `.exe` file to launch the setup process.
+
+### 3. Bypass Windows SmartScreen (If Prompted)
+Because ASynX does not currently utilise a paid enterprise code-signing certificate, Windows Defender SmartScreen may temporarily flag the programme as unrecognised upon launching the installer. To proceed securely:
+1. Click on the **More info** text link within the blue SmartScreen popup window.
+2. A new button will appear at the bottom right. Click **Run anyway** to authorise the installation.
+
+### 4. Launch the Application
+1. The installer will automatically unpack the files, configure the required dependencies, and complete the installation without requiring any further input.
+2. Once finished, ASynX will automatically launch. Desktop and Start Menu shortcuts will be generated for quick access.
+
+---
 ### 1. Local Web Application
 Run ASynX on your local system with hot-reload development tools:
 
 ```bash
 # Clone the repository
-git clone https://github.com/JhayceFrancis/ASynX.git
+git clone ahttps://github.com/JhayceFrancis/ASynX.git
 cd ASynX
 
 # Install dependencies
@@ -109,6 +141,30 @@ environment:
 | `REMOTE_SYNC_API_KEY` | API Key required for remote sync server endpoints | Auto-generated |
 | `GEMINI_API_KEY` | Optional key for AI-assisted conflict resolution | None |
 | `SSL_KEY_PATH` / `SSL_CERT_PATH` | Path to TLS private key / certificate for HTTPS | None |
+
+---
+## 💻 Download & Installation Guide (Windows Client)
+
+Follow these steps to download and install the latest version of ASynX for Windows:
+
+### 1. Download the Installer
+1. Navigate to the [ASynX Releases page](https://github.com/JhayceFrancis/ASynX/releases) on GitHub.
+2. Locate the most recent release, which will be marked with a green **Latest** badge.
+3. Scroll to the bottom of the release notes and click to expand the **Assets** dropdown menu.
+4. Click on the Windows executable file (e.g., `ASynX Setup 2.4.0-beta.8.exe`) to download the installer directly to your machine.
+
+### 2. Run the Setup
+1. Open your Windows **Downloads** folder (or wherever your browser saves downloaded files).
+2. Double-click the downloaded `.exe` file to launch the setup process.
+
+### 3. Bypass Windows SmartScreen (If Prompted)
+Because ASynX does not currently utilise a paid enterprise code-signing certificate, Windows Defender SmartScreen may temporarily flag the programme as unrecognised upon launching the installer. To proceed securely:
+1. Click on the **More info** text link within the blue SmartScreen popup window.
+2. A new button will appear at the bottom right. Click **Run anyway** to authorise the installation.
+
+### 4. Launch the Application
+1. The installer will automatically unpack the files, configure the required dependencies, and complete the installation without requiring any further input.
+2. Once finished, ASynX will automatically launch. Desktop and Start Menu shortcuts will be generated for quick access.
 
 ---
 
