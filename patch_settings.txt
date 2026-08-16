@@ -1,0 +1,105 @@
+--- src/components/SettingsView.tsx
++++ src/components/SettingsView.tsx
+@@ -1,4 +1,4 @@
+-import React, { useState } from 'react';
++import React, { useState, useEffect } from 'react';
+ import { Save, Settings, Play, Database, Key, CheckCircle2, ShieldCheck, Terminal, UploadCloud, RefreshCw, FileSpreadsheet, HardDrive, Radio, Search } from 'lucide-react';
+ import { AppSettings } from '../types';
+ import { BackupSettingsView } from './BackupSettingsView';
+@@ -29,6 +29,48 @@
+     setImportState(null);
+   };
+ 
++  // OAuth Popup Handler
++  const handleConnect = async (provider: string) => {
++    try {
++      const response = await fetch(`/api/auth/${provider}/url`);
++      if (!response.ok) throw new Error('Failed to get auth URL');
++      const { url } = await response.json();
++      
++      const authWindow = window.open(
++        url,
++        'oauth_popup',
++        'width=600,height=700'
++      );
++      
++      if (!authWindow) {
++        alert('Please allow popups for this site to connect your account.');
++      }
++    } catch (error) {
++      console.error('OAuth error:', error);
++      alert('OAuth integration is currently unavailable.');
++    }
++  };
++
++  useEffect(() => {
++    const handleMessage = (event: MessageEvent) => {
++      const origin = event.origin;
++      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
++        return;
++      }
++      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
++        const { provider, token } = event.data;
++        if (provider === 'simkl') setFormState(prev => ({ ...prev, simkl: { ...prev.simkl, accessToken: token, connected: true } }));
++        if (provider === 'mal') setFormState(prev => ({ ...prev, mal: { ...prev.mal, accessToken: token, connected: true } }));
++        if (provider === 'anilist') setFormState(prev => ({ ...prev, anilist: { ...prev.anilist, accessToken: token, connected: true } }));
++      }
++    };
++    window.addEventListener('message', handleMessage);
++    return () => window.removeEventListener('message', handleMessage);
++  }, []);
++
+   const [activeSection, setActiveSection] = useState<'api'|'webhook'|'database'|'system'>('api');
+ 
+   return (
+@@ -173,6 +215,16 @@
+               />
+             </div>
+ 
++            <div className="pt-2 border-t border-gray-100 dark:border-neutral-800">
++              <button
++                type="button"
++                onClick={() => handleConnect('simkl')}
++                className="w-full flex items-center justify-center space-x-2 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition shadow-sm"
++              >
++                <span>Connect with Simkl</span>
++              </button>
++            </div>
++
+             <div>
+               <label className="text-gray-600 dark:text-gray-400 font-medium">Simkl Client ID</label>
+               <input
+@@ -226,6 +278,16 @@
+               />
+             </div>
+ 
++            <div className="pt-2 border-t border-gray-100 dark:border-neutral-800">
++              <button
++                type="button"
++                onClick={() => handleConnect('mal')}
++                className="w-full flex items-center justify-center space-x-2 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold transition shadow-sm"
++              >
++                <span>Connect with MyAnimeList</span>
++              </button>
++            </div>
++
+             <div>
+               <label className="text-gray-600 dark:text-gray-400 font-medium">MAL Client ID</label>
+               <input
+@@ -275,6 +337,16 @@
+               />
+             </div>
+ 
++            <div className="pt-2 border-t border-gray-100 dark:border-neutral-800">
++              <button
++                type="button"
++                onClick={() => handleConnect('anilist')}
++                className="w-full flex items-center justify-center space-x-2 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm font-bold transition shadow-sm"
++              >
++                <span>Connect with AniList</span>
++              </button>
++            </div>
++
+             <div>
+               <label className="text-gray-600 dark:text-gray-400 font-medium">OAuth User Token</label>
+               <input

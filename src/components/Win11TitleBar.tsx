@@ -6,12 +6,14 @@ interface Win11TitleBarProps {
   appName?: string;
   isSyncing?: boolean;
   onTriggerSync?: () => void;
+  progress?: number;
 }
 
 export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
   appName = "ASynX Studio",
   isSyncing = false,
-  onTriggerSync
+  onTriggerSync,
+  progress
 }) => {
   const [isMaximized, setIsMaximized] = useState(true);
   const [windowVisible, setWindowVisible] = useState(true);
@@ -35,7 +37,32 @@ export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
   }
 
   return (
-    <div className="bg-gray-50 dark:bg-black/90 backdrop-blur-md border-b border-gray-200 dark:border-neutral-900/90 text-gray-700 dark:text-gray-300 select-none flex items-center justify-between px-3 py-1.5 text-xs font-sans rounded-t-2xl">
+    <div className="relative bg-gray-50 dark:bg-black/90 backdrop-blur-md border-b border-gray-200 dark:border-neutral-900/90 text-gray-700 dark:text-gray-300 select-none flex items-center justify-between px-3 py-1.5 text-xs font-sans rounded-t-2xl">
+      {/* Subtle Progress Bar */}
+      {isSyncing && (
+        <div className="absolute bottom-0 left-0 w-full h-[2px] bg-transparent overflow-hidden rounded-b-xl z-50">
+          <div 
+            className="h-full bg-indigo-500 rounded-full"
+            style={
+              progress !== undefined 
+                ? { width: `${progress}%`, transition: 'width 300ms ease-in-out' }
+                : { 
+                    width: '30%', 
+                    position: 'relative', 
+                    animation: 'asynx-indeterminate 1.5s infinite linear' 
+                  }
+            }
+          />
+          <style>{`
+            @keyframes asynx-indeterminate {
+              0% { left: -30%; width: 30%; }
+              50% { left: 30%; width: 50%; }
+              100% { left: 100%; width: 30%; }
+            }
+          `}</style>
+        </div>
+      )}
+
       {/* Left: Window Icon & Title */}
       <div className="flex items-center space-x-2.5">
         <ASynXLogo className="w-5 h-5 drop-shadow-[0_0_4px_rgba(99,102,241,0.5)]" animated={isSyncing} onClick={onTriggerSync} />

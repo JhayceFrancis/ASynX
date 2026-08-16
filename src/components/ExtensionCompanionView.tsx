@@ -27,7 +27,7 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
   libraryItems,
   onTriggerExtensionAction
 }) => {
-  const [selectedSite, setSelectedSite] = useState<'Crunchyroll' | 'Netflix' | 'HiDive' | 'Aniwave'>('Crunchyroll');
+  const [selectedSite, setSelectedSite] = useState<string>('Crunchyroll');
   const [selectedItemTitle, setSelectedItemTitle] = useState('Solo Leveling Season 2: Arise from the Shadow');
   const [testEpisode, setTestEpisode] = useState(10);
   const [testProgress, setTestProgress] = useState(88);
@@ -63,7 +63,7 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">AniSync Matrix Browser Plugin Companion</h2>
           </div>
           <p className="text-xs text-gray-700 dark:text-gray-300">
-            Simulates real-time video player detection & auto-scroobling on Crunchyroll, Netflix, HiDive, and web streaming portals.
+            Simulates real-time video player detection & auto-scroobling on Windows desktop apps (MPC-BE, VLC, Plex, Stremio) and web streaming portals (Crunchyroll, Netflix, HiDive).
           </p>
         </div>
 
@@ -163,16 +163,27 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] text-gray-600 dark:text-gray-400 font-medium">Select Streaming Portal</label>
+                <label className="text-[11px] text-gray-600 dark:text-gray-400 font-medium">Select Streaming App/Portal</label>
                 <select
                   value={selectedSite}
-                  onChange={(e) => setSelectedSite(e.target.value as any)}
+                  onChange={(e) => setSelectedSite(e.target.value)}
                   className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-1.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none"
                 >
-                  <option value="Crunchyroll">Crunchyroll</option>
-                  <option value="Netflix">Netflix</option>
-                  <option value="HiDive">HiDive</option>
-                  <option value="Aniwave">Aniwave Portal</option>
+                  <optgroup label="Web Portals">
+                    <option value="Crunchyroll">Crunchyroll</option>
+                    <option value="Netflix">Netflix Web</option>
+                    <option value="HiDive">HiDive</option>
+                    <option value="Plex Web">Plex Web</option>
+                    <option value="Stremio Web">Stremio Web</option>
+                    <option value="Aniwave">Aniwave Portal</option>
+                  </optgroup>
+                  <optgroup label="Native Windows Apps">
+                    <option value="MPC-BE">MPC-BE (Local)</option>
+                    <option value="VLC">VLC Media Player (Local)</option>
+                    <option value="Plex Desktop">Plex Desktop</option>
+                    <option value="Netflix Desktop">Netflix Desktop</option>
+                    <option value="Stremio Desktop">Stremio Desktop</option>
+                  </optgroup>
                 </select>
               </div>
 

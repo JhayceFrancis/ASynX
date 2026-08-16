@@ -1,12 +1,21 @@
-import { app, BrowserWindow, net, nativeImage, Tray, Menu } from 'electron';
+import { app, BrowserWindow, net, nativeImage, Tray, Menu, ipcMain } from 'electron';
 import path, { dirname } from 'path';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
+
+// Suppress DEP0180 (fs.Stats constructor deprecation) caused by Electron's internal asar handling in Node 22+
+const originalEmitWarning = process.emitWarning;
+process.emitWarning = function (warning, type, code, ...args) {
+  const isDep0180 = code === 'DEP0180' || (warning && warning.code === 'DEP0180');
+  if (isDep0180) return;
+  return originalEmitWarning.call(process, warning, type, code, ...args);
+};
 
 let mainWindow;
 
@@ -63,19 +72,67 @@ async function createWindow(port) {
     }
   });
 
-  // Tray Setup
-  const icon = nativeImage.createEmpty(); // Replace with actual icon if available
-  
+  // --- Tray Setup & Dynamic Animation (324 Frames) ---
+
+  const frameDir = path.join(__dirname, 'ASynX-split').replace('app.asar', 'app.asar.unpacked');
+
+  // Set your default resting icon (using the first frame)
+  const idleIcon = nativeImage.createFromPath(path.join(frameDir, 'ASynX_000.png'));
+
+  // Automatically read, filter, and numerically sort all 324 PNG frames from ASynX_000 to ASynX_323
+  const syncFrames = fs.readdirSync(frameDir)
+    .filter(file => file.startsWith('ASynX_') && file.endsWith('.png'))
+    .sort((a, b) => {
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    })
+    .map(file => nativeImage.createFromPath(path.join(frameDir, file)));
+
+  let animationInterval = null;
+  let currentFrame = 0;
+
   if (!tray) {
-    tray = new Tray(icon);
+    tray = new Tray(idleIcon);
     const contextMenu = Menu.buildFromTemplate([
       { label: 'Show ASynX Studio', click: function () { mainWindow.show(); } },
-      { label: 'Quit', click: function () { isQuitting = true; app.quit(); } }
+      { type: 'separator' },
+      { label: 'Quit ASynX', click: function () { isQuitting = true; app.quit(); } }
     ]);
-    tray.setToolTip('ASynX Background Sync Daemon');
+    tray.setToolTip('ASynX: Up to date');
     tray.setContextMenu(contextMenu);
     tray.on('click', () => mainWindow.show());
   }
+
+  // Function to start the high-density flipbook animation
+  function startTrayAnimation() {
+    if (animationInterval || syncFrames.length === 0) return;
+    
+    animationInterval = setInterval(() => {
+      tray.setImage(syncFrames[currentFrame]);
+      currentFrame = (currentFrame + 1) % syncFrames.length;
+    }, 10); // 10ms interval ensures a silky-smooth loop across all 324 frames
+  }
+
+  // Function to stop and return to resting state
+  function stopTrayAnimation() {
+    if (animationInterval) {
+      clearInterval(animationInterval);
+      animationInterval = null;
+    }
+    tray.setImage(idleIcon);
+    currentFrame = 0;
+  }
+
+  // --- IPC Listeners for the React Frontend ---
+
+  ipcMain.on('sync-started', () => {
+    if (tray) tray.setToolTip('ASynX: Syncing...');
+    startTrayAnimation();
+  });
+
+  ipcMain.on('sync-stopped', () => {
+    if (tray) tray.setToolTip('ASynX: Up to date');
+    stopTrayAnimation();
+  });
 
 
   // Wait for the local Express server to start before loading

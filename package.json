@@ -23,7 +23,11 @@
     },
     "files": [
       "dist/**/*",
-      "electron-main.js"
+      "electron-main.js",
+      "ASynX-split/**/*"
+    ],
+    "asarUnpack": [
+      "ASynX-split/**/*"
     ],
     "win": {
       "target": "nsis"

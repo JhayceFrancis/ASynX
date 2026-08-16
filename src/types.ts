@@ -59,7 +59,7 @@ export interface SyncLog {
 export interface WebhookLog {
   id: string;
   timestamp: string;
-  source: 'plex' | 'tautulli';
+  source: 'plex' | 'tautulli' | 'jellyfin' | 'emby';
   event: 'media.play' | 'media.pause' | 'media.scrobble' | 'media.stop' | 'watched';
   mediaTitle: string;
   grandparentTitle?: string; // Anime / Series title
@@ -74,7 +74,7 @@ export interface WebhookLog {
 
 export interface BrowserExtensionState {
   installed: boolean;
-  activeSite?: 'Crunchyroll' | 'Netflix' | 'HiDive' | 'Hulu' | 'Aniwave' | 'Local Player';
+  activeSite?: 'Crunchyroll' | 'Netflix' | 'HiDive' | 'Hulu' | 'Aniwave' | 'Local Player' | 'MPC-BE' | 'VLC' | 'Plex Desktop' | 'Netflix Desktop' | 'Stremio Desktop' | 'Plex Web' | 'Stremio Web';
   currentMedia?: {
     title: string;
     season: number;
@@ -91,6 +91,12 @@ export interface BrowserExtensionState {
 }
 
 export interface AppSettings {
+  theme?: {
+    accentColor: string;
+    isGradient: boolean;
+    gradientStart?: string;
+    gradientEnd?: string;
+  };
   simkl: {
     clientId: string;
     accessToken: string;
@@ -116,6 +122,22 @@ export interface AppSettings {
     webhookUrl: string;
     autoScrobbleThreshold: number; // e.g. 80%
   };
+  jellyfin: {
+    serverUrl: string;
+    apiKey: string;
+    connected: boolean;
+    serverName: string;
+    webhookUrl: string;
+    autoScrobbleThreshold: number;
+  };
+  emby: {
+    serverUrl: string;
+    apiKey: string;
+    connected: boolean;
+    serverName: string;
+    webhookUrl: string;
+    autoScrobbleThreshold: number;
+  };
   tautulli: {
     webhookUrl: string;
     secretKey: string;
@@ -139,6 +161,7 @@ export interface AppSettings {
     frequency: 'daily' | 'weekly' | 'monthly';
     token: string;
     targetId: string;
+    encryptionKey?: string;
     lastBackup?: string;
   };
   syncRules: {
@@ -167,7 +190,8 @@ export interface SyncAnalyticsPoint {
   totalSyncs: number;
   successfulSyncs: number;
   conflicts: number;
-  successRate: number; // percentage e.g. 95
+  successRate: number;
+  avgLatencyMs: number;
 }
 
 export interface HealthCheckService {
@@ -182,6 +206,8 @@ export interface HealthCheckService {
 export interface HealthCheckStatus {
   plex: HealthCheckService;
   tautulli: HealthCheckService;
+  jellyfin: HealthCheckService;
+  emby: HealthCheckService;
   lastOverallPing: string;
 }
 

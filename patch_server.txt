@@ -1,0 +1,63 @@
+--- server.ts
++++ server.ts
+@@ -512,6 +512,50 @@
+ // --- API ENDPOINTS ---
+ 
++// Database Raw Export Endpoint
++app.get("/api/database/raw", (req, res) => {
++  res.json({
++    appSettings,
++    libraryItems,
++    syncLogs,
++    webhookLogs,
++    extensionState
++  });
++});
++
++// OAuth URL Generator
++app.get("/api/auth/:provider/url", (req, res) => {
++  const { provider } = req.params;
++  const redirectUri = `${process.env.APP_URL || 'http://localhost:3000'}/auth/callback/${provider}`;
++  
++  if (provider === 'simkl') {
++    const clientId = appSettings.simkl.clientId || 'mock_client_id';
++    const url = `https://simkl.com/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}`;
++    return res.json({ url });
++  } else if (provider === 'mal') {
++    const clientId = appSettings.mal.clientId || 'mock_client_id';
++    const url = `https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=${clientId}&code_challenge=mock_challenge&code_challenge_method=plain`;
++    return res.json({ url });
++  } else if (provider === 'anilist') {
++    const clientId = process.env.ANILIST_CLIENT_ID || 'mock_client_id';
++    const url = `https://anilist.co/api/v2/oauth/authorize?client_id=${clientId}&response_type=token`;
++    return res.json({ url });
++  }
++  res.status(404).json({ error: "Unknown provider" });
++});
++
++// OAuth Callback Handler
++app.get("/auth/callback/:provider", (req, res) => {
++  const { provider } = req.params;
++  const { code, access_token } = req.query;
++  const tokenToSave = access_token || code || 'mock_token_success';
++  
++  res.send(`
++    <html>
++      <body>
++        <script>
++          let token = new URLSearchParams(window.location.hash.substring(1)).get('access_token') || '${tokenToSave}';
++          if (window.opener) {
++            window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: '${provider}', token: token }, '*');
++            window.close();
++          } else {
++            window.location.href = '/';
++          }
++        </script>
++        <p>Authentication successful. This window should close automatically.</p>
++      </body>
++    </html>
++  `);
++});
++
+ // System Health Endpoint
+ app.get("/api/health", (req, res) => {

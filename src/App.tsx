@@ -16,13 +16,17 @@ import { ConflictResolutionView } from './components/ConflictResolutionView';
 import { PlexWebhookView } from './components/PlexWebhookView';
 import { ExtensionCompanionView } from './components/ExtensionCompanionView';
 import { SettingsView } from './components/SettingsView';
+import { DatabaseView } from './components/DatabaseView';
+import { ApiDocumentationView } from './components/ApiDocumentationView';
+import { DockerBackendView } from './components/DockerBackendView';
+import { SyncPerformanceView } from './components/SyncPerformanceView';
 import { OverrideModal } from './components/OverrideModal';
 import { ScrobblePrompt } from './components/ScrobblePrompt';
 import { ToastContainer, ToastMessage, ToastType } from './components/ToastContainer';
 import { useRef } from 'react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'matrix' | 'conflicts' | 'plex' | 'extension' | 'settings'>('matrix');
+  const [activeTab, setActiveTab] = useState<'matrix' | 'conflicts' | 'plex' | 'extension' | 'settings' | 'api-docs' | 'docker-backend' | 'performance'>('matrix');
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [webhookLogs, setWebhookLogs] = useState<WebhookLog[]>([]);
@@ -182,9 +186,9 @@ export default function App() {
     }
   };
 
-  const handleTriggerSimulatedWebhook = async (payload: any) => {
+  const handleTriggerSimulatedWebhook = async (payload: any, source: string = 'plex') => {
     try {
-      const res = await fetch('/api/webhooks/plex', {
+      const res = await fetch(`/api/webhooks/${source}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -238,8 +242,51 @@ export default function App() {
 
   const conflictItems = items.filter(i => i.hasConflict);
 
+  const themeStyle = {
+    ...(settings.theme?.accentColor && { '--accent-base': settings.theme.accentColor }),
+    ...(settings.theme?.isGradient && settings.theme?.gradientStart && settings.theme?.gradientEnd && {
+      '--accent-gradient-start': settings.theme.gradientStart,
+      '--accent-gradient-end': settings.theme.gradientEnd,
+    }),
+  } as React.CSSProperties;
+
+  const CustomTheme = () => (
+    <style dangerouslySetInnerHTML={{__html: `
+      :root {
+        --accent-base: ${settings.theme?.accentColor || '#4f46e5'};
+        --accent-gradient: ${settings.theme?.isGradient 
+          ? `linear-gradient(to right, ${settings.theme?.gradientStart}, ${settings.theme?.gradientEnd})` 
+          : 'var(--accent-base)'};
+      }
+      .bg-indigo-500, .bg-indigo-600, .bg-purple-600 {
+        background: var(--accent-gradient) !important;
+      }
+      .hover\\:bg-indigo-500:hover, .hover\\:bg-indigo-600:hover {
+        background: var(--accent-base) !important;
+        opacity: 0.9;
+      }
+      .text-indigo-500, .text-indigo-600, .text-purple-500, .text-purple-600 {
+        color: var(--accent-base) !important;
+      }
+      .border-indigo-500, .border-purple-500 {
+        border-color: var(--accent-base) !important;
+      }
+      .from-indigo-600 {
+        --tw-gradient-from: ${settings.theme?.gradientStart || 'var(--accent-base)'} !important;
+      }
+      .to-purple-600 {
+        --tw-gradient-to: ${settings.theme?.gradientEnd || 'var(--accent-base)'} !important;
+      }
+      ::selection {
+        background-color: var(--accent-base) !important;
+        color: white !important;
+      }
+    `}} />
+  );
+
   return (
-    <div className={`min-h-screen font-sans antialiased selection:bg-indigo-500 selection:text-white flex flex-col justify-between ${isDarkMode ? 'dark bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+    <div style={themeStyle} className={`min-h-screen font-sans antialiased flex flex-col justify-between ${isDarkMode ? 'dark bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+      <CustomTheme />
       <div>
         {/* Windows 11 Title Bar */}
         <Win11TitleBar
@@ -305,6 +352,18 @@ export default function App() {
               settings={settings}
               onSaveSettings={handleSaveSettings}
             />
+          )}
+          {activeTab === 'database' && (
+            <DatabaseView />
+          )}
+          {activeTab === 'api-docs' && (
+            <ApiDocumentationView />
+          )}
+          {activeTab === 'docker-backend' && (
+            <DockerBackendView />
+          )}
+          {activeTab === 'performance' && (
+            <SyncPerformanceView />
           )}
         </main>
       </div>

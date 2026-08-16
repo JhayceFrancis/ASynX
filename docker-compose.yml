@@ -2,7 +2,8 @@ version: '3.8'
 
 services:
   asynx:
-    build: .
+    image: ghcr.io/jhaycefrancis/asynx:latest
+    container_name: asynx-backend
     ports:
       - "3000:3000"
     volumes:
@@ -18,12 +19,12 @@ services:
       - PORT=3000
       
       # Define your custom API Key here so only your clients can sync
-      - REMOTE_SYNC_API_KEY=your_secure_api_key_123
+      - REMOTE_SYNC_API_KEY=
       
       # --- SECURE NATIVE TLS / HTTPS CONFIGURATION ---
       # To secure internet traffic, provide the paths to your mapped certificates
       # - SSL_KEY_PATH=/app/certs/privkey.pem
       # - SSL_CERT_PATH=/app/certs/fullchain.pem
       
-      # - GEMINI_API_KEY=your_key_here
+      # - GEMINI_API_KEY=
     restart: unless-stopped

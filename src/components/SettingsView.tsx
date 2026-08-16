@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { PreImportModal } from './PreImportModal';
+import { BackupSettingsView } from './BackupSettingsView';
 import { AppSettings, PlatformType } from '../types';
+import { OAuthService } from '../services/OAuthService';
 import { 
   Database, FileSpreadsheet, Settings, Radio, Cloud, 
+  Palette,
   CheckCircle2, 
   Key, 
   Tv, 
@@ -44,9 +47,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setFormState(settings);
   }, [settings]);
 
+  // OAuth Popup Handler
+  const handleConnect = async (provider: string) => {
+    await OAuthService.initiateLogin(provider);
+  };
+
+  React.useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      setFormState(prev => {
+        const updatedSettings = OAuthService.processAuthMessage(event, prev);
+        if (updatedSettings) {
+          // Immediately persist the captured tokens to the backend DB
+          onSaveSettings(updatedSettings);
+          return updatedSettings;
+        }
+        return prev;
+      });
+    };
+    
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onSaveSettings]);
+
   // Background processor for the queue
   React.useEffect(() => {
-    const processNext = async () => {
+    const processNext = () => {
       const nextPending = importQueue.find(q => q.status === 'pending');
       if (!nextPending) return;
 
@@ -145,6 +170,61 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </button>
       </div>
 
+      {/* Section 0: Theme & Appearance */}
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
+        <div className="flex items-center space-x-2 border-b border-gray-200 dark:border-neutral-900 pb-3">
+          <Palette className="w-5 h-5 text-indigo-400" />
+          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Theme & Accent Colors</h3>
+        </div>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Accent Color</label>
+              <input
+                type="color"
+                value={formState.theme?.accentColor || '#4f46e5'}
+                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, accentColor: e.target.value, isGradient: prev.theme?.isGradient || false } }))}
+                className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
+              />
+            </div>
+            <div className="flex items-center space-x-4 mt-6">
+              <label className="flex items-center space-x-2 cursor-pointer text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={formState.theme?.isGradient || false}
+                  onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, isGradient: e.target.checked, accentColor: prev.theme?.accentColor || '#4f46e5' } }))}
+                  className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+                />
+                <span>Enable Gradient Styling</span>
+              </label>
+            </div>
+          </div>
+          
+          {formState.theme?.isGradient && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-100 dark:border-neutral-900/50">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Gradient Start</label>
+                <input
+                  type="color"
+                  value={formState.theme?.gradientStart || '#4f46e5'}
+                  onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, isGradient: true, accentColor: prev.theme?.accentColor || '#4f46e5', gradientStart: e.target.value } }))}
+                  className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Gradient End</label>
+                <input
+                  type="color"
+                  value={formState.theme?.gradientEnd || '#9333ea'}
+                  onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, isGradient: true, accentColor: prev.theme?.accentColor || '#4f46e5', gradientEnd: e.target.value } }))}
+                  className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Section 1: Simkl API Config */}
         <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
@@ -185,17 +265,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               />
             </div>
 
-            <div>
-              <label className="text-gray-600 dark:text-gray-400 font-medium">OAuth User Token</label>
-              <input
-                type="password"
-                value={formState.simkl.accessToken}
-                onChange={(e) => setFormState({
-                  ...formState,
-                  simkl: { ...formState.simkl, accessToken: e.target.value }
-                })}
-                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 font-mono"
-              />
+            <div className="pt-2">
+              <label className="text-gray-600 dark:text-gray-400 font-medium mb-1 block">Authentication</label>
+              <button
+                type="button"
+                onClick={() => handleConnect('simkl')}
+                className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl text-sm font-bold transition shadow-sm ${
+                  formState.simkl.connected
+                    ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
+                    : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                }`}
+              >
+                <span>{formState.simkl.connected ? 'Simkl Connected ✓' : 'Connect with Simkl'}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -239,17 +321,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               />
             </div>
 
-            <div>
-              <label className="text-gray-600 dark:text-gray-400 font-medium">Bearer Token</label>
-              <input
-                type="password"
-                value={formState.mal.accessToken}
-                onChange={(e) => setFormState({
-                  ...formState,
-                  mal: { ...formState.mal, accessToken: e.target.value }
-                })}
-                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 font-mono"
-              />
+            <div className="pt-2">
+              <label className="text-gray-600 dark:text-gray-400 font-medium mb-1 block">Authentication</label>
+              <button
+                type="button"
+                onClick={() => handleConnect('mal')}
+                className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl text-sm font-bold transition shadow-sm ${
+                  formState.mal.connected
+                    ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
+                    : 'bg-blue-600 hover:bg-blue-500 text-white'
+                }`}
+              >
+                <span>{formState.mal.connected ? 'MyAnimeList Connected ✓' : 'Connect with MyAnimeList'}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -280,61 +364,179 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               />
             </div>
 
-            <div>
-              <label className="text-gray-600 dark:text-gray-400 font-medium">GraphQL Personal Access Token</label>
-              <input
-                type="password"
-                value={formState.anilist.accessToken}
-                onChange={(e) => setFormState({
-                  ...formState,
-                  anilist: { ...formState.anilist, accessToken: e.target.value }
-                })}
-                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 font-mono"
-              />
+            <div className="pt-2">
+              <label className="text-gray-600 dark:text-gray-400 font-medium mb-1 block">Authentication</label>
+              <button
+                type="button"
+                onClick={() => handleConnect('anilist')}
+                className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl text-sm font-bold transition shadow-sm ${
+                  formState.anilist.connected
+                    ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
+                    : 'bg-sky-600 hover:bg-sky-500 text-white'
+                }`}
+              >
+                <span>{formState.anilist.connected ? 'AniList Connected ✓' : 'Connect with AniList'}</span>
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Section 4: Plex & Tautulli Config */}
+        {/* Section 4: Media Servers & Scrobbler */}
         <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
             <div className="flex items-center space-x-2">
               <Tv className="w-4 h-4 text-purple-400" />
-              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Plex & Tautulli Scrobbler</h3>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Media Servers (Plex, Jellyfin, Emby)</h3>
             </div>
             <span className="text-xs text-purple-400 font-semibold bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
               Webhooks Active
             </span>
           </div>
 
-          <div className="space-y-3 text-xs">
-            <div>
-              <label className="text-gray-600 dark:text-gray-400 font-medium">Plex Server Name</label>
-              <input
-                type="text"
-                value={formState.plex.serverName}
-                onChange={(e) => setFormState({
-                  ...formState,
-                  plex: { ...formState.plex, serverName: e.target.value }
-                })}
-                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-              />
+          <div className="space-y-6 text-xs">
+            {/* Plex */}
+            <div className="space-y-3">
+              <h4 className="font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-100 dark:border-neutral-800 pb-1">Plex</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-gray-600 dark:text-gray-400 font-medium">Plex Server Name</label>
+                  <input
+                    type="text"
+                    value={formState.plex.serverName}
+                    onChange={(e) => setFormState({
+                      ...formState,
+                      plex: { ...formState.plex, serverName: e.target.value }
+                    })}
+                    className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-600 dark:text-gray-400 font-medium">Scrobble Threshold (%)</label>
+                  <input
+                    type="number"
+                    min="50"
+                    max="98"
+                    value={formState.plex.autoScrobbleThreshold}
+                    onChange={(e) => setFormState({
+                      ...formState,
+                      plex: { ...formState.plex, autoScrobbleThreshold: Number(e.target.value) }
+                    })}
+                    className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="text-gray-600 dark:text-gray-400 font-medium">Auto-Scrobble Watch Percentage Threshold</label>
-              <input
-                type="number"
-                min="50"
-                max="98"
-                value={formState.plex.autoScrobbleThreshold}
-                onChange={(e) => setFormState({
-                  ...formState,
-                  plex: { ...formState.plex, autoScrobbleThreshold: Number(e.target.value) }
-                })}
-                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-              />
+            {/* Jellyfin */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
+                <h4 className="font-semibold text-gray-800 dark:text-gray-200">Jellyfin</h4>
+                <button
+                  onClick={() => setFormState(prev => ({ ...prev, jellyfin: { ...prev.jellyfin, connected: !prev.jellyfin.connected } }))}
+                  className={`w-8 h-4 rounded-full transition-colors relative ${formState.jellyfin.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+                >
+                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.jellyfin.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+              
+              {formState.jellyfin.connected && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-gray-600 dark:text-gray-400 font-medium">Jellyfin Server Name</label>
+                    <input
+                      type="text"
+                      value={formState.jellyfin.serverName}
+                      onChange={(e) => setFormState({
+                        ...formState,
+                        jellyfin: { ...formState.jellyfin, serverName: e.target.value }
+                      })}
+                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-gray-600 dark:text-gray-400 font-medium">Server URL</label>
+                    <input
+                      type="text"
+                      value={formState.jellyfin.serverUrl}
+                      onChange={(e) => setFormState({
+                        ...formState,
+                        jellyfin: { ...formState.jellyfin, serverUrl: e.target.value }
+                      })}
+                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-gray-600 dark:text-gray-400 font-medium">API Key</label>
+                    <input
+                      type="password"
+                      value={formState.jellyfin.apiKey}
+                      onChange={(e) => setFormState({
+                        ...formState,
+                        jellyfin: { ...formState.jellyfin, apiKey: e.target.value }
+                      })}
+                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                      placeholder="Jellyfin API Token"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Emby */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
+                <h4 className="font-semibold text-gray-800 dark:text-gray-200">Emby</h4>
+                <button
+                  onClick={() => setFormState(prev => ({ ...prev, emby: { ...prev.emby, connected: !prev.emby.connected } }))}
+                  className={`w-8 h-4 rounded-full transition-colors relative ${formState.emby.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+                >
+                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.emby.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+              
+              {formState.emby.connected && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-gray-600 dark:text-gray-400 font-medium">Emby Server Name</label>
+                    <input
+                      type="text"
+                      value={formState.emby.serverName}
+                      onChange={(e) => setFormState({
+                        ...formState,
+                        emby: { ...formState.emby, serverName: e.target.value }
+                      })}
+                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-gray-600 dark:text-gray-400 font-medium">Server URL</label>
+                    <input
+                      type="text"
+                      value={formState.emby.serverUrl}
+                      onChange={(e) => setFormState({
+                        ...formState,
+                        emby: { ...formState.emby, serverUrl: e.target.value }
+                      })}
+                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-gray-600 dark:text-gray-400 font-medium">API Key</label>
+                    <input
+                      type="password"
+                      value={formState.emby.apiKey}
+                      onChange={(e) => setFormState({
+                        ...formState,
+                        emby: { ...formState.emby, apiKey: e.target.value }
+                      })}
+                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                      placeholder="Emby API Token"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            
           </div>
         </div>
       </div>
@@ -351,13 +553,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="flex items-center space-x-2">
             <button
               onClick={async () => {
-                const res = await fetch('/api/remote-sync/push', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                  setFormState(prev => ({ ...prev, remoteSync: { ...prev.remoteSync, lastSync: data.timestamp } }));
-                  alert('Successfully pushed to remote server.');
-                } else {
-                  alert(data.error || 'Failed to push');
+                try {
+                  const res = await fetch('/api/remote-sync/push', { method: 'POST' });
+                  const data = await res.json();
+                  if (data.success) {
+                    setFormState(prev => ({ ...prev, remoteSync: { ...prev.remoteSync, lastSync: data.timestamp } }));
+                    alert('Successfully pushed to remote server.');
+                  } else {
+                    alert(data.error || 'Failed to push');
+                  }
+                } catch (err) {
+                  alert('Network error while pushing to remote server.');
                 }
               }}
               className="px-3 py-1.5 bg-indigo-600/20 text-indigo-500 hover:bg-indigo-600/30 rounded-lg text-xs font-semibold transition"
@@ -366,13 +572,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </button>
             <button
               onClick={async () => {
-                const res = await fetch('/api/remote-sync/pull', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                  alert('Successfully pulled from remote server. Refreshing...');
-                  window.location.reload();
-                } else {
-                  alert(data.error || 'Failed to pull');
+                try {
+                  const res = await fetch('/api/remote-sync/pull', { method: 'POST' });
+                  const data = await res.json();
+                  if (data.success) {
+                    alert('Successfully pulled from remote server. Refreshing...');
+                    window.location.reload();
+                  } else {
+                    alert(data.error || 'Failed to pull');
+                  }
+                } catch (err) {
+                  alert('Network error while pulling from remote server.');
                 }
               }}
               className="px-3 py-1.5 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-lg text-xs font-semibold transition"
@@ -494,7 +704,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <span className="block text-gray-800 dark:text-gray-200 font-semibold">Local Media Detection</span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">Enable API endpoint for browser extensions (Crunchyroll, Netflix) and Stremio/VLC plugins to report playback.</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">Enable tracking of web-based streaming (Netflix, Crunchyroll, Hi-Dive, Plex, Stremio) and native Windows apps (MPC-BE, VLC, Plex Desktop, Netflix Desktop, Stremio Desktop).</span>
             </div>
             <button
               onClick={() => setFormState(prev => ({ ...prev, daemonSettings: { ...prev.daemonSettings, enableLocalMediaDetection: !prev.daemonSettings?.enableLocalMediaDetection } }))}
@@ -599,7 +809,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               id="file-upload" 
               className="absolute inset-0 w-full h-full z-10 opacity-0 cursor-pointer"
               accept=".csv,.json,.zip,.html"
-              onChange={async (e) => {
+              onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) {
                   const ext = file.name.split('.').pop()?.toLowerCase();
@@ -645,8 +855,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     // Fallback to legacy upload for unsupported formats
                     const reader = new FileReader();
                     reader.onload = async (event) => {
-                      const base64Data = event.target?.result;
                       try {
+                        const base64Data = event.target?.result;
                         const res = await fetch('/api/data/import-file', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -739,125 +949,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       )}
 
       {/* Section 9: Automated Cloud Backups */}
-      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3 gap-3">
-          <div className="flex items-center space-x-2">
-            <Cloud className="w-5 h-5 text-indigo-400" />
-            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Automated Cloud Backups</h3>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              onClick={async () => {
-                if (!formState.automatedBackups?.enabled) {
-                   alert("Please enable backups first.");
-                   return;
-                }
-                try {
-                  const res = await fetch('/api/backups/run', { method: 'POST' });
-                  const data = await res.json();
-                  if (data.success) {
-                    setFormState(prev => ({ ...prev, automatedBackups: { ...prev.automatedBackups!, lastBackup: data.lastBackup } }));
-                    alert(data.message);
-                  } else {
-                    alert(data.error || 'Backup failed');
-                  }
-                } catch (err) {
-                  alert("Network error.");
-                }
-              }}
-              className="px-3 py-1.5 bg-indigo-600/20 text-indigo-500 hover:bg-indigo-600/30 rounded-lg text-xs font-semibold transition"
-            >
-              Run Backup Now
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 text-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="block text-gray-800 dark:text-gray-200 font-semibold">Enable Automated Backups</span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">Regularly push an encrypted snapshot to your preferred cloud.</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                const isEnabled = formState.automatedBackups?.enabled || false;
-                setFormState(prev => ({ 
-                  ...prev, 
-                  automatedBackups: { 
-                    ...(prev.automatedBackups || { provider: 'github_gist', frequency: 'weekly', token: '', targetId: '' }),
-                    enabled: !isEnabled 
-                  } 
-                }));
-              }}
-              className={`w-12 h-6 rounded-full transition-colors relative ${formState.automatedBackups?.enabled ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
-            >
-              <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${formState.automatedBackups?.enabled ? 'translate-x-7' : 'translate-x-1'}`} />
-            </button>
-          </div>
-          
-          {formState.automatedBackups?.enabled && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-              <div>
-                <label className="text-gray-600 dark:text-gray-400 font-medium text-xs">Provider</label>
-                <select
-                  value={formState.automatedBackups.provider}
-                  onChange={(e) => setFormState(prev => ({ ...prev, automatedBackups: { ...prev.automatedBackups!, provider: e.target.value as any } }))}
-                  className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none"
-                >
-                  <option value="github_gist">GitHub Private Gist</option>
-                  <option value="github_repo">GitHub Private Repo</option>
-                  <option value="gdrive">Google Drive</option>
-                  <option value="onedrive">OneDrive</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="text-gray-600 dark:text-gray-400 font-medium text-xs">Frequency</label>
-                <select
-                  value={formState.automatedBackups.frequency}
-                  onChange={(e) => setFormState(prev => ({ ...prev, automatedBackups: { ...prev.automatedBackups!, frequency: e.target.value as any } }))}
-                  className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none"
-                >
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly (Default)</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-gray-600 dark:text-gray-400 font-medium text-xs">Auth Token (Personal Access Token / OAuth Refresh Token)</label>
-                <input
-                  type="password"
-                  placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                  value={formState.automatedBackups.token || ''}
-                  onChange={(e) => setFormState(prev => ({ ...prev, automatedBackups: { ...prev.automatedBackups!, token: e.target.value } }))}
-                  className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 font-mono text-xs"
-                />
-              </div>
-              
-              <div className="sm:col-span-2">
-                <label className="text-gray-600 dark:text-gray-400 font-medium text-xs">Target ID (Gist ID, Repo Name, or Folder ID)</label>
-                <input
-                  type="text"
-                  placeholder="Leave blank to create new (Gist only)"
-                  value={formState.automatedBackups.targetId || ''}
-                  onChange={(e) => setFormState(prev => ({ ...prev, automatedBackups: { ...prev.automatedBackups!, targetId: e.target.value } }))}
-                  className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 font-mono text-xs"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-gray-600 dark:text-gray-400 font-medium text-xs">Last Backup</label>
-                <div className="mt-1 text-xs text-gray-800 dark:text-gray-200 font-mono">
-                  {formState.automatedBackups?.lastBackup ? new Date(formState.automatedBackups.lastBackup).toLocaleString() : 'Never'}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <BackupSettingsView formState={formState} setFormState={setFormState} />
 
       {/* Section 10: System Maintenance */}
       <div className="bg-white dark:bg-[#0a0a0a] border border-red-200 dark:border-red-900/30 rounded-3xl p-6 space-y-4 shadow-sm relative overflow-hidden">
@@ -900,11 +992,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           headers={importState.headers}
           onClose={() => setImportState(null)}
           onImport={async (mappedItems) => {
-            const currentId = importState.id;
-            setImportState(null); // close modal
-            setImportQueue(prev => prev.map(q => q.id === currentId ? { ...q, status: 'importing' } : q));
-            
             try {
+              if (!importState) return;
+              const currentId = importState.id;
+              setImportState(null); // close modal
+              setImportQueue(prev => prev.map(q => q.id === currentId ? { ...q, status: 'importing' } : q));
+              
               // Simulated database saving delay
               await new Promise(r => setTimeout(r, 1500));
 
@@ -926,7 +1019,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 setImportQueue(prev => prev.map(q => q.id === currentId ? { ...q, status: 'error', error: data.error || 'Failed to import' } : q));
               }
             } catch (err) {
-              setImportQueue(prev => prev.map(q => q.id === currentId ? { ...q, status: 'error', error: 'Network error.' } : q));
+              if (importState) {
+                setImportQueue(prev => prev.map(q => q.id === importState.id ? { ...q, status: 'error', error: 'Network error.' } : q));
+              }
             }
           }}
         />

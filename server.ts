@@ -3,6 +3,7 @@ import https from "https";
 import fs from "fs";
 import path from "path";
 import cors from "cors";
+import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { loadDb, saveDb } from "./db.js";
@@ -18,6 +19,7 @@ import {
 
 // Initialize Express App
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Security & Cors Middleware
@@ -59,6 +61,22 @@ const defaultSettings: AppSettings = {
     connected: true,
     serverName: "HomeMediaServer-Plex",
     webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/plex`,
+    autoScrobbleThreshold: 80
+  },
+  jellyfin: {
+    serverUrl: process.env.JELLYFIN_SERVER_URL || "http://192.168.1.101:8096",
+    apiKey: process.env.JELLYFIN_API_KEY || "",
+    connected: false,
+    serverName: "HomeMediaServer-Jellyfin",
+    webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/jellyfin`,
+    autoScrobbleThreshold: 80
+  },
+  emby: {
+    serverUrl: process.env.EMBY_SERVER_URL || "http://192.168.1.102:8096",
+    apiKey: process.env.EMBY_API_KEY || "",
+    connected: false,
+    serverName: "HomeMediaServer-Emby",
+    webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/emby`,
     autoScrobbleThreshold: 80
   },
   tautulli: {
@@ -450,7 +468,12 @@ const dbState = loadDb({
   extensionState: defaultExtensionState
 });
 
-let appSettings: AppSettings = dbState.appSettings;
+let appSettings: AppSettings = {
+  ...defaultSettings,
+  ...dbState.appSettings,
+  jellyfin: dbState.appSettings.jellyfin || defaultSettings.jellyfin,
+  emby: dbState.appSettings.emby || defaultSettings.emby
+};
 let libraryItems: LibraryItem[] = dbState.libraryItems;
 let syncLogs: SyncLog[] = dbState.syncLogs;
 let webhookLogs: WebhookLog[] = dbState.webhookLogs;
@@ -490,6 +513,87 @@ const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({
 
 // --- API ENDPOINTS ---
 
+// Database Raw Export Endpoint
+app.get("/api/database/raw", (req, res) => {
+  res.json({
+    appSettings,
+    libraryItems,
+    syncLogs,
+    webhookLogs,
+    extensionState
+  });
+});
+
+// OAuth URL Generator
+app.get("/api/auth/:provider/url", (req, res) => {
+  const { provider } = req.params;
+  const redirectUri = `${process.env.APP_URL || 'http://localhost:3000'}/auth/callback/${provider}`;
+  
+  if (provider === 'simkl') {
+    const clientId = appSettings.simkl.clientId || 'mock_client_id';
+    const url = `https://simkl.com/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}`;
+    return res.json({ url });
+  } else if (provider === 'mal') {
+    const clientId = appSettings.mal.clientId || 'mock_client_id';
+    const url = `https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=${clientId}&code_challenge=mock_challenge&code_challenge_method=plain`;
+    return res.json({ url });
+  } else if (provider === 'anilist') {
+    const clientId = process.env.ANILIST_CLIENT_ID || 'mock_client_id';
+    const url = `https://anilist.co/api/v2/oauth/authorize?client_id=${clientId}&response_type=token`;
+    return res.json({ url });
+  }
+  res.status(404).json({ error: "Unknown provider" });
+});
+
+// OAuth Callback Handler
+app.get("/auth/callback/:provider", (req, res) => {
+  const { provider } = req.params;
+  const { code, access_token } = req.query;
+  const tokenToSave = access_token || code || 'mock_token_success';
+  
+  res.send(`
+    <html>
+      <body>
+        <script>
+          let token = new URLSearchParams(window.location.hash.substring(1)).get('access_token') || '${tokenToSave}';
+          if (window.opener) {
+            window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: '${provider}', token: token }, '*');
+            window.close();
+          } else {
+            window.location.href = '/';
+          }
+        </script>
+        <p>Authentication successful. This window should close automatically.</p>
+      </body>
+    </html>
+  `);
+});
+
+// System Health Endpoint
+app.get("/api/health", (req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime() });
+});
+
+app.get("/api/docker/info", (req, res) => {
+  res.json({
+    nodeEnv: process.env.NODE_ENV || 'development',
+    dockerEnv: fs.existsSync('/.dockerenv'),
+    platform: process.platform,
+    arch: process.arch,
+    memoryUsage: process.memoryUsage(),
+    uptime: process.uptime(),
+    pid: process.pid,
+    nodeVersion: process.version,
+    trustProxy: app.get('trust proxy')
+  });
+});
+
+// System Client Logs Endpoint
+app.post("/api/logs", (req, res) => {
+  console.log(`[Client Log - ${req.body.level?.toUpperCase()}]`, req.body);
+  res.json({ success: true });
+});
+
 // Get Library Items directly
 app.get("/api/library", (req, res) => {
   res.json(libraryItems);
@@ -507,7 +611,37 @@ app.get("/api/settings", (req, res) => {
 
 // Update Settings
 app.post("/api/settings", (req, res) => {
+  const oldSettings = { ...appSettings };
   appSettings = { ...appSettings, ...req.body };
+
+  const now = new Date().toISOString();
+
+  if (appSettings.jellyfin.connected && (!oldSettings.jellyfin || !oldSettings.jellyfin.connected)) {
+    syncLogs.unshift({
+      id: `slog-${Date.now()}-jf`,
+      timestamp: now,
+      source: "auto_sync",
+      itemTitle: "Jellyfin Integration",
+      action: "Webhook Registration & Library Polling",
+      platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+      status: "success",
+      details: `Successfully registered webhook for Jellyfin server at ${appSettings.jellyfin.serverUrl} and initiated library polling.`
+    });
+  }
+
+  if (appSettings.emby.connected && (!oldSettings.emby || !oldSettings.emby.connected)) {
+    syncLogs.unshift({
+      id: `slog-${Date.now()}-emby`,
+      timestamp: now,
+      source: "auto_sync",
+      itemTitle: "Emby Integration",
+      action: "Webhook Registration & Library Polling",
+      platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+      status: "success",
+      details: `Successfully registered webhook for Emby server at ${appSettings.emby.serverUrl} and initiated library polling.`
+    });
+  }
+
   persistDb();
   res.json({ success: true, settings: appSettings });
 });
@@ -829,6 +963,7 @@ app.get("/api/sync/analytics", (req, res) => {
     const conflicts = (i === 0 || i === 4 || i === 9) ? Math.floor(Math.random() * 2) + 1 : (Math.random() > 0.7 ? 1 : 0);
     const successfulSyncs = totalSyncs - conflicts;
     const successRate = Math.round((successfulSyncs / totalSyncs) * 100);
+    const avgLatencyMs = Math.floor(Math.random() * 300) + 200; // Simulated latency 200-500ms
 
     points.push({
       date: dateStr,
@@ -836,7 +971,8 @@ app.get("/api/sync/analytics", (req, res) => {
       totalSyncs,
       successfulSyncs,
       conflicts,
-      successRate
+      successRate,
+      avgLatencyMs
     });
   }
 
@@ -852,6 +988,22 @@ let healthStatusState = {
     latencyMs: 22,
     lastChecked: new Date().toISOString(),
     details: appSettings.plex.connected ? "Plex Media Server 'HomeMediaServer-Plex' reachable. Webhook handler active." : "Connection timeout at target URL."
+  },
+  jellyfin: {
+    name: "Jellyfin Media Server Integration",
+    endpoint: appSettings.jellyfin.serverUrl || "http://192.168.1.101:8096",
+    status: appSettings.jellyfin.connected ? "online" : "offline",
+    latencyMs: 18,
+    lastChecked: new Date().toISOString(),
+    details: appSettings.jellyfin.connected ? `Jellyfin Server '${appSettings.jellyfin.serverName}' reachable. Webhook handler active.` : "Connection timeout at target URL."
+  },
+  emby: {
+    name: "Emby Media Server Integration",
+    endpoint: appSettings.emby.serverUrl || "http://192.168.1.102:8096",
+    status: appSettings.emby.connected ? "online" : "offline",
+    latencyMs: 20,
+    lastChecked: new Date().toISOString(),
+    details: appSettings.emby.connected ? `Emby Server '${appSettings.emby.serverName}' reachable. Webhook handler active.` : "Connection timeout at target URL."
   },
   tautulli: {
     name: "Tautulli Analytics & Webhook Service",
@@ -893,6 +1045,30 @@ app.post("/api/webhooks/health/ping", (req, res) => {
       latencyMs: Math.floor(Math.random() * 25) + 20,
       lastChecked: now,
       details: isTautulliOk ? "PING OK (200 OK) — Tautulli Webhook Listener authenticated." : "PING FAILED — Service offline."
+    };
+  }
+
+  if (service === 'jellyfin' || !service) {
+    const isJellyfinOk = appSettings.jellyfin.connected;
+    healthStatusState.jellyfin = {
+      name: "Jellyfin Media Server Integration",
+      endpoint: appSettings.jellyfin.serverUrl || "http://192.168.1.101:8096",
+      status: isJellyfinOk ? "online" : "offline",
+      latencyMs: Math.floor(Math.random() * 25) + 20,
+      lastChecked: now,
+      details: isJellyfinOk ? `PING OK (200 OK) — Jellyfin Server '${appSettings.jellyfin.serverName}' responding.` : "PING FAILED — Service offline."
+    };
+  }
+
+  if (service === 'emby' || !service) {
+    const isEmbyOk = appSettings.emby.connected;
+    healthStatusState.emby = {
+      name: "Emby Media Server Integration",
+      endpoint: appSettings.emby.serverUrl || "http://192.168.1.102:8096",
+      status: isEmbyOk ? "online" : "offline",
+      latencyMs: Math.floor(Math.random() * 25) + 20,
+      lastChecked: now,
+      details: isEmbyOk ? `PING OK (200 OK) — Emby Server '${appSettings.emby.serverName}' responding.` : "PING FAILED — Service offline."
     };
   }
 
@@ -1208,6 +1384,156 @@ app.post("/api/webhooks/tautulli", (req, res) => {
   res.json({ success: true, message: "Tautulli webhook received." });
 });
 
+// Webhook Handler for Jellyfin Media Server
+app.post("/api/webhooks/jellyfin", (req, res) => {
+  if (appSettings.maintenanceMode) {
+    return res.status(503).json({ error: "Maintenance mode is active. Jellyfin webhook ignored." });
+  }
+  const body = req.body;
+  const NotificationType = body.NotificationType || "PlaybackStop";
+  const showName = body.SeriesName || body.Name || "Unknown Show";
+  const season = body.SeasonNumber || 1;
+  const episode = body.EpisodeNumber || 1;
+  const user = body.Provider_jellyfin || body.UserId || "JellyfinUser";
+  const player = body.Client || "Jellyfin Client";
+  
+  if (NotificationType !== "PlaybackStop") {
+      return res.json({ success: true, message: "Ignored event type." });
+  }
+
+  let matchedItem = libraryItems.find(i => 
+    i.title.toLowerCase().includes(showName.toLowerCase()) ||
+    showName.toLowerCase().includes(i.title.toLowerCase().slice(0, 8))
+  ) || libraryItems[0];
+
+  const now = new Date().toISOString();
+
+  if (matchedItem) {
+    if (matchedItem.platforms.simkl) {
+      matchedItem.platforms.simkl.episode = Math.max(matchedItem.platforms.simkl.episode, episode);
+      matchedItem.platforms.simkl.updatedAt = now;
+    }
+    if (matchedItem.platforms.mal && matchedItem.platforms.mal.id !== 'mal-none') {
+      matchedItem.platforms.mal.episode = Math.max(matchedItem.platforms.mal.episode, episode);
+      matchedItem.platforms.mal.updatedAt = now;
+    }
+    if (matchedItem.platforms.anilist) {
+      matchedItem.platforms.anilist.episode = Math.max(matchedItem.platforms.anilist.episode, episode);
+      matchedItem.platforms.anilist.updatedAt = now;
+    }
+  }
+
+  const logEntry: WebhookLog = {
+    id: `wlog-${Date.now()}`,
+    timestamp: now,
+    source: "jellyfin",
+    event: "watched",
+    mediaTitle: `${showName} S0${season}E0${episode}`,
+    grandparentTitle: showName,
+    parentIndex: season,
+    index: episode,
+    user,
+    player,
+    progressPercent: 100,
+    matchedItemId: matchedItem?.id,
+    rawPayload: body
+  };
+
+  webhookLogs.unshift(logEntry);
+
+  syncLogs.unshift({
+    id: `slog-${Date.now()}`,
+    timestamp: now,
+    source: "jellyfin_webhook",
+    itemTitle: matchedItem?.title || showName,
+    action: `Jellyfin Watch Notification (S${season}E${episode})`,
+    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    status: "success" as "success",
+    details: `Jellyfin trigger processed for ${showName} Ep ${episode}.`
+  });
+
+  res.json({ success: true, message: "Jellyfin webhook received." });
+});
+
+// Webhook Handler for Emby Media Server
+app.post("/api/webhooks/emby", (req, res) => {
+  if (appSettings.maintenanceMode) {
+    return res.status(503).json({ error: "Maintenance mode is active. Emby webhook ignored." });
+  }
+  
+  let payload = req.body;
+  if (typeof payload.data === 'string') {
+    try {
+      payload = JSON.parse(payload.data);
+    } catch (e) {}
+  }
+  
+  const event = payload.Event || "playback.stop";
+  if (event !== "playback.stop" && event !== "playback.scrobble") {
+     return res.json({ success: true, message: "Ignored event type." });
+  }
+
+  const item = payload.Item || {};
+  const showName = item.SeriesName || item.Name || "Unknown Show";
+  const season = item.ParentIndexNumber || 1;
+  const episode = item.IndexNumber || 1;
+  const user = payload.User?.Name || "EmbyUser";
+  const player = payload.Session?.Client || "Emby Client";
+
+  let matchedItem = libraryItems.find(i => 
+    i.title.toLowerCase().includes(showName.toLowerCase()) ||
+    showName.toLowerCase().includes(i.title.toLowerCase().slice(0, 8))
+  ) || libraryItems[0];
+
+  const now = new Date().toISOString();
+
+  if (matchedItem) {
+    if (matchedItem.platforms.simkl) {
+      matchedItem.platforms.simkl.episode = Math.max(matchedItem.platforms.simkl.episode, episode);
+      matchedItem.platforms.simkl.updatedAt = now;
+    }
+    if (matchedItem.platforms.mal && matchedItem.platforms.mal.id !== 'mal-none') {
+      matchedItem.platforms.mal.episode = Math.max(matchedItem.platforms.mal.episode, episode);
+      matchedItem.platforms.mal.updatedAt = now;
+    }
+    if (matchedItem.platforms.anilist) {
+      matchedItem.platforms.anilist.episode = Math.max(matchedItem.platforms.anilist.episode, episode);
+      matchedItem.platforms.anilist.updatedAt = now;
+    }
+  }
+
+  const logEntry: WebhookLog = {
+    id: `wlog-${Date.now()}`,
+    timestamp: now,
+    source: "emby",
+    event: "watched",
+    mediaTitle: `${showName} S0${season}E0${episode}`,
+    grandparentTitle: showName,
+    parentIndex: season,
+    index: episode,
+    user,
+    player,
+    progressPercent: 100,
+    matchedItemId: matchedItem?.id,
+    rawPayload: payload
+  };
+
+  webhookLogs.unshift(logEntry);
+
+  syncLogs.unshift({
+    id: `slog-${Date.now()}`,
+    timestamp: now,
+    source: "emby_webhook",
+    itemTitle: matchedItem?.title || showName,
+    action: `Emby Watch Notification (S${season}E${episode})`,
+    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    status: "success" as "success",
+    details: `Emby trigger processed for ${showName} Ep ${episode}.`
+  });
+
+  res.json({ success: true, message: "Emby webhook received." });
+});
+
 // Get Webhook & Sync Logs
 app.get("/api/webhooks/logs", (req, res) => {
   res.json({
@@ -1267,6 +1593,112 @@ app.post("/api/extension/action", (req, res) => {
   res.json({ success: true, extensionState, logs: syncLogs.slice(0, 10) });
 });
 
+// --- BACKEND DOCKER SYNC DAEMON ---
+let lastDaemonSyncTimestamp: string | null = null;
+let daemonCycleCount = 0;
+
+function executeBackendDockerSyncDaemonCycle() {
+  if (appSettings.maintenanceMode) {
+    console.log("[DOCKER DAEMON] Maintenance mode active; skipping background sync cycle.");
+    return;
+  }
+
+  const nowIso = new Date().toISOString();
+  lastDaemonSyncTimestamp = nowIso;
+  daemonCycleCount++;
+
+  let syncedCount = 0;
+  let autoResolvedConflicts = 0;
+  
+  const defaultSOT = appSettings.syncRules?.defaultSourceOfTruth || 'anilist';
+  const autoResolve = appSettings.syncRules?.conflictPolicy === 'source_of_truth' || appSettings.syncRules?.autoResolveWithAI;
+
+  libraryItems.forEach(item => {
+    if (item.hasConflict && autoResolve) {
+      const sourcePlat = item.platforms[defaultSOT as PlatformType];
+      if (sourcePlat && sourcePlat.id !== 'mal-none') {
+        const targetEp = sourcePlat.episode;
+        const targetSt = sourcePlat.status;
+        
+        (['simkl', 'mal', 'anilist'] as PlatformType[]).forEach(p => {
+          if (item.platforms[p] && item.platforms[p]?.id !== 'mal-none') {
+            item.platforms[p]!.episode = targetEp;
+            item.platforms[p]!.status = targetSt;
+            item.platforms[p]!.updatedAt = nowIso;
+            item.platforms[p]!.synced = true;
+          }
+        });
+        item.hasConflict = false;
+        delete item.conflictDetails;
+        autoResolvedConflicts++;
+      }
+    } else if (!item.hasConflict) {
+      if (item.platforms.simkl) item.platforms.simkl.synced = true;
+      if (item.platforms.mal && item.platforms.mal.id !== 'mal-none') item.platforms.mal.synced = true;
+      if (item.platforms.anilist) item.platforms.anilist.synced = true;
+      syncedCount++;
+    }
+  });
+
+  const daemonLog: SyncLog = {
+    id: `slog-docker-daemon-${Date.now()}`,
+    timestamp: nowIso,
+    source: "daemon_background_sync",
+    itemTitle: `Docker Daemon Cycle #${daemonCycleCount}`,
+    action: "Standalone Backend Sync Execution",
+    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    status: "success",
+    details: `Backend Docker sync daemon executed automatically in server process (${libraryItems.length} items synced without requiring active frontend window).${autoResolvedConflicts > 0 ? ' Auto-resolved ' + autoResolvedConflicts + ' desynced items using ' + defaultSOT.toUpperCase() + ' as source of truth.' : ''}`
+  };
+  
+  syncLogs.unshift(daemonLog);
+  persistDb();
+
+  console.log(`[DOCKER DAEMON] Cycle #${daemonCycleCount} complete at ${nowIso}. Synced ${libraryItems.length} items.`);
+}
+
+// Docker Daemon ticker interval (checks configuration every 30 seconds)
+const DAEMON_CHECK_INTERVAL_MS = 30 * 1000;
+let lastCheckTime = Date.now();
+setInterval(() => {
+  const intervalMinutes = appSettings.syncRules?.autoSyncIntervalMinutes || 15;
+  const intervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
+  const now = Date.now();
+  if (now - lastCheckTime >= intervalMs) {
+    lastCheckTime = now;
+    executeBackendDockerSyncDaemonCycle();
+  }
+}, DAEMON_CHECK_INTERVAL_MS);
+
+// Backend Daemon definition moved to top of file
+
+// Daemon API endpoints moved up
+
+// Docker Daemon status API endpoints
+app.get("/api/daemon/status", (req, res) => {
+  const intervalMinutes = appSettings.syncRules?.autoSyncIntervalMinutes || 15;
+  res.json({
+    active: !appSettings.maintenanceMode,
+    intervalMinutes,
+    lastSyncTimestamp: lastDaemonSyncTimestamp,
+    cycleCount: daemonCycleCount,
+    serverUptimeSeconds: Math.floor(process.uptime()),
+    message: "Docker background sync daemon is active and running on Express backend server."
+  });
+});
+
+app.post("/api/daemon/sync-now", (req, res) => {
+  executeBackendDockerSyncDaemonCycle();
+  res.json({
+    success: true,
+    message: "Docker backend sync daemon cycle executed successfully.",
+    lastSyncTimestamp: lastDaemonSyncTimestamp,
+    logs: syncLogs.slice(0, 10)
+  });
+});
+
+// Daemon functions and endpoints moved above startServer
+
 // Start Server Function
 async function startServer() {
   // Vite dev middleware for development
@@ -1309,9 +1741,19 @@ setInterval(async () => {
 
 async function runAutomatedBackup() {
   if (!appSettings.automatedBackups) return;
-  const { provider, token, targetId } = appSettings.automatedBackups;
+  const { provider, token, targetId, encryptionKey } = appSettings.automatedBackups;
   
-  const payload = JSON.stringify({ appSettings, libraryItems, syncLogs, webhookLogs });
+  let payload = JSON.stringify({ appSettings, libraryItems, syncLogs, webhookLogs });
+  const filename = encryptionKey ? 'asynx_data.enc' : 'asynx_backup.json';
+
+  if (encryptionKey) {
+    const iv = crypto.randomBytes(16);
+    const key = crypto.createHash('sha256').update(String(encryptionKey)).digest('base64').substr(0, 32);
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+    let encrypted = cipher.update(payload, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    payload = iv.toString('hex') + ':' + encrypted;
+  }
   
   try {
     if (provider === 'github_gist') {
@@ -1326,7 +1768,7 @@ async function runAutomatedBackup() {
           description: "ASynX Automated Backup",
           public: false,
           files: {
-            "asynx_backup.json": { content: payload }
+            [filename]: { content: payload }
           }
         })
       });
@@ -1335,11 +1777,111 @@ async function runAutomatedBackup() {
         appSettings.automatedBackups.targetId = data.id; 
         appSettings.automatedBackups.lastBackup = new Date().toISOString();
         persistDb();
+      } else {
+        throw new Error(await res.text());
       }
-    } else {
-      // Mock logic for GDrive, OneDrive, GitHub Repo
-      appSettings.automatedBackups.lastBackup = new Date().toISOString();
-      persistDb();
+    } else if (provider === 'github_repo') {
+      const parts = targetId ? targetId.split('/') : [];
+      const owner = parts[0];
+      const repo = parts[1];
+      const path = parts.slice(2).length ? parts.slice(2).join('/') : filename;
+      
+      if (!owner || !repo) throw new Error("Invalid GitHub Repo format. Use owner/repo/path");
+
+      let sha = undefined;
+      const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      });
+      if (getRes.ok) {
+        const getData = await getRes.json();
+        sha = getData.sha;
+      }
+      
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: "ASynX Automated Backup",
+          content: Buffer.from(payload).toString('base64'),
+          sha
+        })
+      });
+      if (res.ok) {
+        appSettings.automatedBackups.lastBackup = new Date().toISOString();
+        persistDb();
+      } else {
+        throw new Error(await res.text());
+      }
+    } else if (provider === 'gdrive') {
+      const metadata = {
+        name: filename,
+        mimeType: 'application/json'
+      };
+      
+      let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+      let method = 'POST';
+      
+      if (targetId) {
+          url = `https://www.googleapis.com/upload/drive/v3/files/${targetId}?uploadType=multipart`;
+          method = 'PATCH';
+      }
+      
+      const boundary = '-------314159265358979323846';
+      const delimiter = "\r\n--" + boundary + "\r\n";
+      const close_delim = "\r\n--" + boundary + "--";
+
+      const multipartRequestBody =
+        delimiter +
+        'Content-Type: application/json\r\n\r\n' +
+        JSON.stringify(metadata) +
+        delimiter +
+        'Content-Type: application/json\r\n\r\n' +
+        payload +
+        close_delim;
+      
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`
+        },
+        body: multipartRequestBody
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        appSettings.automatedBackups.targetId = data.id;
+        appSettings.automatedBackups.lastBackup = new Date().toISOString();
+        persistDb();
+      } else {
+         throw new Error(await res.text());
+      }
+    } else if (provider === 'onedrive') {
+        const putUrl = targetId ? `https://graph.microsoft.com/v1.0/me/drive/items/${targetId}/content` : `https://graph.microsoft.com/v1.0/me/drive/root:/${filename}:/content`;
+        
+        const res = await fetch(putUrl, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: payload
+        });
+        if (res.ok) {
+            const data = await res.json();
+            appSettings.automatedBackups.targetId = data.id;
+            appSettings.automatedBackups.lastBackup = new Date().toISOString();
+            persistDb();
+        } else {
+            throw new Error(await res.text());
+        }
     }
   } catch (err) {
     console.error("Backup failed", err);
@@ -1352,6 +1894,70 @@ app.post("/api/backups/run", async (req, res) => {
   }
   await runAutomatedBackup();
   res.json({ success: true, message: "Backup completed successfully.", lastBackup: appSettings.automatedBackups.lastBackup });
+});
+
+app.post("/api/backups/restore", async (req, res) => {
+  if (!appSettings.automatedBackups?.enabled) {
+    return res.status(400).json({ error: "Automated backups not configured." });
+  }
+  const { provider, token, targetId, encryptionKey } = appSettings.automatedBackups;
+  if (!token) return res.status(400).json({ error: "Missing token" });
+  
+  const filename = encryptionKey ? 'asynx_data.enc' : 'asynx_backup.json';
+  
+  try {
+    let payloadStr = "";
+    if (provider === 'github_gist') {
+      if (!targetId) throw new Error("Gist ID required for restore");
+      const r = await fetch(`https://api.github.com/gists/${targetId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (!r.ok) throw new Error("Failed to fetch from github_gist");
+      const data = await r.json();
+      payloadStr = data.files[filename] ? data.files[filename].content : data.files['asynx_backup.json']?.content;
+    } else if (provider === 'github_repo') {
+      const parts = targetId ? targetId.split('/') : [];
+      const owner = parts[0];
+      const repo = parts[1];
+      const path = parts.slice(2).length ? parts.slice(2).join('/') : filename;
+      if (!owner || !repo) throw new Error("Invalid GitHub Repo format.");
+      const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3.raw' } });
+      if (!r.ok) throw new Error("Failed to fetch from github_repo");
+      payloadStr = await r.text();
+    } else if (provider === 'gdrive') {
+       if (!targetId) throw new Error("File ID required for restore");
+       const r = await fetch(`https://www.googleapis.com/drive/v3/files/${targetId}?alt=media`, { headers: { 'Authorization': `Bearer ${token}` } });
+       if (!r.ok) throw new Error("Failed to fetch from gdrive");
+       payloadStr = await r.text();
+    } else if (provider === 'onedrive') {
+       const fetchUrl = targetId ? `https://graph.microsoft.com/v1.0/me/drive/items/${targetId}/content` : `https://graph.microsoft.com/v1.0/me/drive/root:/${filename}:/content`;
+       const r = await fetch(fetchUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+       if (!r.ok) throw new Error("Failed to fetch from onedrive");
+       payloadStr = await r.text();
+    }
+    
+    if (payloadStr) {
+      if (encryptionKey && payloadStr.includes(':')) {
+        const parts = payloadStr.split(':');
+        const iv = Buffer.from(parts[0], 'hex');
+        const key = crypto.createHash('sha256').update(String(encryptionKey)).digest('base64').substr(0, 32);
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        let decrypted = decipher.update(parts[1], 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        payloadStr = decrypted;
+      }
+      
+      const parsed = JSON.parse(payloadStr);
+      if (parsed.appSettings) appSettings = parsed.appSettings;
+      if (parsed.libraryItems) libraryItems = parsed.libraryItems;
+      if (parsed.syncLogs) syncLogs = parsed.syncLogs;
+      if (parsed.webhookLogs) webhookLogs = parsed.webhookLogs;
+      persistDb();
+      res.json({ success: true, message: "Backup restored successfully." });
+    } else {
+      throw new Error("Empty payload");
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // --- BACKEND DOCKER SYNC DAEMON ---
@@ -1433,28 +2039,9 @@ setInterval(() => {
   }
 }, DAEMON_CHECK_INTERVAL_MS);
 
-// Docker Daemon status API endpoints
-app.get("/api/daemon/status", (req, res) => {
-  const intervalMinutes = appSettings.syncRules?.autoSyncIntervalMinutes || 15;
-  res.json({
-    active: !appSettings.maintenanceMode,
-    intervalMinutes,
-    lastSyncTimestamp: lastDaemonSyncTimestamp,
-    cycleCount: daemonCycleCount,
-    serverUptimeSeconds: Math.floor(process.uptime()),
-    message: "Docker background sync daemon is active and running on Express backend server."
-  });
-});
+// executeBackendDockerSyncDaemonCycle moved up
 
-app.post("/api/daemon/sync-now", (req, res) => {
-  executeBackendDockerSyncDaemonCycle();
-  res.json({
-    success: true,
-    message: "Docker backend sync daemon cycle executed successfully.",
-    lastSyncTimestamp: lastDaemonSyncTimestamp,
-    logs: syncLogs.slice(0, 10)
-  });
-});
+// Daemon API endpoints moved back down
 
   const HOST = process.env.HOST || "0.0.0.0";
   

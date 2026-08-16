@@ -1,0 +1,130 @@
+name: ASynX Master CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main # Triggers workflow automatically on merge or push to main
+  workflow_dispatch: # Allows manual trigger
+
+permissions:
+  contents: write # Required for GitHub Releases and Git Tagging
+  packages: write # Required to push to GitHub Container Registry (ghcr.io)
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ==========================================
+  # JOB 1: Windows Electron (.exe) Publisher
+  # ==========================================
+  build-electron:
+    name: Build & Publish Electron Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for GitHub Actions to read and push tags
+
+      - name: Setup Node.js (v20 LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Configure Git Bot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Extract Version and Auto-Tag
+        id: auto_tag
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $tagName = "v$version"
+          
+          if (!(git tag -l $tagName)) {
+            Write-Host "Tag $tagName does not exist. Creating and pushing..."
+            git tag $tagName
+            git push origin $tagName
+          } else {
+            Write-Host "Tag $tagName already exists. Proceeding with build..."
+          }
+
+      - name: Cache Electron & Builder Binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: ${{ runner.os }}-electron-cache-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-cache-
+
+      - name: Install Dependencies
+        run: npm ci --include=optional || npm install --include=optional
+
+      - name: Patch Native & Optional Windows Binaries
+        run: |
+          npm install --no-save --force @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @tailwindcss/oxide-win32-x64-msvc @esbuild/win32-x64
+
+      - name: Verify Type Safety
+        run: npm run lint
+
+      - name: Build Application Assets
+        run: npm run build
+        
+      - name: Package and Publish with Electron Builder
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npx electron-builder --win --publish always
+
+  # ==========================================
+  # JOB 2: Ubuntu Docker (GHCR) Publisher
+  # ==========================================
+  build-docker:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract Version from package.json
+        id: get_version
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Extracted version: $VERSION"
+
+      - name: Lowercase Repository Owner
+        id: lower_owner
+        run: |
+          # Docker strictly enforces lowercase repository names
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "OWNER=$OWNER" >> $GITHUB_ENV
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER }}/asynx:latest
+            ghcr.io/${{ env.OWNER }}/asynx:v${{ env.VERSION }}
+          # Advanced caching pulled from your docker-publish.yml
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

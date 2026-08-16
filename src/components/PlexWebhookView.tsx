@@ -27,7 +27,7 @@ interface PlexWebhookViewProps {
   settings: AppSettings;
   webhookLogs: WebhookLog[];
   libraryItems: LibraryItem[];
-  onTriggerSimulatedWebhook: (payload: any) => void;
+  onTriggerSimulatedWebhook: (payload: any, source: string) => void;
 }
 
 export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
@@ -38,6 +38,8 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
 }) => {
   const [copiedPlex, setCopiedPlex] = useState(false);
   const [copiedTautulli, setCopiedTautulli] = useState(false);
+  const [copiedJellyfin, setCopiedJellyfin] = useState(false);
+  const [copiedEmby, setCopiedEmby] = useState(false);
 
   // Automated Health Checker state
   const [healthData, setHealthData] = useState<HealthCheckStatus | null>(null);
@@ -49,7 +51,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
   const [testEpisode, setTestEpisode] = useState<number>(10);
   const [testUser, setTestUser] = useState<string>('OtakuWatcher99');
   const [testDevice, setTestDevice] = useState<string>('NVIDIA SHIELD TV');
-  const [testSource, setTestSource] = useState<'plex' | 'tautulli'>('plex');
+  const [testSource, setTestSource] = useState<'plex' | 'tautulli' | 'jellyfin' | 'emby'>('plex');
 
   // AI Filename Matcher state
   const [customFilename, setCustomFilename] = useState('[SubsPlease] Solo Leveling S2 - 11 (1080p) [9A1B2C].mkv');
@@ -58,6 +60,8 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
 
   const plexUrl = window.location.origin + '/api/webhooks/plex';
   const tautulliUrl = window.location.origin + '/api/webhooks/tautulli';
+  const jellyfinUrl = window.location.origin + '/api/webhooks/jellyfin';
+  const embyUrl = window.location.origin + '/api/webhooks/emby';
 
   // Fetch initial health check
   const fetchHealth = async () => {
@@ -76,7 +80,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
   }, []);
 
   // Run ping health check
-  const handlePingWebhooks = async (service?: 'plex' | 'tautulli') => {
+  const handlePingWebhooks = async (service?: 'plex' | 'tautulli' | 'jellyfin' | 'emby') => {
     setIsPinging(true);
     try {
       const res = await fetch('/api/webhooks/health/ping', {
@@ -94,14 +98,20 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
     }
   };
 
-  const handleCopy = (text: string, type: 'plex' | 'tautulli') => {
-    navigator.clipboard.writeText(text);
+  const handleCopy = (text: string, type: 'plex' | 'tautulli' | 'jellyfin' | 'emby') => {
+    navigator.clipboard.writeText(text).catch(err => console.error("Clipboard error:", err));
     if (type === 'plex') {
       setCopiedPlex(true);
       setTimeout(() => setCopiedPlex(false), 2000);
-    } else {
+    } else if (type === 'tautulli') {
       setCopiedTautulli(true);
       setTimeout(() => setCopiedTautulli(false), 2000);
+    } else if (type === 'jellyfin') {
+      setCopiedJellyfin(true);
+      setTimeout(() => setCopiedJellyfin(false), 2000);
+    } else if (type === 'emby') {
+      setCopiedEmby(true);
+      setTimeout(() => setCopiedEmby(false), 2000);
     }
   };
 
@@ -119,8 +129,8 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
           index: testEpisode
         }
       };
-      onTriggerSimulatedWebhook(payload);
-    } else {
+      onTriggerSimulatedWebhook(payload, 'plex');
+    } else if (testSource === 'tautulli') {
       const payload = {
         action: 'watched',
         show_name: selectedItemTitle,
@@ -129,7 +139,29 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
         user: testUser,
         player: testDevice
       };
-      onTriggerSimulatedWebhook(payload);
+      onTriggerSimulatedWebhook(payload, 'tautulli');
+    } else if (testSource === 'jellyfin') {
+      const payload = {
+        NotificationType: "PlaybackStop",
+        SeriesName: selectedItemTitle,
+        SeasonNumber: testSeason,
+        EpisodeNumber: testEpisode,
+        UserId: testUser,
+        Client: testDevice
+      };
+      onTriggerSimulatedWebhook(payload, 'jellyfin');
+    } else if (testSource === 'emby') {
+      const payload = {
+        Event: "playback.stop",
+        Item: {
+          SeriesName: selectedItemTitle,
+          ParentIndexNumber: testSeason,
+          IndexNumber: testEpisode
+        },
+        User: { Name: testUser },
+        Session: { Client: testDevice }
+      };
+      onTriggerSimulatedWebhook(payload, 'emby');
     }
   };
 
@@ -152,7 +184,9 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
 
   const plexStatus = healthData?.plex.status || 'online';
   const tautulliStatus = healthData?.tautulli.status || 'online';
-  const hasOffline = plexStatus === 'offline' || tautulliStatus === 'offline';
+  const jellyfinStatus = healthData?.jellyfin?.status || 'offline';
+  const embyStatus = healthData?.emby?.status || 'offline';
+  const hasOffline = plexStatus === 'offline' || tautulliStatus === 'offline' || jellyfinStatus === 'offline' || embyStatus === 'offline';
 
   return (
     <div className="space-y-6">
@@ -227,7 +261,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
         )}
 
         {/* Connection Status Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Plex Health Card */}
           <div className={`p-4 rounded-2xl border transition ${
             plexStatus === 'online' 
@@ -331,6 +365,102 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Jellyfin Health Card */}
+          <div className={`p-4 rounded-2xl border transition ${
+            jellyfinStatus === 'online' 
+              ? 'bg-gray-50 dark:bg-black/80 border-gray-200 dark:border-neutral-900' 
+              : 'bg-rose-950/20 border-rose-500/40'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Server className="w-4 h-4 text-purple-400" />
+                <span className="font-bold text-gray-800 dark:text-gray-200 text-sm">Jellyfin Server</span>
+              </div>
+              <div className="flex items-center space-x-1.5">
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center space-x-1 ${
+                  jellyfinStatus === 'online'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                }`}>
+                  {jellyfinStatus === 'online' ? (
+                    <>
+                      <Wifi className="w-3 h-3 text-emerald-400" />
+                      <span>Online ({healthData?.jellyfin?.latencyMs || 18}ms)</span>
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="w-3 h-3 text-rose-400" />
+                      <span>Offline</span>
+                    </>
+                  )}
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 line-clamp-1 font-mono">
+              Endpoint: {healthData?.jellyfin?.endpoint || 'http://192.168.1.101:8096'}
+            </p>
+            <p className="text-[11px] text-gray-700 dark:text-gray-300 mt-1 leading-relaxed">
+              {healthData?.jellyfin?.details || 'Responding OK.'}
+            </p>
+            <div className="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-500">
+              <span>Last Checked: {healthData?.jellyfin?.lastChecked ? new Date(healthData.jellyfin.lastChecked).toLocaleTimeString() : 'Just now'}</span>
+              <button
+                onClick={() => handlePingWebhooks('jellyfin')}
+                className="text-indigo-400 hover:underline font-semibold cursor-pointer"
+              >
+                Ping Jellyfin
+              </button>
+            </div>
+          </div>
+
+          {/* Emby Health Card */}
+          <div className={`p-4 rounded-2xl border transition ${
+            embyStatus === 'online' 
+              ? 'bg-gray-50 dark:bg-black/80 border-gray-200 dark:border-neutral-900' 
+              : 'bg-rose-950/20 border-rose-500/40'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Server className="w-4 h-4 text-green-400" />
+                <span className="font-bold text-gray-800 dark:text-gray-200 text-sm">Emby Server</span>
+              </div>
+              <div className="flex items-center space-x-1.5">
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center space-x-1 ${
+                  embyStatus === 'online'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                }`}>
+                  {embyStatus === 'online' ? (
+                    <>
+                      <Wifi className="w-3 h-3 text-emerald-400" />
+                      <span>Online ({healthData?.emby?.latencyMs || 20}ms)</span>
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="w-3 h-3 text-rose-400" />
+                      <span>Offline</span>
+                    </>
+                  )}
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 line-clamp-1 font-mono">
+              Endpoint: {healthData?.emby?.endpoint || 'http://192.168.1.102:8096'}
+            </p>
+            <p className="text-[11px] text-gray-700 dark:text-gray-300 mt-1 leading-relaxed">
+              {healthData?.emby?.details || 'Responding OK.'}
+            </p>
+            <div className="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-500">
+              <span>Last Checked: {healthData?.emby?.lastChecked ? new Date(healthData.emby.lastChecked).toLocaleTimeString() : 'Just now'}</span>
+              <button
+                onClick={() => handlePingWebhooks('emby')}
+                className="text-indigo-400 hover:underline font-semibold cursor-pointer"
+              >
+                Ping Emby
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -385,6 +515,46 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
               >
                 {copiedTautulli ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedTautulli ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Jellyfin URL */}
+          <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-neutral-900">
+            <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Jellyfin Webhook Target URL</label>
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                readOnly
+                value={jellyfinUrl}
+                className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-xs font-mono text-purple-400 focus:outline-none"
+              />
+              <button
+                onClick={() => handleCopy(jellyfinUrl, 'jellyfin')}
+                className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-semibold transition cursor-pointer flex items-center space-x-1 flex-shrink-0"
+              >
+                {copiedJellyfin ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedJellyfin ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Emby URL */}
+          <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-neutral-900">
+            <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Emby Webhook Target URL</label>
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                readOnly
+                value={embyUrl}
+                className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-xs font-mono text-green-500 focus:outline-none"
+              />
+              <button
+                onClick={() => handleCopy(embyUrl, 'emby')}
+                className="px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl text-xs font-semibold transition cursor-pointer flex items-center space-x-1 flex-shrink-0"
+              >
+                {copiedEmby ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedEmby ? 'Copied' : 'Copy'}</span>
               </button>
             </div>
           </div>
@@ -474,6 +644,8 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
               >
                 <option value="plex">Plex Standard Scrobble</option>
                 <option value="tautulli">Tautulli Watch Event</option>
+                <option value="jellyfin">Jellyfin Playback Stop</option>
+                <option value="emby">Emby Playback Stop</option>
               </select>
             </div>
           </div>
@@ -569,8 +741,12 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
                     <td className="py-3 px-3">
                       <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
                         log.source === 'plex' 
-                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
-                          : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                          ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' 
+                          : log.source === 'jellyfin'
+                          ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                          : log.source === 'emby'
+                          ? 'bg-green-500/20 text-green-500 border border-green-500/30'
+                          : 'bg-cyan-500/20 text-cyan-500 border border-cyan-500/30'
                       }`}>
                         {log.source}
                       </span>
