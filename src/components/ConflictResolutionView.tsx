@@ -24,13 +24,15 @@ interface ConflictResolutionViewProps {
   onResolveConflict: (itemId: string, sourceOfTruthPlatform?: PlatformType, customEpisode?: number, customStatus?: WatchStatus) => void;
   onRefreshData?: () => void;
   settings?: AppSettings;
+  onNavigateSettings?: () => void;
 }
 
 export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
   conflicts,
   onResolveConflict,
   onRefreshData,
-  settings
+  settings,
+  onNavigateSettings
 }) => {
   const [selectedConflictId, setSelectedConflictId] = useState<string | null>(conflicts[0]?.id || null);
   const [aiAnalysis, setAiAnalysis] = useState<Record<string, AIConflictAnalysis>>({});
@@ -49,6 +51,39 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
       setBulkStrategy(sot);
     }
   }, [settings]);
+
+  // Handle setting selection when conflict list changes
+  useEffect(() => {
+    if (conflicts.length > 0 && (!selectedConflictId || !conflicts.find(c => c.id === selectedConflictId))) {
+      setSelectedConflictId(conflicts[0].id);
+    }
+  }, [conflicts, selectedConflictId]);
+
+  if (conflicts.length === 0) {
+    return (
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-12 text-center max-w-2xl mx-auto space-y-6 my-8 shadow-sm">
+        <div className="w-24 h-24 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 rounded-3xl flex items-center justify-center mx-auto border border-emerald-200 dark:border-emerald-500/20 shadow-inner">
+          <ShieldCheck className="w-12 h-12" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Zero Desync Conflicts Found</h2>
+          <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed max-w-md mx-auto">
+            All your tracked anime and drama progress across Simkl, MyAnimeList, and AniList are in perfect synchronization. Your real-time webhooks and scrobbles are properly aligned!
+          </p>
+        </div>
+        
+        {onNavigateSettings && (
+          <button
+            onClick={onNavigateSettings}
+            className="mt-4 px-6 py-2.5 bg-gray-100 dark:bg-[#111] hover:bg-gray-200 dark:hover:bg-[#222] text-gray-800 dark:text-gray-200 font-semibold text-sm rounded-xl transition border border-gray-300 dark:border-neutral-800 flex items-center justify-center space-x-2 mx-auto cursor-pointer"
+          >
+            <Sliders className="w-4 h-4" />
+            <span>Review Source of Truth Settings</span>
+          </button>
+        )}
+      </div>
+    );
+  }
 
   const selectedItem = conflicts.find(c => c.id === selectedConflictId) || conflicts[0];
 

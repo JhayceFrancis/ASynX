@@ -51,6 +51,9 @@ interface SyncMatrixViewProps {
   onOpenOverride: (item: LibraryItem) => void;
   onOpenConflictView: () => void;
   onTriggerSyncItem: (itemId: string) => void;
+  onNavigateSettings?: () => void;
+  onImportCSV?: (items: LibraryItem[]) => void;
+  onUndoAction?: (itemId: string) => void;
 }
 
 export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
@@ -59,10 +62,13 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
   settings,
   onOpenOverride,
   onOpenConflictView,
-  onTriggerSyncItem
+  onTriggerSyncItem,
+  onNavigateSettings,
+  onImportCSV,
+  onUndoAction
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'conflicts' | 'anime' | 'drama'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'conflicts' | 'anime' | 'drama' | 'history'>('all');
   const [analyticsData, setAnalyticsData] = useState<SyncAnalyticsPoint[]>([]);
   const [chartMetric, setChartMetric] = useState<'frequency' | 'rates'>('frequency');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
@@ -237,6 +243,51 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
         return <span key={p} className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-bold uppercase">{p}</span>;
     }
   };
+
+  if (items.length === 0) {
+    return (
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-12 text-center max-w-2xl mx-auto space-y-6 my-8 shadow-sm">
+        <div className="w-24 h-24 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 rounded-3xl flex items-center justify-center mx-auto border border-indigo-200 dark:border-indigo-500/20 shadow-inner">
+          <Film className="w-12 h-12" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Your Library is Empty</h2>
+          <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed max-w-md mx-auto">
+            You haven't tracked any anime or drama series yet, or your database hasn't synced with your connected accounts.
+          </p>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-4">
+          <div>
+            <input 
+              type="file" 
+              id="csv-upload-empty"
+              accept=".csv" 
+              className="hidden" 
+              onChange={handleImport}
+            />
+            <label 
+              htmlFor="csv-upload-empty"
+              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm rounded-xl shadow-md transition flex items-center space-x-2 cursor-pointer w-full sm:w-auto justify-center"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Bulk Import CSV</span>
+            </label>
+          </div>
+
+          {onNavigateSettings && (
+            <button
+              onClick={onNavigateSettings}
+              className="px-6 py-2.5 bg-gray-100 dark:bg-[#111] hover:bg-gray-200 dark:hover:bg-[#222] text-gray-800 dark:text-gray-200 font-semibold text-sm rounded-xl transition border border-gray-300 dark:border-neutral-800 flex items-center space-x-2 cursor-pointer w-full sm:w-auto justify-center"
+            >
+              <Sliders className="w-4 h-4" />
+              <span>Configure Connections</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -523,6 +574,17 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                 >
                   Dramas
                 </button>
+                <button
+                  onClick={() => setActiveFilter('history')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer flex items-center space-x-1.5 ${
+                    activeFilter === 'history'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-50 dark:bg-black text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-neutral-900 hover:text-gray-800 dark:text-gray-200'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Recent Changes</span>
+                </button>
               </div>
 
               {/* View Toggles */}
@@ -546,7 +608,62 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
           </div>
 
           {/* Main Content Area */}
-          {filteredItems.length === 0 ? (
+          {activeFilter === 'history' ? (
+            <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-2xl shadow-sm p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0 sm:space-x-3 mb-6 border-b border-gray-200 dark:border-neutral-800 pb-4">
+                <div className="w-12 h-12 flex items-center justify-center bg-indigo-500/10 text-indigo-500 rounded-xl border border-indigo-500/20 shrink-0">
+                  <Clock className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Recent Synchronization History</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Track and revert the last 10 synchronization actions across your library.</p>
+                </div>
+              </div>
+
+              {logs.length === 0 ? (
+                <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                  No synchronization history available yet.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {logs.slice(0, 10).map((log, idx) => (
+                    <div key={log.id || idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-neutral-900 rounded-xl hover:border-indigo-500/30 transition-colors gap-4 group">
+                      <div className="flex items-start space-x-4">
+                        <div className={`p-2 rounded-lg mt-1 shrink-0 ${
+                          log.status === 'success' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
+                          log.status === 'conflict' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 
+                          'bg-gray-200 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-neutral-700'
+                        }`}>
+                          {log.status === 'success' ? <CheckCircle2 className="w-4 h-4" /> : log.status === 'conflict' ? <AlertTriangle className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
+                        </div>
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <span className="font-bold text-gray-900 dark:text-gray-100 text-base">{log.itemTitle}</span>
+                            <span className="px-2 py-0.5 rounded bg-gray-200 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 text-[10px] font-mono uppercase font-bold border border-gray-300 dark:border-neutral-700">{log.source}</span>
+                          </div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{log.message}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-500 mt-2 font-mono flex items-center space-x-1">
+                            <Clock className="w-3 h-3" />
+                            <span>{new Date(log.timestamp).toLocaleString()}</span>
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {onUndoAction && (
+                        <button 
+                          onClick={() => onUndoAction(log.itemId)}
+                          className="px-4 py-2 bg-white dark:bg-[#111] hover:bg-gray-50 dark:hover:bg-[#222] text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-neutral-800 rounded-xl text-sm font-semibold shadow-sm transition flex items-center justify-center space-x-2 w-full sm:w-auto cursor-pointer shrink-0 opacity-100 sm:opacity-50 sm:group-hover:opacity-100"
+                        >
+                          <ArrowUpDown className="w-4 h-4 text-gray-500 group-hover:text-indigo-400 transition-colors" />
+                          <span>Undo Sync</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : filteredItems.length === 0 ? (
             <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-2xl p-8 text-center text-gray-600 dark:text-gray-400">
               No titles match your current filter or search criteria.
             </div>

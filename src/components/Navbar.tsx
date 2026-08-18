@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCw, Radio, Compass, ShieldAlert, Cpu, Settings, Layers, AlertTriangle, Tv, CheckCircle2, Monitor, Sun, Moon, Terminal, Server, Activity, Database } from 'lucide-react';
+import { RefreshCw, Radio, Compass, ShieldAlert, Cpu, Settings, Layers, AlertTriangle, Tv, CheckCircle2, Monitor, Sun, Moon, Terminal, Server, Activity, Database, ExternalLink } from 'lucide-react';
 import { AppSettings, BrowserExtensionState } from '../types';
 import { ASynXLogo } from './ASynXLogo';
 import { Tooltip } from './Tooltip';
@@ -52,6 +52,20 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Desktop Controls */}
         <div className="flex items-center space-x-2.5 ml-auto">
+          {/* Documentation Button */}
+          <Tooltip title="API & App Documentation" description="View guides, endpoint documentation, and general app capabilities." position="bottom">
+            <button
+              onClick={() => setActiveTab('api-docs')}
+              className={`p-1.5 rounded-xl border transition cursor-pointer backdrop-blur-sm ${
+                activeTab === 'api-docs'
+                  ? 'bg-emerald-600/20 text-emerald-600 dark:text-emerald-300 border-emerald-500/30'
+                  : 'bg-gray-100/50 dark:bg-[#111]/50 border-gray-300/50 dark:border-neutral-800/50 text-gray-600 dark:text-gray-400 hover:text-emerald-500'
+              }`}
+            >
+              <Terminal className="w-4 h-4" />
+            </button>
+          </Tooltip>
+
           {/* Theme Toggle Button */}
           <Tooltip title="Appearance Theme" description="Toggle between Dark Mode and Light Mode Fluent UI theme appearance." position="bottom">
             <button
@@ -66,16 +80,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Tooltip title="Browser Extension Status" description="Inspect live media playback detection and browser overlay status." position="bottom">
             <button 
               onClick={() => setActiveTab('extension')}
-              className={`hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer backdrop-blur-sm ${
+              className={`hidden sm:flex items-center justify-center p-1.5 rounded-xl border transition cursor-pointer backdrop-blur-sm ${
                 extensionState.installed 
                   ? 'bg-gray-100/50 dark:bg-[#111]/80 border-indigo-500/30 text-indigo-500 dark:text-indigo-300 hover:bg-gray-200/50 dark:hover:bg-[#111]' 
                   : 'bg-gray-100/30 dark:bg-[#111]/30 border-gray-300/50 dark:border-neutral-800/50 text-gray-600 dark:text-gray-400'
               }`}
             >
-              <Compass className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
-              <span>Browser Overlay</span>
+              <Compass className="w-4 h-4" />
               {extensionState.currentMedia?.isPlaying && (
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
               )}
             </button>
           </Tooltip>
@@ -164,7 +177,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               </Tooltip>
 
-              <Tooltip title="Browser Overlay Companion" description="Manage browser extension integration, floating media video overlay, and scrobble triggers.">
+              <Tooltip title="Browser Extension" description="Manage browser extension integration, floating media video overlay, and scrobble triggers.">
                 <button
                   onClick={() => setActiveTab('extension')}
                   className={`flex items-center px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer whitespace-nowrap ${
@@ -174,7 +187,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }`}
                 >
                   <Compass className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
-                  <span className={`overflow-hidden transition-all duration-300 ease-in-out ${activeTab === 'extension' ? 'max-w-[200px] ml-2 opacity-100' : 'max-w-0 opacity-0'}`}>Browser Overlay Companion</span>
+                  <span className={`overflow-hidden transition-all duration-300 ease-in-out ${activeTab === 'extension' ? 'max-w-[200px] ml-2 opacity-100' : 'max-w-0 opacity-0'}`}>Extension</span>
                 </button>
               </Tooltip>
             </div>
@@ -209,20 +222,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               </Tooltip>
 
-              <Tooltip title="API Documentation" description="Integrate custom scripts and view ASynX endpoints for external connectivity.">
-                <button
-                  onClick={() => setActiveTab('api-docs')}
-                  className={`flex items-center px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer whitespace-nowrap ${
-                    activeTab === 'api-docs'
-                      ? 'bg-emerald-600/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:text-gray-200 hover:bg-gray-100/50 dark:hover:bg-[#111]/50'
-                  }`}
-                >
-                  <Terminal className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
-                  <span className={`overflow-hidden transition-all duration-300 ease-in-out ${activeTab === 'api-docs' ? 'max-w-[200px] ml-2 opacity-100' : 'max-w-0 opacity-0'}`}>API Documentation</span>
-                </button>
-              </Tooltip>
-
               <Tooltip title="Docker Backend" description="Monitor the self-hosted Express server, Node telemetry, and daemon cycles.">
                 <button
                   onClick={() => setActiveTab('docker-backend')}
@@ -242,51 +241,84 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Live System Status Badges (Moved here) */}
           <div className="hidden xl:flex items-center space-x-3 bg-gray-50/50 dark:bg-[#111]/50 px-3 py-1.5 rounded-xl border border-gray-200/50 dark:border-neutral-800/50 text-xs flex-shrink-0 backdrop-blur-md ml-4">
             {/* Simkl */}
-            <Tooltip title="Simkl Tracker Status" description="Real-time connection health and sync readiness with Simkl service. Click to view API requests dashboard.">
-              <button 
-                onClick={() => setActiveTab('performance')}
-                className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-200/50 dark:hover:bg-[#222]/50 px-1.5 py-0.5 rounded transition-colors"
-              >
-                <span className={`w-2 h-2 rounded-full ${settings.simkl.connected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
-                <span className="font-semibold text-gray-700 dark:text-gray-300 text-[11px]">Simkl</span>
-              </button>
-            </Tooltip>
+            <div className="flex items-center space-x-1">
+              <Tooltip title="Simkl Tracker Status" description="Real-time connection health and sync readiness with Simkl service. Click to view API requests dashboard.">
+                <button 
+                  onClick={() => setActiveTab('performance')}
+                  className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-200/50 dark:hover:bg-[#222]/50 px-1.5 py-0.5 rounded transition-colors"
+                >
+                  <span className={`w-2 h-2 rounded-full ${settings?.simkl?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L22 20H2L12 2Z" fill="#FACC15" />
+                  </svg>
+                </button>
+              </Tooltip>
+              <a href="https://simkl.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition" title="Visit Simkl.com">
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+
             <span className="text-gray-300 dark:text-neutral-700">|</span>
 
             {/* MAL */}
-            <Tooltip title="MyAnimeList Status" description="Connected status for MyAnimeList account synchronization. Click to view API requests dashboard.">
-              <button 
-                onClick={() => setActiveTab('performance')}
-                className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-200/50 dark:hover:bg-[#222]/50 px-1.5 py-0.5 rounded transition-colors"
-              >
-                <span className={`w-2 h-2 rounded-full ${settings.mal.connected ? 'bg-blue-400 animate-pulse' : 'bg-slate-600'}`} />
-                <span className="font-semibold text-gray-700 dark:text-gray-300 text-[11px]">MAL</span>
-              </button>
-            </Tooltip>
+            <div className="flex items-center space-x-1">
+              <Tooltip title="MyAnimeList Status" description="Connected status for MyAnimeList account synchronization. Click to view API requests dashboard.">
+                <button 
+                  onClick={() => setActiveTab('performance')}
+                  className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-200/50 dark:hover:bg-[#222]/50 px-1.5 py-0.5 rounded transition-colors"
+                >
+                  <span className={`w-2 h-2 rounded-full ${settings?.mal?.connected ? 'bg-blue-400 animate-pulse' : 'bg-slate-600'}`} />
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="#2E51A2" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="24" height="24" rx="4" />
+                    <text x="12" y="16" fill="white" fontSize="10" fontWeight="bold" textAnchor="middle">MAL</text>
+                  </svg>
+                </button>
+              </Tooltip>
+              <a href="https://myanimelist.net" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition" title="Visit MyAnimeList.net">
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+
             <span className="text-gray-300 dark:text-neutral-700">|</span>
 
             {/* AniList */}
-            <Tooltip title="AniList Tracker Status" description="GraphQL API connection and active bearer token status for AniList. Click to view API requests dashboard.">
-              <button 
-                onClick={() => setActiveTab('performance')}
-                className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-200/50 dark:hover:bg-[#222]/50 px-1.5 py-0.5 rounded transition-colors"
-              >
-                <span className={`w-2 h-2 rounded-full ${settings.anilist.connected ? 'bg-cyan-400 animate-pulse' : 'bg-slate-600'}`} />
-                <span className="font-semibold text-gray-700 dark:text-gray-300 text-[11px]">AniList</span>
-              </button>
-            </Tooltip>
+            <div className="flex items-center space-x-1">
+              <Tooltip title="AniList Tracker Status" description="GraphQL API connection and active bearer token status for AniList. Click to view API requests dashboard.">
+                <button 
+                  onClick={() => setActiveTab('performance')}
+                  className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-200/50 dark:hover:bg-[#222]/50 px-1.5 py-0.5 rounded transition-colors"
+                >
+                  <span className={`w-2 h-2 rounded-full ${settings?.anilist?.connected ? 'bg-cyan-400 animate-pulse' : 'bg-slate-600'}`} />
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="#02A9FF" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L22 22H17L15 17H9L7 22H2L12 2Z" />
+                  </svg>
+                </button>
+              </Tooltip>
+              <a href="https://anilist.co" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition" title="Visit AniList.co">
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+
             <span className="text-gray-300 dark:text-neutral-700">|</span>
 
             {/* Plex Webhook */}
-            <Tooltip title="Docker Sync Daemon" description="Background daemon on server running automated cross-platform sync cycles. Click to view API requests dashboard.">
-              <button 
-                onClick={() => setActiveTab('performance')}
-                className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-200/50 dark:hover:bg-[#222]/50 px-1.5 py-0.5 rounded transition-colors"
-              >
-                <span className={`w-2 h-2 rounded-full ${settings.plex.connected ? 'bg-purple-400 animate-pulse' : 'bg-slate-600'}`} />
-                <span className="font-semibold text-gray-700 dark:text-gray-300 text-[11px]">Docker Daemon</span>
-              </button>
-            </Tooltip>
+            <div className="flex items-center space-x-1">
+              <Tooltip title="Docker Sync Daemon" description="Background daemon on server running automated cross-platform sync cycles. Click to view API requests dashboard.">
+                <button 
+                  onClick={() => setActiveTab('performance')}
+                  className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-200/50 dark:hover:bg-[#222]/50 px-1.5 py-0.5 rounded transition-colors"
+                >
+                  <span className={`w-2 h-2 rounded-full ${settings?.plex?.connected ? 'bg-purple-400 animate-pulse' : 'bg-slate-600'}`} />
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="#E5A00D" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L22 7V17L12 22L2 17V7L12 2Z" />
+                    <path d="M15 12L10 8V16L15 12Z" fill="#282A2D" />
+                  </svg>
+                </button>
+              </Tooltip>
+              <a href="https://plex.tv" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition" title="Visit Plex.tv">
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
           </div>
         </div>
       </div>

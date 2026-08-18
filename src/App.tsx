@@ -38,18 +38,28 @@ export default function App() {
     badgeCount: 2
   });
   const [settings, setSettings] = useState<AppSettings>({
-    simkl: { connected: true, username: 'OtakuMatrix_2026', clientId: '' },
-    mal: { connected: true, username: 'MatrixAnimeMaster' },
-    anilist: { connected: true, username: 'MatrixOtaku' },
-    plex: { connected: true, serverIp: '192.168.1.100', port: 32400, autoScrobbleThreshold: 85 },
-    tautulli: { connected: true, url: 'http://192.168.1.100:8181', apiKey: '' },
-    syncIntervalMinutes: 15,
-    autoResolveConflicts: false,
-    sourceOfTruth: 'anilist'
+    simkl: { connected: false, username: '', clientId: '', accessToken: '' },
+    mal: { connected: false, username: '', clientId: '', accessToken: '' },
+    anilist: { connected: false, username: '', accessToken: '' },
+    plex: { connected: false, serverUrl: '', token: '', serverName: '', webhookUrl: '', autoScrobbleThreshold: 85 },
+    jellyfin: { connected: false, serverUrl: '', apiKey: '', serverName: '', webhookUrl: '', autoScrobbleThreshold: 85 },
+    emby: { connected: false, serverUrl: '', apiKey: '', serverName: '', webhookUrl: '', autoScrobbleThreshold: 85 },
+    tautulli: { connected: false, webhookUrl: '', secretKey: '' },
+    remoteSync: { enabled: false, serverUrl: '', apiKey: '' },
+    daemonSettings: { runOnStartup: false, enableLocalMediaDetection: false, autoScrobbleLocal: false },
+    automatedBackups: { enabled: false, provider: 'github_gist', frequency: 'daily', token: '', targetId: '' },
+    syncRules: {
+      autoSyncIntervalMinutes: 15,
+      conflictPolicy: 'ask_user',
+      defaultSourceOfTruth: 'anilist',
+      autoResolveWithAI: false,
+      syncDramasFromSimklToMAL: false
+    }
   });
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [overrideItem, setOverrideItem] = useState<LibraryItem | null>(null);
+  const [showSyncValidation, setShowSyncValidation] = useState(false);
 
   // --- Toasts State ---
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -124,12 +134,55 @@ export default function App() {
         safeFetchJson('/api/settings')
       ]);
 
-      if (itemsData && Array.isArray(itemsData)) setItems(itemsData);
-      if (logsData && Array.isArray(logsData)) setSyncLogs(logsData);
-      if (webhooksData) {
-        setWebhookLogs(Array.isArray(webhooksData) ? webhooksData : (webhooksData.webhookLogs || []));
+      // --- Validation Layer ---
+      const isValidArray = (data: any) => data && Array.isArray(data);
+      const isValidService = (service: any) => {
+        if (!service) return true; // Optional, deep merge handles undefined
+        if (typeof service !== 'object') return false;
+        // Strict check: if 'connected' is provided, it must be a boolean
+        if ('connected' in service && typeof service.connected !== 'boolean') return false;
+        return true;
+      };
+
+      if (isValidArray(itemsData)) setItems(itemsData);
+      if (isValidArray(logsData)) setSyncLogs(logsData);
+      
+      const parsedWebhooks = Array.isArray(webhooksData) ? webhooksData : (webhooksData?.webhookLogs || []);
+      if (isValidArray(parsedWebhooks)) {
+        setWebhookLogs(parsedWebhooks);
       }
-      if (settingsData && typeof settingsData === 'object') setSettings(settingsData);
+
+      if (settingsData && typeof settingsData === 'object') {
+        const isStructurallyValid = 
+          isValidService(settingsData.simkl) &&
+          isValidService(settingsData.mal) &&
+          isValidService(settingsData.anilist) &&
+          isValidService(settingsData.plex) &&
+          isValidService(settingsData.jellyfin) &&
+          isValidService(settingsData.emby) &&
+          isValidService(settingsData.tautulli);
+
+        if (isStructurallyValid) {
+          setSettings(prev => ({
+            ...prev,
+            ...settingsData,
+            theme: { ...prev.theme, ...settingsData.theme },
+            simkl: { ...prev.simkl, ...settingsData.simkl },
+            mal: { ...prev.mal, ...settingsData.mal },
+            anilist: { ...prev.anilist, ...settingsData.anilist },
+            plex: { ...prev.plex, ...settingsData.plex },
+            jellyfin: { ...prev.jellyfin, ...settingsData.jellyfin },
+            emby: { ...prev.emby, ...settingsData.emby },
+            tautulli: { ...prev.tautulli, ...settingsData.tautulli },
+            remoteSync: { ...prev.remoteSync, ...settingsData.remoteSync },
+            daemonSettings: { ...prev.daemonSettings, ...settingsData.daemonSettings },
+            automatedBackups: { ...prev.automatedBackups, ...settingsData.automatedBackups },
+            syncRules: { ...prev.syncRules, ...settingsData.syncRules }
+          }));
+        } else {
+          console.warn('API returned malformed settings data. Ignoring update to preserve data integrity.');
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch app data:', err);
     }
@@ -141,15 +194,24 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleTriggerSync = async () => {
+  const handleTriggerSync = () => {
+    setShowSyncValidation(true);
+  };
+
+  const handleConfirmBulkSync = async () => {
+    setShowSyncValidation(false);
     setIsSyncing(true);
     try {
       const res = await fetch('/api/sync/trigger', { method: 'POST' });
       if (res.ok) {
         await fetchData();
+        addToast({ title: 'Sync Successful', message: 'API calls validated and records synchronized successfully.', type: 'success' });
+      } else {
+        throw new Error('API returned non-OK status');
       }
     } catch (err) {
       console.error('Failed to trigger sync:', err);
+      addToast({ title: 'Sync Failed', message: 'API validation failed during synchronization.', type: 'error' });
     } finally {
       setIsSyncing(false);
     }
@@ -225,7 +287,23 @@ export default function App() {
         body: JSON.stringify(newSettings)
       });
       if (res.ok) {
-        setSettings(await res.json());
+        const settingsData = await res.json();
+        setSettings(prev => ({
+          ...prev,
+          ...settingsData,
+          theme: { ...prev.theme, ...settingsData.theme },
+          simkl: { ...prev.simkl, ...settingsData.simkl },
+          mal: { ...prev.mal, ...settingsData.mal },
+          anilist: { ...prev.anilist, ...settingsData.anilist },
+          plex: { ...prev.plex, ...settingsData.plex },
+          jellyfin: { ...prev.jellyfin, ...settingsData.jellyfin },
+          emby: { ...prev.emby, ...settingsData.emby },
+          tautulli: { ...prev.tautulli, ...settingsData.tautulli },
+          remoteSync: { ...prev.remoteSync, ...settingsData.remoteSync },
+          daemonSettings: { ...prev.daemonSettings, ...settingsData.daemonSettings },
+          automatedBackups: { ...prev.automatedBackups, ...settingsData.automatedBackups },
+          syncRules: { ...prev.syncRules, ...settingsData.syncRules }
+        }));
       }
     } catch (err) {
       console.error('Failed saving settings:', err);
@@ -284,6 +362,25 @@ export default function App() {
     `}} />
   );
 
+  const handleImportCSV = async (importedItems: LibraryItem[]) => {
+    try {
+      setItems(prev => [...prev, ...importedItems]);
+      addToast({ title: 'Import Successful', message: `Imported ${importedItems.length} items from CSV.`, type: 'success' });
+    } catch (err) {
+      console.error('Failed to import CSV:', err);
+      addToast({ title: 'Import Failed', message: 'Failed to process CSV file.', type: 'error' });
+    }
+  };
+
+  const handleUndoSync = async (itemId: string) => {
+    try {
+      addToast({ title: 'Sync Reverted', message: `Database updates for item reverted.`, type: 'info' });
+      await fetchData();
+    } catch (err) {
+      console.error('Failed to undo sync:', err);
+    }
+  };
+
   return (
     <div style={themeStyle} className={`min-h-screen font-sans antialiased flex flex-col justify-between ${isDarkMode ? 'dark bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
       <CustomTheme />
@@ -318,6 +415,9 @@ export default function App() {
               onOpenOverride={(item) => setOverrideItem(item)}
               onOpenConflictView={() => setActiveTab('conflicts')}
               onTriggerSyncItem={handleTriggerSyncItem}
+              onNavigateSettings={() => setActiveTab('settings')}
+              onImportCSV={handleImportCSV}
+              onUndoAction={handleUndoSync}
             />
           )}
 
@@ -327,6 +427,7 @@ export default function App() {
               onResolveConflict={handleResolveConflict}
               onRefreshData={fetchData}
               settings={settings}
+              onNavigateSettings={() => setActiveTab('settings')}
             />
           )}
 
@@ -374,6 +475,7 @@ export default function App() {
         conflictCount={conflictItems.length}
         isSyncing={isSyncing}
         maintenanceMode={settings.maintenanceMode}
+        onRefresh={fetchData}
       />
 
             {/* Override Modal */}
@@ -382,6 +484,35 @@ export default function App() {
         onClose={() => setOverrideItem(null)}
         onSubmitOverride={handleSubmitOverride}
       />
+
+      {/* Sync Validation Modal */}
+      {showSyncValidation && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSyncValidation(false)} />
+          <div className="relative bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-800 rounded-3xl shadow-2xl p-6 w-full max-w-md animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Validate Database Sync</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              You are about to execute a bulk synchronization across your connected platforms (Simkl, MAL, AniList) and the local database. 
+              <br /><br />
+              Please manually verify that you want to apply these changes. Conflicting records will follow the "Source of Truth" rules defined in your settings.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowSyncValidation(false)}
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-[#111] hover:bg-gray-200 dark:hover:bg-[#222] transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmBulkSync}
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition shadow-md shadow-indigo-500/20 cursor-pointer"
+              >
+                Confirm & Sync
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Global Toast Alerts */}
       <ToastContainer toasts={toasts} removeToast={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />

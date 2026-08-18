@@ -271,12 +271,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 type="button"
                 onClick={() => handleConnect('simkl')}
                 className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl text-sm font-bold transition shadow-sm ${
-                  formState.simkl.connected
+                  formState.simkl?.connected
                     ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
                     : 'bg-indigo-600 hover:bg-indigo-500 text-white'
                 }`}
               >
-                <span>{formState.simkl.connected ? 'Simkl Connected ✓' : 'Connect with Simkl'}</span>
+                <span>{formState.simkl?.connected ? 'Simkl Connected ✓' : 'Connect with Simkl'}</span>
               </button>
             </div>
           </div>
@@ -327,12 +327,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 type="button"
                 onClick={() => handleConnect('mal')}
                 className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl text-sm font-bold transition shadow-sm ${
-                  formState.mal.connected
+                  formState.mal?.connected
                     ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
                     : 'bg-blue-600 hover:bg-blue-500 text-white'
                 }`}
               >
-                <span>{formState.mal.connected ? 'MyAnimeList Connected ✓' : 'Connect with MyAnimeList'}</span>
+                <span>{formState.mal?.connected ? 'MyAnimeList Connected ✓' : 'Connect with MyAnimeList'}</span>
               </button>
             </div>
           </div>
@@ -370,12 +370,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 type="button"
                 onClick={() => handleConnect('anilist')}
                 className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl text-sm font-bold transition shadow-sm ${
-                  formState.anilist.connected
+                  formState.anilist?.connected
                     ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
                     : 'bg-sky-600 hover:bg-sky-500 text-white'
                 }`}
               >
-                <span>{formState.anilist.connected ? 'AniList Connected ✓' : 'Connect with AniList'}</span>
+                <span>{formState.anilist?.connected ? 'AniList Connected ✓' : 'Connect with AniList'}</span>
               </button>
             </div>
           </div>
@@ -432,14 +432,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
                 <h4 className="font-semibold text-gray-800 dark:text-gray-200">Jellyfin</h4>
                 <button
-                  onClick={() => setFormState(prev => ({ ...prev, jellyfin: { ...prev.jellyfin, connected: !prev.jellyfin.connected } }))}
-                  className={`w-8 h-4 rounded-full transition-colors relative ${formState.jellyfin.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+                  onClick={() => setFormState(prev => ({ ...prev, jellyfin: { serverUrl: '', apiKey: '', serverName: '', webhookUrl: '', autoScrobbleThreshold: 85, ...prev.jellyfin, connected: !prev.jellyfin?.connected } }))}
+                  className={`w-8 h-4 rounded-full transition-colors relative ${formState.jellyfin?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
                 >
-                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.jellyfin.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.jellyfin?.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
                 </button>
               </div>
               
-              {formState.jellyfin.connected && (
+              {formState.jellyfin?.connected && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-gray-600 dark:text-gray-400 font-medium">Jellyfin Server Name</label>
@@ -487,14 +487,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
                 <h4 className="font-semibold text-gray-800 dark:text-gray-200">Emby</h4>
                 <button
-                  onClick={() => setFormState(prev => ({ ...prev, emby: { ...prev.emby, connected: !prev.emby.connected } }))}
-                  className={`w-8 h-4 rounded-full transition-colors relative ${formState.emby.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+                  onClick={() => setFormState(prev => ({ ...prev, emby: { serverUrl: '', apiKey: '', serverName: '', webhookUrl: '', autoScrobbleThreshold: 85, ...prev.emby, connected: !prev.emby?.connected } }))}
+                  className={`w-8 h-4 rounded-full transition-colors relative ${formState.emby?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
                 >
-                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.emby.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.emby?.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
                 </button>
               </div>
               
-              {formState.emby.connected && (
+              {formState.emby?.connected && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-gray-600 dark:text-gray-400 font-medium">Emby Server Name</label>

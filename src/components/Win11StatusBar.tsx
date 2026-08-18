@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Cpu, HardDrive, Wifi, Activity, ShieldCheck, Clock, RefreshCw } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
@@ -7,14 +7,24 @@ interface Win11StatusBarProps {
   conflictCount: number;
   isSyncing: boolean;
   maintenanceMode?: boolean;
+  onRefresh?: () => void;
 }
 
 export const Win11StatusBar: React.FC<Win11StatusBarProps> = ({
   itemCount,
   conflictCount,
   isSyncing,
-  maintenanceMode
+  maintenanceMode,
+  onRefresh
 }) => {
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  useEffect(() => {
+    if (!isSyncing) {
+      setLastUpdated(new Date());
+    }
+  }, [isSyncing]);
+
   return (
     <footer className="bg-gray-50 dark:bg-black/90 backdrop-blur-md border-t border-gray-200 dark:border-neutral-900/80 text-gray-600 dark:text-gray-400 px-4 py-1.5 text-[11px] font-sans flex flex-wrap items-center justify-between gap-2 select-none">
       {/* Left */}
@@ -72,10 +82,22 @@ export const Win11StatusBar: React.FC<Win11StatusBarProps> = ({
             </span>
           </Tooltip>
         )}
+        
+        <Tooltip title="Last Updated" description="Timestamp of the last successful data synchronization. Click to manually refresh." position="top">
+          <button 
+            onClick={onRefresh}
+            className={`flex items-center space-x-1.5 px-2 py-0.5 rounded hover:bg-gray-200 dark:hover:bg-[#111] transition-colors cursor-pointer ${isSyncing ? 'opacity-100' : 'opacity-70 hover:opacity-100'}`}
+          >
+            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-indigo-400' : 'text-gray-500 dark:text-gray-400'}`} />
+            <span className={`text-[10px] font-medium ${isSyncing ? 'text-indigo-400 animate-pulse' : 'text-gray-500 dark:text-gray-400'}`}>
+              {isSyncing ? 'Fetching...' : `Last Updated: ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+            </span>
+          </button>
+        </Tooltip>
+
         <Tooltip title="ASynX Release Build" description="Windows 11 desktop companion build and Docker container version." position="top">
-          <div className="flex items-center space-x-1.5 cursor-help opacity-70 hover:opacity-100 transition-opacity">
-            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-indigo-400' : 'text-gray-500 dark:text-gray-500'}`} />
-            <span className="text-[10px] text-gray-500 dark:text-gray-500 font-medium">ASynX Studio v2.4.0-beta.1</span>
+          <div className="flex items-center space-x-1.5 cursor-help opacity-70 hover:opacity-100 transition-opacity ml-2 border-l border-gray-300 dark:border-neutral-800 pl-3">
+            <span className="text-[10px] text-gray-500 dark:text-gray-500 font-medium">v2.4.0-beta.1</span>
           </div>
         </Tooltip>
       </div>
