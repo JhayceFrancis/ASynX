@@ -205,13 +205,13 @@ export default function App() {
       const res = await fetch('/api/sync/trigger', { method: 'POST' });
       if (res.ok) {
         await fetchData();
-        addToast({ title: 'Sync Successful', message: 'API calls validated and records synchronized successfully.', type: 'success' });
+        addToast('success', 'Sync Successful', 'API calls validated and records synchronized successfully.');
       } else {
         throw new Error('API returned non-OK status');
       }
     } catch (err) {
       console.error('Failed to trigger sync:', err);
-      addToast({ title: 'Sync Failed', message: 'API validation failed during synchronization.', type: 'error' });
+      addToast('error', 'Sync Failed', 'API validation failed during synchronization.');
     } finally {
       setIsSyncing(false);
     }
@@ -365,16 +365,16 @@ export default function App() {
   const handleImportCSV = async (importedItems: LibraryItem[]) => {
     try {
       setItems(prev => [...prev, ...importedItems]);
-      addToast({ title: 'Import Successful', message: `Imported ${importedItems.length} items from CSV.`, type: 'success' });
+      addToast('success', 'Import Successful', `Imported ${importedItems.length} items from CSV.`);
     } catch (err) {
       console.error('Failed to import CSV:', err);
-      addToast({ title: 'Import Failed', message: 'Failed to process CSV file.', type: 'error' });
+      addToast('error', 'Import Failed', 'Failed to process CSV file.');
     }
   };
 
   const handleUndoSync = async (itemId: string) => {
     try {
-      addToast({ title: 'Sync Reverted', message: `Database updates for item reverted.`, type: 'info' });
+      addToast('info', 'Sync Reverted', `Database updates for item reverted.`);
       await fetchData();
     } catch (err) {
       console.error('Failed to undo sync:', err);
