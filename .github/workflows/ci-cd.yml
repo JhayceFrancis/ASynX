@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   # ==========================================
-  # JOB 1: Version Bumper & Auto-Tag
+  # JOB 1: Version Bumper
   # ==========================================
   bump-version:
     name: Bump Release Version
@@ -39,8 +39,11 @@ jobs:
 
       - name: Bump Version and Push
         run: |
-          npm version patch -m "chore(release): bump version to %s [skip ci]"
-          git push origin HEAD:${{ github.ref }} --follow-tags
+          npm version patch --no-git-tag-version
+          git add package.json package-lock.json
+          git commit -m "chore(release): bump version [skip ci]"
+          git pull --rebase origin ${{ github.ref_name }}
+          git push origin HEAD:${{ github.ref }}
 
   # ==========================================
   # JOB 2: Windows Electron (.exe) Publisher
