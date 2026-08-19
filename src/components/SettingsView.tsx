@@ -14,7 +14,8 @@ import {
   ShieldCheck, 
   RotateCcw,
   Sparkles,
-  Link2
+  Link2,
+  Keyboard
 } from 'lucide-react';
 
 export type QueueItemStatus = 'pending' | 'processing' | 'awaiting_mapping' | 'importing' | 'completed' | 'error';
@@ -170,63 +171,167 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </button>
       </div>
 
-      {/* Section 0: Theme & Appearance */}
-      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
+            {/* Section 0: Theme & Appearance */}
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm mb-6">
         <div className="flex items-center space-x-2 border-b border-gray-200 dark:border-neutral-900 pb-3">
           <Palette className="w-5 h-5 text-indigo-400" />
-          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Theme & Accent Colors</h3>
+          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Theme & UI Customization</h3>
         </div>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Accent Color</label>
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Accent Text Color</label>
               <input
                 type="color"
                 value={formState.theme?.accentColor || '#4f46e5'}
-                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, accentColor: e.target.value, isGradient: prev.theme?.isGradient || false } }))}
+                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, accentColor: e.target.value } }))}
                 className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
               />
             </div>
-            <div className="flex items-center space-x-4 mt-6">
+            <div>
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Header Background</label>
+              <div className="flex items-center space-x-2 mt-1">
+                <input
+                  type="color"
+                  value={formState.theme?.headerColor || '#1a1a1a'}
+                  onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, headerColor: e.target.value } }))}
+                  className="w-full h-10 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Main Content Padding</label>
+              <select
+                value={formState.theme?.paddingSize || '1.5rem'}
+                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, paddingSize: e.target.value } }))}
+                className="w-full mt-1 p-2 rounded-xl bg-gray-50 dark:bg-[#111] border border-gray-200 dark:border-neutral-800 text-sm focus:ring-2 focus:ring-indigo-500/50"
+              >
+                <option value="0.5rem">Compact (0.5rem)</option>
+                <option value="1rem">Cozy (1rem)</option>
+                <option value="1.5rem">Standard (1.5rem)</option>
+                <option value="2rem">Spacious (2rem)</option>
+                <option value="3rem">Ultra Wide (3rem)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 dark:border-neutral-900/50 pt-4">
+            <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">Buttons & Highlights</h4>
+            <div className="flex items-center space-x-4 mb-4">
               <label className="flex items-center space-x-2 cursor-pointer text-sm text-gray-700 dark:text-gray-300">
                 <input
                   type="checkbox"
                   checked={formState.theme?.isGradient || false}
-                  onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, isGradient: e.target.checked, accentColor: prev.theme?.accentColor || '#4f46e5' } }))}
+                  onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, isGradient: e.target.checked } }))}
                   className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
                 />
-                <span>Enable Gradient Styling</span>
+                <span>Enable Gradient Backgrounds</span>
               </label>
             </div>
+
+            {!formState.theme?.isGradient ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Solid Button Color</label>
+                  <input
+                    type="color"
+                    value={formState.theme?.buttonColor || '#4f46e5'}
+                    onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, buttonColor: e.target.value } }))}
+                    className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Button Text Color</label>
+                  <input
+                    type="color"
+                    value={formState.theme?.buttonTextColor || '#ffffff'}
+                    onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, buttonTextColor: e.target.value } }))}
+                    className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Gradient Direction</label>
+                    <select
+                      value={formState.theme?.gradientDirection || 'to right'}
+                      onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, gradientDirection: e.target.value } }))}
+                      className="w-full mt-1 p-2 rounded-xl bg-gray-50 dark:bg-[#111] border border-gray-200 dark:border-neutral-800 text-sm focus:ring-2 focus:ring-indigo-500/50"
+                    >
+                      <option value="to right">To Right</option>
+                      <option value="to left">To Left</option>
+                      <option value="to bottom">To Bottom</option>
+                      <option value="to top">To Top</option>
+                      <option value="to bottom right">To Bottom Right</option>
+                      <option value="45deg">45 Degrees</option>
+                      <option value="135deg">135 Degrees</option>
+                      <option value="circle at center">Radial (Center)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2 block">Gradient Colors Palette</label>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {(formState.theme?.gradientColors || ['#4f46e5', '#ec4899']).map((color, index) => (
+                      <div key={index} className="flex items-center space-x-1">
+                        <input
+                          type="color"
+                          value={color}
+                          onChange={(e) => {
+                            const newColors = [...(formState.theme?.gradientColors || ['#4f46e5', '#ec4899'])];
+                            newColors[index] = e.target.value;
+                            setFormState(prev => ({ ...prev, theme: { ...prev.theme, gradientColors: newColors } }));
+                          }}
+                          className="w-10 h-10 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
+                        />
+                        {(formState.theme?.gradientColors?.length || 2) > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newColors = [...(formState.theme?.gradientColors || ['#4f46e5', '#ec4899'])];
+                              newColors.splice(index, 1);
+                              setFormState(prev => ({ ...prev, theme: { ...prev.theme, gradientColors: newColors } }));
+                            }}
+                            className="p-1 text-gray-400 hover:text-rose-500 transition"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newColors = [...(formState.theme?.gradientColors || ['#4f46e5', '#ec4899']), '#ffffff'];
+                        setFormState(prev => ({ ...prev, theme: { ...prev.theme, gradientColors: newColors } }));
+                      }}
+                      className="h-10 px-3 rounded-lg border border-dashed border-gray-300 dark:border-neutral-700 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#111] transition flex items-center space-x-1"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                      <span>Add Color</span>
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="mt-3 h-8 rounded-lg w-full border border-gray-200 dark:border-neutral-800" 
+                  style={{
+                    background: (formState.theme?.gradientDirection && (formState.theme?.gradientDirection === 'circle at center')) 
+                      ? `radial-gradient(circle at center, ${(formState.theme?.gradientColors || ['#4f46e5', '#ec4899']).join(', ')})`
+                      : `linear-gradient(${formState.theme?.gradientDirection || 'to right'}, ${(formState.theme?.gradientColors || ['#4f46e5', '#ec4899']).join(', ')})`
+                  }}
+                />
+              </div>
+            )}
           </div>
-          
-          {formState.theme?.isGradient && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-100 dark:border-neutral-900/50">
-              <div>
-                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Gradient Start</label>
-                <input
-                  type="color"
-                  value={formState.theme?.gradientStart || '#4f46e5'}
-                  onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, isGradient: true, accentColor: prev.theme?.accentColor || '#4f46e5', gradientStart: e.target.value } }))}
-                  className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Gradient End</label>
-                <input
-                  type="color"
-                  value={formState.theme?.gradientEnd || '#9333ea'}
-                  onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, isGradient: true, accentColor: prev.theme?.accentColor || '#4f46e5', gradientEnd: e.target.value } }))}
-                  className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
-                />
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Section 1: Simkl API Config */}
+{/* Section 1: Simkl API Config */}
         <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
             <div className="flex items-center space-x-2">
@@ -299,12 +404,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-gray-600 dark:text-gray-400 font-medium">Username</label>
               <input
                 type="text"
-                value={formState.mal.username}
+                value={formState.mal?.username || ''}
                 onChange={(e) => setFormState({
                   ...formState,
                   mal: { ...formState.mal, username: e.target.value }
                 })}
                 className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                placeholder="Enter MAL username"
               />
             </div>
 
@@ -312,12 +418,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <label className="text-gray-600 dark:text-gray-400 font-medium">MAL Client ID</label>
               <input
                 type="text"
-                value={formState.mal.clientId}
+                value={formState.mal?.clientId || ''}
                 onChange={(e) => setFormState({
                   ...formState,
                   mal: { ...formState.mal, clientId: e.target.value }
                 })}
                 className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 font-mono"
+                placeholder="Enter MAL Client ID"
               />
             </div>
 
@@ -741,22 +848,64 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Matrix Sync Engine Rules & Defaults</h3>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-          <div>
-            <label className="text-gray-600 dark:text-gray-400 font-medium">Background Sync Frequency</label>
-            <select
-              value={formState.syncRules.autoSyncIntervalMinutes}
-              onChange={(e) => setFormState({
-                ...formState,
-                syncRules: { ...formState.syncRules, autoSyncIntervalMinutes: Number(e.target.value) }
-              })}
-              className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none"
-            >
-              <option value={5}>Every 5 Minutes</option>
-              <option value={15}>Every 15 Minutes</option>
-              <option value={30}>Every 30 Minutes</option>
-              <option value={60}>Every Hour</option>
-            </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+          <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-gray-600 dark:text-gray-400 font-medium">Automated Sync Schedule Mode</label>
+              <select
+                value={formState.syncRules.syncScheduleMode || 'interval'}
+                onChange={(e) => setFormState({
+                  ...formState,
+                  syncRules: { ...formState.syncRules, syncScheduleMode: e.target.value as 'interval' | 'specific_time' }
+                })}
+                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none"
+              >
+                <option value="interval">Fixed Interval (Frequency)</option>
+                <option value="specific_time">Specific Time of Day</option>
+              </select>
+            </div>
+            
+            {(formState.syncRules.syncScheduleMode === 'specific_time') ? (
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium">Specific Time of Day</label>
+                <select
+                  value={formState.syncRules.syncSpecificTime || '03:00'}
+                  onChange={(e) => setFormState({
+                    ...formState,
+                    syncRules: { ...formState.syncRules, syncSpecificTime: e.target.value }
+                  })}
+                  className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none"
+                >
+                  {Array.from({ length: 48 }).map((_, i) => {
+                    const hours = Math.floor(i / 2).toString().padStart(2, '0');
+                    const mins = (i % 2 === 0) ? '00' : '30';
+                    const time = `${hours}:${mins}`;
+                    return <option key={time} value={time}>{time}</option>;
+                  })}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium">Background Sync Frequency</label>
+                <select
+                  value={formState.syncRules.autoSyncIntervalMinutes}
+                  onChange={(e) => setFormState({
+                    ...formState,
+                    syncRules: { ...formState.syncRules, autoSyncIntervalMinutes: Number(e.target.value) }
+                  })}
+                  className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none"
+                >
+                  <option value={15}>Every 15 Minutes</option>
+                  <option value={30}>Every 30 Minutes</option>
+                  <option value={60}>Every Hour</option>
+                  <option value={120}>Every 2 Hours</option>
+                  <option value={240}>Every 4 Hours</option>
+                  <option value={360}>Every 6 Hours</option>
+                  <option value={720}>Every 12 Hours</option>
+                  <option value={1440}>Every 24 Hours</option>
+                </select>
+              </div>
+            )}
           </div>
 
           <div>
@@ -950,6 +1099,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Section 9: Automated Cloud Backups */}
       <BackupSettingsView formState={formState} setFormState={setFormState} />
+
+      {/* Section 9b: Keyboard Shortcuts */}
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
+        <div className="flex items-center space-x-2 border-b border-gray-200 dark:border-neutral-900 pb-3">
+          <Keyboard className="w-5 h-5 text-indigo-400" />
+          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Keyboard Shortcuts</h3>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="text-sm">
+            <span className="block text-gray-800 dark:text-gray-200 font-semibold">Enable Keyboard Shortcuts</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">Use keyboard combinations (e.g. Ctrl+S to sync, Alt+1/2/3 to switch tabs) to navigate the app efficiently.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFormState({
+              ...formState,
+              keyboardShortcuts: { ...formState.keyboardShortcuts, enabled: !(formState.keyboardShortcuts?.enabled ?? true) }
+            })}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+              (formState.keyboardShortcuts?.enabled ?? true) ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-neutral-800'
+            }`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              (formState.keyboardShortcuts?.enabled ?? true) ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+      </div>
 
       {/* Section 10: System Maintenance */}
       <div className="bg-white dark:bg-[#0a0a0a] border border-red-200 dark:border-red-900/30 rounded-3xl p-6 space-y-4 shadow-sm relative overflow-hidden">

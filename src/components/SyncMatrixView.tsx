@@ -43,6 +43,9 @@ import {
   Legend,
   Bar
 } from 'recharts';
+import { Tooltip as UITooltip } from './Tooltip';
+import { motion, AnimatePresence } from 'motion/react';
+import { MalLogo, AniListLogo, SimklLogo, PlexLogo } from './PlatformLogos';
 
 interface SyncMatrixViewProps {
   items: LibraryItem[];
@@ -68,12 +71,45 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
   onUndoAction
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'conflicts' | 'anime' | 'drama' | 'history'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'conflicts' | 'Anime TV Series' | 'Anime Film' | 'Film' | 'TV Series' | 'Anime Special' | 'Drama' | 'history'>('all');
   const [analyticsData, setAnalyticsData] = useState<SyncAnalyticsPoint[]>([]);
   const [chartMetric, setChartMetric] = useState<'frequency' | 'rates'>('frequency');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [sortCol, setSortCol] = useState<'title' | 'year' | 'episodes' | 'status'>('title');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+
+  const handleSelectAll = (filteredItems: LibraryItem[]) => {
+    if (selectedIds.length === filteredItems.length && filteredItems.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredItems.map(i => i.id));
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleBulkSync = () => {
+    setShowBulkModal(true);
+  };
+
+  const executeBulkSync = (onlyConflicts: boolean) => {
+    let idsToSync = selectedIds;
+    if (onlyConflicts) {
+      idsToSync = idsToSync.filter(id => items.find(i => i.id === id)?.hasConflict);
+    }
+    idsToSync.forEach(id => onTriggerSyncItem(id));
+    setSelectedIds([]);
+    setShowBulkModal(false);
+  };
+
+  const handleBulkIgnore = () => {
+    // Basic ignore behavior clears selection in this frontend mock unless backend ignore is implemented
+    setSelectedIds([]);
+  };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -99,7 +135,15 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
               headers.forEach((h, i) => obj[h] = values[i]);
               return {
                 title: obj.title || obj.name || 'Imported CSV Title',
-                mediaType: (obj.type || obj.mediatype || 'anime').toLowerCase(),
+                
+                mediaType: ((val) => {
+                  if (val.includes('movie') || val.includes('film')) return 'Anime Film';
+                  if (val.includes('special')) return 'Anime Special';
+                  if (val.includes('drama')) return 'Drama';
+                  if (val.includes('tv')) return 'Anime TV Series';
+                  return 'Anime TV Series';
+                })((obj.type || obj.mediatype || 'Anime TV Series').toLowerCase()),
+
                 totalEpisodes: parseInt(obj.episodes) || parseInt(obj.total_episodes) || 12,
                 year: parseInt(obj.year) || new Date().getFullYear(),
                 genres: obj.genres ? obj.genres.split(';') : [],
@@ -127,7 +171,13 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
               
               // Guessing columns if headers aren't perfectly named
               const title = obj.title || obj.name || obj['anime title'] || 'Imported HTML Title';
-              const type = (obj.type || obj.format || 'anime').toLowerCase();
+              
+              const typeRaw = (obj.type || obj.format || 'Anime TV Series').toLowerCase();
+              const type = typeRaw.includes('movie') || typeRaw.includes('film') ? 'Anime Film' 
+                         : typeRaw.includes('special') ? 'Anime Special'
+                         : typeRaw.includes('drama') ? 'Drama'
+                         : 'Anime TV Series';
+
               const episodes = parseInt(obj.episodes) || parseInt(obj['total episodes']) || 12;
               const year = parseInt(obj.year) || parseInt(obj.season?.split(' ')[1]) || new Date().getFullYear();
               
@@ -187,8 +237,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
     if (!matchesSearch) return false;
 
     if (activeFilter === 'conflicts') return item.hasConflict;
-    if (activeFilter === 'anime') return item.mediaType === 'anime';
-    if (activeFilter === 'drama') return item.mediaType === 'drama';
+    if (activeFilter !== 'all' && activeFilter !== 'history' && activeFilter !== 'conflicts') return item.mediaType === activeFilter;
     return true;
   }).sort((a, b) => {
     let aVal: any = a[sortCol];
@@ -219,28 +268,50 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
     if (!status) return <span className="text-gray-500 dark:text-gray-500 text-xs">Not Listed</span>;
     switch (status) {
       case 'watching':
-        return <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-medium">Watching</span>;
+        return (
+          <UITooltip title="Watching" description="Currently tracking progress on this platform." position="top">
+            <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-medium cursor-help">Watching</span>
+          </UITooltip>
+        );
       case 'completed':
-        return <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-medium">Completed</span>;
+        return (
+          <UITooltip title="Completed" description="Finished watching this series entirely." position="top">
+            <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-medium cursor-help">Completed</span>
+          </UITooltip>
+        );
       case 'plan_to_watch':
-        return <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-[#111] text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-neutral-800 text-xs font-medium">Plan to Watch</span>;
+        return (
+          <UITooltip title="Plan to Watch" description="Saved in the queue for future viewing." position="top">
+            <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-[#111] text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-neutral-800 text-xs font-medium cursor-help">Plan to Watch</span>
+          </UITooltip>
+        );
       case 'paused':
-        return <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-medium">Paused</span>;
+        return (
+          <UITooltip title="Paused" description="Temporarily on hold." position="top">
+            <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-medium cursor-help">Paused</span>
+          </UITooltip>
+        );
       case 'dropped':
-        return <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-medium">Dropped</span>;
+        return (
+          <UITooltip title="Dropped" description="Stopped watching permanently." position="top">
+            <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-medium cursor-help">Dropped</span>
+          </UITooltip>
+        );
     }
   };
 
   const renderPlatformChip = (p: PlatformType | string) => {
-    switch (p) {
+    switch (p.toLowerCase()) {
       case 'simkl':
-        return <span key={p} className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold uppercase">Simkl</span>;
+        return <span key={p} className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase flex items-center space-x-1 w-fit"><SimklLogo className="w-3 h-3 text-emerald-400 flex-shrink-0" /><span>Simkl</span></span>;
       case 'mal':
-        return <span key={p} className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-bold uppercase">MAL</span>;
+        return <span key={p} className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold uppercase flex items-center space-x-1 w-fit"><MalLogo className="w-3 h-3 text-blue-400 flex-shrink-0" /><span>MAL</span></span>;
       case 'anilist':
-        return <span key={p} className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold uppercase">AniList</span>;
+        return <span key={p} className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[10px] font-bold uppercase flex items-center space-x-1 w-fit"><AniListLogo className="w-3 h-3 text-cyan-400 flex-shrink-0" /><span>AniList</span></span>;
+      case 'plex':
+        return <span key={p} className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[10px] font-bold uppercase flex items-center space-x-1 w-fit"><PlexLogo className="w-3 h-3 text-amber-500 flex-shrink-0" /><span>Plex</span></span>;
       default:
-        return <span key={p} className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-bold uppercase">{p}</span>;
+        return <span key={p} className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-bold uppercase flex items-center space-x-1 w-fit"><span>{p}</span></span>;
     }
   };
 
@@ -262,7 +333,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
             <input 
               type="file" 
               id="csv-upload-empty"
-              accept=".csv" 
+              accept=".csv,.json,.html" 
               className="hidden" 
               onChange={handleImport}
             />
@@ -271,7 +342,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
               className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm rounded-xl shadow-md transition flex items-center space-x-2 cursor-pointer w-full sm:w-auto justify-center"
             >
               <Upload className="w-4 h-4" />
-              <span>Bulk Import CSV</span>
+              <span>Import Media</span>
             </label>
           </div>
 
@@ -502,33 +573,54 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
       {/* Main Grid & Activity Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Table / Grid (2 cols on lg) */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-4 min-w-0">
           {/* Controls Bar */}
-          <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-2xl p-4 flex flex-col xl:flex-row items-center justify-between gap-4 shadow-sm">
-            {/* Search Input & Import */}
-            <div className="flex items-center space-x-2 w-full xl:w-auto">
-              <div className="relative flex-grow sm:w-64">
-                <Search className="w-4 h-4 text-gray-600 dark:text-gray-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  placeholder="Search anime or drama title..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 placeholder:text-gray-500 dark:text-gray-500"
-                />
+          <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-2xl p-4 flex flex-col gap-4 shadow-sm">
+            
+            {/* Top Row: Search, Import, View Toggles */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center space-x-2 w-full sm:w-auto">
+                <div className="relative flex-grow sm:w-64">
+                  <Search className="w-4 h-4 text-gray-600 dark:text-gray-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search anime or drama title..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 placeholder:text-gray-500 dark:text-gray-500"
+                  />
+                </div>
+                
+                {/* Import Button */}
+                <label className="flex items-center justify-center bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-700 dark:text-indigo-400 border border-indigo-500/30 px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition shadow-sm whitespace-nowrap">
+                  <Upload className="w-3.5 h-3.5 mr-1.5" />
+                  Import Media
+                  <input type="file" className="hidden" accept=".csv,.json,.html" onChange={handleImport} />
+                </label>
               </div>
-              
-              {/* Import Button */}
-              <label className="flex items-center justify-center bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition">
-                <Upload className="w-4 h-4 mr-1.5" />
-                Import
-                <input type="file" className="hidden" accept=".csv,.json,.html" onChange={handleImport} />
-              </label>
+
+              {/* View Selector (moved to top row) */}
+              <div className="flex items-center space-x-1 bg-gray-100 dark:bg-[#111] p-1 rounded-xl border border-gray-200 dark:border-neutral-900 self-end sm:self-auto w-full sm:w-auto justify-center sm:justify-start">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 rounded-md transition ${viewMode === 'grid' ? 'bg-indigo-500 text-white' : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:text-gray-200'}`}
+                  title="Grid View"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`p-1.5 rounded-md transition ${viewMode === 'table' ? 'bg-indigo-500 text-white' : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:text-gray-200'}`}
+                  title="Table View"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto justify-between xl:justify-end">
-              {/* Filter Pills */}
-              <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-none">
+            {/* Bottom Row: Filter Pills */}
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 max-w-full">
                 <button
                   onClick={() => setActiveFilter('all')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
@@ -554,26 +646,21 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                     </span>
                   )}
                 </button>
-                <button
-                  onClick={() => setActiveFilter('anime')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-                    activeFilter === 'anime'
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-50 dark:bg-black text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-neutral-900 hover:text-gray-800 dark:text-gray-200'
-                  }`}
-                >
-                  Anime
-                </button>
-                <button
-                  onClick={() => setActiveFilter('drama')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-                    activeFilter === 'drama'
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-50 dark:bg-black text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-neutral-900 hover:text-gray-800 dark:text-gray-200'
-                  }`}
-                >
-                  Dramas
-                </button>
+                
+                {['Anime TV Series', 'Anime Film', 'Anime Special', 'Drama', 'TV Series', 'Film'].map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setActiveFilter(type as any)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer whitespace-nowrap ${
+                      activeFilter === type
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-50 dark:bg-black text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-neutral-900 hover:text-gray-800 dark:text-gray-200'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+
                 <button
                   onClick={() => setActiveFilter('history')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer flex items-center space-x-1.5 ${
@@ -607,6 +694,40 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
             </div>
           </div>
 
+          {/* Bulk Actions Bar */}
+          <AnimatePresence>
+            {selectedIds.length > 0 && activeFilter !== 'history' && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0, scale: 0.95, marginBottom: 0 }}
+                animate={{ opacity: 1, height: 'auto', scale: 1, marginBottom: 16 }}
+                exit={{ opacity: 0, height: 0, scale: 0.95, marginBottom: 0 }}
+                transition={{ duration: 0.2 }}
+                className="bg-indigo-500/10 border border-indigo-500/30 rounded-2xl p-3 flex items-center justify-between shadow-sm overflow-hidden"
+              >
+                <div className="flex items-center space-x-3">
+                  <span className="text-indigo-700 dark:text-indigo-300 font-bold text-sm ml-2">
+                    {selectedIds.length} item{selectedIds.length > 1 ? 's' : ''} selected
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={handleBulkIgnore}
+                    className="px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-black/50 rounded-lg transition"
+                  >
+                    Deselect All
+                  </button>
+                  <button 
+                    onClick={handleBulkSync}
+                    className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-sm transition flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Sync Selected</span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Main Content Area */}
           {activeFilter === 'history' ? (
             <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-2xl shadow-sm p-6 space-y-6">
@@ -639,7 +760,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                         <div>
                           <div className="flex items-center space-x-2">
                             <span className="font-bold text-gray-900 dark:text-gray-100 text-base">{log.itemTitle}</span>
-                            <span className="px-2 py-0.5 rounded bg-gray-200 dark:bg-neutral-800 text-gray-600 dark:text-gray-400 text-[10px] font-mono uppercase font-bold border border-gray-300 dark:border-neutral-700">{log.source}</span>
+                            {renderPlatformChip(log.source)}
                           </div>
                           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{log.message}</p>
                           <p className="text-xs text-gray-500 dark:text-gray-500 mt-2 font-mono flex items-center space-x-1">
@@ -672,6 +793,14 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-gray-50 dark:bg-black/50 text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-neutral-900">
                   <tr>
+                    <th className="px-4 py-3 w-8">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedIds.length === filteredItems.length && filteredItems.length > 0}
+                        onChange={() => handleSelectAll(filteredItems)}
+                        className="w-4 h-4 rounded border-gray-300 dark:border-neutral-700 text-indigo-600 focus:ring-indigo-500 bg-transparent cursor-pointer"
+                      />
+                    </th>
                     <th 
                       className="px-4 py-3 font-medium cursor-pointer hover:text-gray-800 dark:text-gray-200 transition select-none"
                       onClick={() => {
@@ -726,14 +855,30 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-gray-700 dark:text-gray-300">
-                  {filteredItems.map(item => (
-                    <tr key={item.id} className="hover:bg-gray-100 dark:bg-[#111]/30 transition">
-                      <td className="px-4 py-3 max-w-[200px] truncate font-medium text-gray-800 dark:text-gray-200">
-                        {item.title}
-                      </td>
+                  <AnimatePresence>
+                    {filteredItems.map(item => (
+                      <motion.tr 
+                        key={item.id} 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
+                        className="hover:bg-gray-100 dark:bg-[#111]/30 dark:hover:bg-[#222] transition"
+                      >
+                        <td className="px-4 py-3">
+                          <input 
+                            type="checkbox"
+                            checked={selectedIds.includes(item.id)}
+                            onChange={() => handleToggleSelect(item.id)}
+                            className="w-4 h-4 rounded border-gray-300 dark:border-neutral-700 text-indigo-600 focus:ring-indigo-500 bg-transparent cursor-pointer"
+                          />
+                        </td>
+                        <td className="px-4 py-3 max-w-[200px] truncate font-medium text-gray-800 dark:text-gray-200">
+                          {item.title}
+                        </td>
                       <td className="px-4 py-3">
                         <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded ${
-                          item.mediaType === 'anime' 
+                          item.mediaType.includes('Anime') 
                             ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' 
                             : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                         }`}>
@@ -771,23 +916,37 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                           </button>
                         </div>
                       </td>
-                    </tr>
+                    </motion.tr>
                   ))}
+                  </AnimatePresence>
                 </tbody>
               </table>
             </div>
           ) : (
             <div className="space-y-3">
+              <AnimatePresence>
               {filteredItems.map((item) => (
-                <div
+                <motion.div
                   key={item.id}
-                  className={`bg-white dark:bg-[#0a0a0a] border rounded-2xl p-4 shadow-sm transition hover:shadow-md ${
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className={`bg-white dark:bg-[#0a0a0a] border rounded-2xl p-4 shadow-sm transition hover:shadow-md relative ${
                     item.hasConflict 
                       ? 'border-amber-500/40 bg-amber-950/10' 
                       : 'border-gray-200 dark:border-neutral-900 hover:border-gray-300 dark:border-neutral-800'
                   }`}
                 >
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="absolute top-4 left-4 z-10 bg-white/80 dark:bg-black/80 rounded p-1 backdrop-blur shadow-sm">
+                    <input 
+                      type="checkbox"
+                      checked={selectedIds.includes(item.id)}
+                      onChange={() => handleToggleSelect(item.id)}
+                      className="w-4 h-4 rounded border-gray-300 dark:border-neutral-700 text-indigo-600 focus:ring-indigo-500 bg-transparent cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pl-8">
                     {/* Cover & Title Details */}
                     <div className="flex items-center space-x-3.5">
                       <img
@@ -798,7 +957,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                       <div>
                         <div className="flex items-center space-x-2">
                           <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded ${
-                            item.mediaType === 'anime' 
+                            item.mediaType.includes('Anime') 
                               ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' 
                               : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                           }`}>
@@ -845,12 +1004,17 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                   {/* Platform Sync Matrix Breakdown Row */}
                   <div className="mt-4 pt-3 border-t border-gray-200 dark:border-neutral-900/80 grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {/* Simkl */}
-                    <div className="bg-gray-50 dark:bg-black/60 p-2.5 rounded-xl border border-gray-200 dark:border-neutral-900/60 flex items-center justify-between">
+                    <div className="bg-gray-50 dark:bg-black/60 p-2.5 rounded-xl border border-gray-200 dark:border-neutral-900/60 flex items-center justify-between hover:border-emerald-500/30 transition-colors group">
                       <div>
-                        <div className="flex items-center space-x-1.5">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Simkl</span>
-                        </div>
+                        <a 
+                          href={item.platforms.simkl?.id ? `https://simkl.com/${item.mediaType.includes('Anime') ? 'anime' : 'tv'}/${item.platforms.simkl.id}` : '#'} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center space-x-1.5 hover:opacity-80 transition cursor-pointer"
+                        >
+                          <SimklLogo className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                          <span className="text-xs font-bold text-gray-700 dark:text-gray-300 group-hover:text-emerald-500 transition-colors">Simkl</span>
+                        </a>
                         <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
                           Ep <strong className="text-gray-900 dark:text-gray-100">{item.platforms.simkl?.episode || 0}</strong> / {item.totalEpisodes}
                         </p>
@@ -859,12 +1023,17 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                     </div>
 
                     {/* MAL */}
-                    <div className="bg-gray-50 dark:bg-black/60 p-2.5 rounded-xl border border-gray-200 dark:border-neutral-900/60 flex items-center justify-between">
+                    <div className="bg-gray-50 dark:bg-black/60 p-2.5 rounded-xl border border-gray-200 dark:border-neutral-900/60 flex items-center justify-between hover:border-blue-500/30 transition-colors group">
                       <div>
-                        <div className="flex items-center space-x-1.5">
-                          <span className="w-2 h-2 rounded-full bg-blue-400" />
-                          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">MAL</span>
-                        </div>
+                        <a 
+                          href={item.platforms.mal?.id ? `https://myanimelist.net/anime/${item.platforms.mal.id}` : '#'} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center space-x-1.5 hover:opacity-80 transition cursor-pointer"
+                        >
+                          <MalLogo className="w-4 h-4 text-[#2e51a2] dark:text-blue-400 group-hover:scale-110 transition-transform" />
+                          <span className="text-xs font-bold text-gray-700 dark:text-gray-300 group-hover:text-blue-500 transition-colors">MAL</span>
+                        </a>
                         <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
                           Ep <strong className="text-gray-900 dark:text-gray-100">{item.platforms.mal?.episode || 0}</strong> / {item.totalEpisodes}
                         </p>
@@ -873,12 +1042,17 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                     </div>
 
                     {/* AniList */}
-                    <div className="bg-gray-50 dark:bg-black/60 p-2.5 rounded-xl border border-gray-200 dark:border-neutral-900/60 flex items-center justify-between">
+                    <div className="bg-gray-50 dark:bg-black/60 p-2.5 rounded-xl border border-gray-200 dark:border-neutral-900/60 flex items-center justify-between hover:border-cyan-500/30 transition-colors group">
                       <div>
-                        <div className="flex items-center space-x-1.5">
-                          <span className="w-2 h-2 rounded-full bg-cyan-400" />
-                          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">AniList</span>
-                        </div>
+                        <a 
+                          href={item.platforms.anilist?.id ? `https://anilist.co/anime/${item.platforms.anilist.id}` : '#'} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center space-x-1.5 hover:opacity-80 transition cursor-pointer"
+                        >
+                          <AniListLogo className="w-4 h-4 text-[#02A9FF] dark:text-cyan-400 group-hover:scale-110 transition-transform" />
+                          <span className="text-xs font-bold text-gray-700 dark:text-gray-300 group-hover:text-cyan-500 transition-colors">AniList</span>
+                        </a>
                         <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
                           Ep <strong className="text-gray-900 dark:text-gray-100">{item.platforms.anilist?.episode || 0}</strong> / {item.totalEpisodes}
                         </p>
@@ -902,8 +1076,9 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                       </button>
                     </div>
                   )}
-                </div>
+                </motion.div>
               ))}
+              </AnimatePresence>
             </div>
           )}
         </div>
@@ -935,8 +1110,8 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                   <p className="text-gray-600 dark:text-gray-400 text-[11px] font-medium">{log.action}</p>
                   <p className="text-gray-600 dark:text-gray-400 text-[10px] leading-relaxed line-clamp-2">{log.details}</p>
                   <div className="flex items-center justify-between pt-1 text-[10px]">
-                    <span className="text-indigo-400/80 uppercase font-mono">{log.source}</span>
-                    <span className={`px-1.5 py-0.2 rounded font-medium ${
+                    {renderPlatformChip(log.source)}
+                    <span className={`px-1.5 py-0.5 rounded font-medium ${
                       log.status === 'success' ? 'text-emerald-400 bg-emerald-950/40' :
                       log.status === 'conflict' ? 'text-amber-400 bg-amber-950/40' : 'text-gray-600 dark:text-gray-400'
                     }`}>
@@ -949,6 +1124,59 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Bulk Sync Modal */}
+      <AnimatePresence>
+        {showBulkModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 shadow-xl max-w-md w-full"
+            >
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Confirm Mass Synchronization</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                You have selected {selectedIds.length} items. How would you like to process them?
+              </p>
+              
+              <div className="space-y-3">
+                <button
+                  onClick={() => executeBulkSync(false)}
+                  className="w-full flex items-center justify-between p-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 transition group text-left cursor-pointer"
+                >
+                  <div>
+                    <span className="block font-bold text-indigo-700 dark:text-indigo-400">Sync All Selected</span>
+                    <span className="block text-xs text-indigo-600/80 dark:text-indigo-400/80 mt-1">Force a sync for all {selectedIds.length} items, potentially overwriting.</span>
+                  </div>
+                  <Sparkles className="w-5 h-5 text-indigo-500 group-hover:scale-110 transition-transform" />
+                </button>
+
+                <button
+                  onClick={() => executeBulkSync(true)}
+                  className="w-full flex items-center justify-between p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition group text-left cursor-pointer"
+                >
+                  <div>
+                    <span className="block font-bold text-amber-700 dark:text-amber-400">Only Resolve Conflicts</span>
+                    <span className="block text-xs text-amber-600/80 dark:text-amber-400/80 mt-1">Skip synced items and only process items with known conflicts.</span>
+                  </div>
+                  <AlertTriangle className="w-5 h-5 text-amber-500 group-hover:scale-110 transition-transform" />
+                </button>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowBulkModal(false)}
+                  className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

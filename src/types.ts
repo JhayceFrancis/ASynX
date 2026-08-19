@@ -1,3 +1,17 @@
+
+export interface PanelConfig {
+  i: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  type: string;
+  bgColor?: string;
+  isStatic?: boolean;
+}
+
+export type TabLayouts = Record<string, PanelConfig[]>;
+
 export type PlatformType = 'simkl' | 'mal' | 'anilist';
 
 export type WatchStatus = 'watching' | 'completed' | 'plan_to_watch' | 'paused' | 'dropped';
@@ -16,7 +30,7 @@ export interface LibraryItem {
   id: string;
   title: string;
   japaneseTitle?: string;
-  mediaType: 'anime' | 'drama' | 'show';
+  mediaType: 'Anime TV Series' | 'Anime Film' | 'Film' | 'TV Series' | 'Anime Special' | 'Drama';
   coverImage: string;
   totalEpisodes: number;
   year: number;
@@ -92,10 +106,16 @@ export interface BrowserExtensionState {
 
 export interface AppSettings {
   theme?: {
-    accentColor: string;
-    isGradient: boolean;
+    accentColor?: string;
+    isGradient?: boolean;
     gradientStart?: string;
     gradientEnd?: string;
+    headerColor?: string;
+    buttonColor?: string;
+    paddingSize?: string;
+    buttonTextColor?: string;
+    gradientColors?: string[];
+    gradientDirection?: string;
   };
   simkl: {
     clientId: string;
@@ -164,8 +184,14 @@ export interface AppSettings {
     encryptionKey?: string;
     lastBackup?: string;
   };
+  keyboardShortcuts?: {
+    enabled: boolean;
+  };
+  customLayouts?: TabLayouts;
   syncRules: {
     autoSyncIntervalMinutes: number;
+    syncScheduleMode?: 'interval' | 'specific_time';
+    syncSpecificTime?: string;
     conflictPolicy: 'ask_user' | 'source_of_truth' | 'highest_episode';
     defaultSourceOfTruth: PlatformType;
     autoResolveWithAI: boolean;

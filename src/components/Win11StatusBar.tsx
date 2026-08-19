@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, HardDrive, Wifi, Activity, ShieldCheck, Clock, RefreshCw } from 'lucide-react';
+import { Cpu, HardDrive, Activity, ShieldCheck, Clock, RefreshCw, Loader2 } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
 interface Win11StatusBarProps {
@@ -8,6 +8,7 @@ interface Win11StatusBarProps {
   isSyncing: boolean;
   maintenanceMode?: boolean;
   onRefresh?: () => void;
+  isOffline?: boolean;
 }
 
 export const Win11StatusBar: React.FC<Win11StatusBarProps> = ({
@@ -15,7 +16,8 @@ export const Win11StatusBar: React.FC<Win11StatusBarProps> = ({
   conflictCount,
   isSyncing,
   maintenanceMode,
-  onRefresh
+  onRefresh,
+  isOffline
 }) => {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
@@ -31,8 +33,14 @@ export const Win11StatusBar: React.FC<Win11StatusBarProps> = ({
       <div className="flex items-center space-x-3">
         <Tooltip title="Engine Execution State" description="Current active state of the ASynX synchronization engine." position="top">
           <div className="flex items-center space-x-1.5 text-gray-700 dark:text-gray-300 font-medium cursor-help">
-            <Activity className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Status: {isSyncing ? 'Syncing...' : 'Idle'}</span>
+            {isOffline ? (
+              <Activity className="w-3.5 h-3.5 text-rose-400" />
+            ) : isSyncing ? (
+              <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
+            ) : (
+              <Activity className="w-3.5 h-3.5 text-indigo-400" />
+            )}
+            <span className={isOffline ? "text-rose-500 font-bold" : ""}>Status: {isOffline ? 'Offline Mode' : isSyncing ? 'Syncing...' : 'Idle'}</span>
           </div>
         </Tooltip>
         <span className="text-slate-800">|</span>

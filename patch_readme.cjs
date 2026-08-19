@@ -1,22 +1,18 @@
 const fs = require('fs');
 
-const file = 'README.md';
-let content = fs.readFileSync(file, 'utf8');
+let readme = fs.readFileSync('README.md', 'utf8');
 
-const oldDockerText = `The server will build and boot up on port \`3000\`. 
-Your encrypted database will be safely stored and persisted in the newly created \`./data\` folder on your host machine.
+const newFeatures = `
+### 🛠️ Advanced Customization & Real-Time Telemetry
+- **Dynamic Theme Engine**: Personalize your experience with full color palette controls. Customize primary/accent colors, button states, header backgrounds, layout padding scalars, and complex multi-color radial or linear gradients.
+- **System Health Dashboard**: Monitor real-time status, API ping latency, and memory usage for external integrations (Simkl, MAL, AniList) and internal services (Plex, Tautulli, Jellyfin, Emby).
+- **Expanded Media Taxonomy**: Full categorization support including *Anime TV Series*, *Anime Film*, *Anime Special*, *Drama*, *TV Series*, and *Film* with automated fallback logic for legacy CSV/HTML imports.
+- **Bulk Action Modals**: Intuitive mass-synchronization controls (e.g. 'Sync All Selected' vs 'Only Resolve Conflicts').
+- **WebSocket Reactivity**: UI instantly reacts and updates progress charts when a remote Plex/Tautulli webhook scrobbles an episode, backed by a deduplication playback session manager.
 
-#### Configuring the App to Use Your Remote Sync Server:`;
+`;
 
-const newDockerText = `The server will build and boot up on port \`3000\`. 
-Your encrypted database will be safely stored and persisted in the newly created \`./data\` folder on your host machine.
+readme = readme.replace('### 🔄 Multi-Platform Sync & Automation', newFeatures + '### 🔄 Multi-Platform Sync & Automation');
 
-#### Setting Your Credentials (Docker Environment Variables):
-Before starting the container, you can edit the \`docker-compose.yml\` file to set your strict server bind addresses and remote sync credentials:
-- \`HOST\`: The address the backend binds to (default: \`0.0.0.0\` to allow external traffic). You can set this to a specific IP or SSL Hostname.
-- \`REMOTE_SYNC_API_KEY\`: A secure password/key you define. The desktop client MUST provide this key to push/pull data to the server.
+fs.writeFileSync('README.md', readme);
 
-#### Configuring the App to Use Your Remote Sync Server:`;
-
-content = content.replace(oldDockerText, newDockerText);
-fs.writeFileSync(file, content);

@@ -77,6 +77,8 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
 
   useEffect(() => {
     fetchHealth();
+    const interval = setInterval(fetchHealth, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Run ping health check

@@ -16,42 +16,50 @@ concurrency:
 
 jobs:
   # ==========================================
-  # JOB 1: Windows Electron (.exe) Publisher
+  # JOB 1: Version Bumper & Auto-Tag
   # ==========================================
-  build-electron:
-    name: Build & Publish Electron Installer
-    runs-on: windows-latest
-
+  bump-version:
+    name: Bump Release Version
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Required for GitHub Actions to read and push tags
-
-      - name: Setup Node.js (v20 LTS)
+      
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Configure Git Bot
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Extract Version and Auto-Tag
-        id: auto_tag
+      - name: Bump Version and Push
         run: |
-          $version = (Get-Content package.json | ConvertFrom-Json).version
-          $tagName = "v$version"
-          
-          if (!(git tag -l $tagName)) {
-            Write-Host "Tag $tagName does not exist. Creating and pushing..."
-            git tag $tagName
-            git push origin $tagName
-          } else {
-            Write-Host "Tag $tagName already exists. Proceeding with build..."
-          }
+          npm version patch -m "chore(release): bump version to %s [skip ci]"
+          git push origin HEAD:${{ github.ref }} --follow-tags
+
+  # ==========================================
+  # JOB 2: Windows Electron (.exe) Publisher
+  # ==========================================
+  build-electron:
+    name: Build & Publish Electron Installer
+    needs: bump-version
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js (v20 LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
 
       - name: Cache Electron & Builder Binaries
         uses: actions/cache@v4
@@ -83,12 +91,12 @@ jobs:
         run: npx electron-builder --win --publish always
 
   # ==========================================
-  # JOB 2: Ubuntu Docker (GHCR) Publisher
+  # JOB 3: Ubuntu Docker (GHCR) Publisher
   # ==========================================
   build-docker:
     name: Build & Push Docker Image
+    needs: bump-version
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

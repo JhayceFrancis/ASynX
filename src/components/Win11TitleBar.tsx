@@ -37,7 +37,7 @@ export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
   }
 
   return (
-    <div className="relative bg-gray-50 dark:bg-black/90 backdrop-blur-md border-b border-gray-200 dark:border-neutral-900/90 text-gray-700 dark:text-gray-300 select-none flex items-center justify-between px-3 py-1.5 text-xs font-sans rounded-t-2xl">
+    <div className="win11-titlebar-container relative bg-gray-50 dark:bg-black/90 backdrop-blur-md border-b border-gray-200 dark:border-neutral-900/90 text-gray-700 dark:text-gray-300 select-none flex items-center justify-between px-3 py-1.5 text-xs font-sans rounded-t-2xl">
       {/* Subtle Progress Bar */}
       {isSyncing && (
         <div className="absolute bottom-0 left-0 w-full h-[2px] bg-transparent overflow-hidden rounded-b-xl z-50">

@@ -1,4 +1,6 @@
+import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect } from 'react';
+import { io } from 'socket.io-client';
 import { 
   LibraryItem, 
   SyncLog, 
@@ -19,18 +21,38 @@ import { SettingsView } from './components/SettingsView';
 import { DatabaseView } from './components/DatabaseView';
 import { ApiDocumentationView } from './components/ApiDocumentationView';
 import { DockerBackendView } from './components/DockerBackendView';
+import { SystemHealthView } from './components/SystemHealthView';
 import { SyncPerformanceView } from './components/SyncPerformanceView';
 import { OverrideModal } from './components/OverrideModal';
 import { ScrobblePrompt } from './components/ScrobblePrompt';
 import { ToastContainer, ToastMessage, ToastType } from './components/ToastContainer';
 import { useRef } from 'react';
+import { useKeyboardShortcut } from './hooks/useKeyboardShortcut';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'matrix' | 'conflicts' | 'plex' | 'extension' | 'settings' | 'api-docs' | 'docker-backend' | 'performance'>('matrix');
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<'matrix' | 'conflicts' | 'plex' | 'extension' | 'settings' | 'api-docs' | 'docker-backend' | 'performance' | 'health' | 'database'>(() => {
+    const saved = localStorage.getItem('asynx_activeTab');
+    return (saved as any) || 'matrix';
+  });
+  
+  useEffect(() => {
+    localStorage.setItem('asynx_activeTab', activeTab);
+  }, [activeTab]);
+
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [webhookLogs, setWebhookLogs] = useState<WebhookLog[]>([]);
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('asynx_isDarkMode');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('asynx_isDarkMode', JSON.stringify(isDarkMode));
+  }, [isDarkMode]);
+
   const [extensionState, setExtensionState] = useState<BrowserExtensionState>({
     installed: true,
     autoScrobbleEnabled: true,
@@ -58,6 +80,7 @@ export default function App() {
   });
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
   const [overrideItem, setOverrideItem] = useState<LibraryItem | null>(null);
   const [showSyncValidation, setShowSyncValidation] = useState(false);
 
@@ -112,14 +135,29 @@ export default function App() {
   const safeFetchJson = async (url: string) => {
     try {
       const res = await fetch(url);
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const contentType = res.headers.get('content-type');
+      let data;
       if (contentType && contentType.includes('application/json')) {
-        return await res.json();
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        data = JSON.parse(text);
       }
-      const text = await res.text();
-      return JSON.parse(text);
-    } catch {
+      
+      // Cache successful response in localStorage
+      localStorage.setItem('asynx_cache_' + url, JSON.stringify(data));
+      setIsOffline(false);
+      return data;
+    } catch (e) {
+      console.warn(`Failed to fetch ${url}, falling back to local cache. Error: `, e);
+      setIsOffline(true);
+      const cached = localStorage.getItem('asynx_cache_' + url);
+      if (cached) {
+        try {
+          return JSON.parse(cached);
+        } catch(err) {}
+      }
       return null;
     }
   };
@@ -177,6 +215,7 @@ export default function App() {
             remoteSync: { ...prev.remoteSync, ...settingsData.remoteSync },
             daemonSettings: { ...prev.daemonSettings, ...settingsData.daemonSettings },
             automatedBackups: { ...prev.automatedBackups, ...settingsData.automatedBackups },
+            keyboardShortcuts: { ...prev.keyboardShortcuts, ...settingsData.keyboardShortcuts },
             syncRules: { ...prev.syncRules, ...settingsData.syncRules }
           }));
         } else {
@@ -190,13 +229,40 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 10000); // Polling for updates
-    return () => clearInterval(interval);
+    
+    // Connect to WebSocket server for real-time state broadcast
+    const socket = io();
+
+    socket.on('connect', () => {
+      console.log('Connected to real-time WebSocket');
+    });
+
+    socket.on('state_change', (data) => {
+      console.log('Real-time state change received:', data);
+      if (data.type === 'scrobble_committed' || data.type === 'playback_active' || data.type === 'sync_complete') {
+        fetchData(); // Refresh UI dynamically
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   const handleTriggerSync = () => {
     setShowSyncValidation(true);
   };
+
+  const keyboardShortcutsEnabled = settings.keyboardShortcuts?.enabled ?? true;
+
+  useKeyboardShortcut({ key: 's', ctrl: true, enabled: keyboardShortcutsEnabled }, () => {
+    handleTriggerSync();
+  });
+  
+  useKeyboardShortcut({ key: '1', alt: true, enabled: keyboardShortcutsEnabled }, () => setActiveTab('matrix'));
+  useKeyboardShortcut({ key: '2', alt: true, enabled: keyboardShortcutsEnabled }, () => setActiveTab('conflicts'));
+  useKeyboardShortcut({ key: '3', alt: true, enabled: keyboardShortcutsEnabled }, () => setActiveTab('performance'));
+  useKeyboardShortcut({ key: '4', alt: true, enabled: keyboardShortcutsEnabled }, () => setActiveTab('settings'));
 
   const handleConfirmBulkSync = async () => {
     setShowSyncValidation(false);
@@ -302,6 +368,7 @@ export default function App() {
           remoteSync: { ...prev.remoteSync, ...settingsData.remoteSync },
           daemonSettings: { ...prev.daemonSettings, ...settingsData.daemonSettings },
           automatedBackups: { ...prev.automatedBackups, ...settingsData.automatedBackups },
+          keyboardShortcuts: { ...prev.keyboardShortcuts, ...settingsData.keyboardShortcuts },
           syncRules: { ...prev.syncRules, ...settingsData.syncRules }
         }));
       }
@@ -328,39 +395,93 @@ export default function App() {
     }),
   } as React.CSSProperties;
 
-  const CustomTheme = () => (
-    <style dangerouslySetInnerHTML={{__html: `
-      :root {
-        --accent-base: ${settings.theme?.accentColor || '#4f46e5'};
-        --accent-gradient: ${settings.theme?.isGradient 
-          ? `linear-gradient(to right, ${settings.theme?.gradientStart}, ${settings.theme?.gradientEnd})` 
-          : 'var(--accent-base)'};
-      }
-      .bg-indigo-500, .bg-indigo-600, .bg-purple-600 {
-        background: var(--accent-gradient) !important;
-      }
-      .hover\\:bg-indigo-500:hover, .hover\\:bg-indigo-600:hover {
-        background: var(--accent-base) !important;
-        opacity: 0.9;
-      }
-      .text-indigo-500, .text-indigo-600, .text-purple-500, .text-purple-600 {
-        color: var(--accent-base) !important;
-      }
-      .border-indigo-500, .border-purple-500 {
-        border-color: var(--accent-base) !important;
-      }
-      .from-indigo-600 {
-        --tw-gradient-from: ${settings.theme?.gradientStart || 'var(--accent-base)'} !important;
-      }
-      .to-purple-600 {
-        --tw-gradient-to: ${settings.theme?.gradientEnd || 'var(--accent-base)'} !important;
-      }
-      ::selection {
-        background-color: var(--accent-base) !important;
-        color: white !important;
-      }
-    `}} />
-  );
+  const CustomTheme = () => {
+    const t = settings.theme || {};
+    const gradientColors = t.gradientColors && t.gradientColors.length > 0 
+      ? t.gradientColors.join(', ') 
+      : (t.gradientStart && t.gradientEnd ? `${t.gradientStart}, ${t.gradientEnd}` : '#4f46e5, #ec4899');
+    
+    const gradient = t.isGradient 
+      ? (t.gradientDirection === 'circle at center' 
+         ? `radial-gradient(${t.gradientDirection}, ${gradientColors})`
+         : `linear-gradient(${t.gradientDirection || 'to right'}, ${gradientColors})`)
+      : (t.accentColor || '#4f46e5');
+
+    const buttonStyle = t.buttonColor || gradient;
+    const headerBg = t.headerColor || 'transparent';
+    const paddingSz = t.paddingSize || '1.5rem';
+    const btnText = t.buttonTextColor || '#ffffff';
+
+    return (
+      <style dangerouslySetInnerHTML={{__html: `
+        :root {
+          --accent-base: ${t.accentColor || '#4f46e5'};
+          --accent-gradient: ${gradient};
+          --button-bg: ${buttonStyle};
+          --button-text: ${btnText};
+          --header-bg: ${headerBg};
+          --app-padding: ${paddingSz};
+        }
+        /* Buttons overriding */
+        button.bg-indigo-600, button.bg-indigo-500, .bg-indigo-600, .bg-indigo-500, .bg-purple-600 {
+          background: var(--button-bg) !important;
+          color: var(--button-text) !important;
+          transition: opacity 0.2s ease;
+        }
+        button.bg-indigo-600:hover, button.bg-indigo-500:hover, .bg-indigo-600:hover, .bg-indigo-500:hover, .bg-purple-600:hover {
+          opacity: 0.9 !important;
+        }
+        /* Text overriding */
+        .text-indigo-500:not(:hover), .text-indigo-600:not(:hover), .text-purple-500:not(:hover), .text-purple-600:not(:hover) {
+          color: var(--accent-base) !important;
+        }
+        /* Fix for explicit tailwind hover utilities */
+        .hover\:text-white:hover { color: #ffffff !important; }
+        .group:hover .group-hover\:text-white { color: #ffffff !important; }
+        .hover\:text-gray-800:hover { color: #1f2937 !important; }
+        .dark .dark\:hover\:text-gray-200:hover { color: #e5e7eb !important; }
+        /* Borders */
+        .border-indigo-500, .border-purple-500 {
+          border-color: var(--accent-base) !important;
+        }
+        
+        /* Discreet Custom Scrollbars */
+        ::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+          background: transparent;
+        }
+        ::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+          background-color: transparent;
+          border-radius: 10px;
+          transition: background-color 0.2s;
+        }
+        *:hover::-webkit-scrollbar-thumb {
+          background-color: rgba(156, 163, 175, 0.4);
+        }
+        .dark *:hover::-webkit-scrollbar-thumb {
+          background-color: rgba(82, 82, 82, 0.6);
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(107, 114, 128, 0.8) !important;
+        }
+        .dark ::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(115, 115, 115, 0.9) !important;
+        }
+
+        /* App Layout Overrides */
+        main {
+          padding: var(--app-padding) !important;
+        }
+        header, .win11-titlebar-container, nav {
+          background-color: var(--header-bg) !important;
+        }
+      `}} />
+    );
+  };
 
   const handleImportCSV = async (importedItems: LibraryItem[]) => {
     try {
@@ -389,6 +510,7 @@ export default function App() {
         <Win11TitleBar
           appName="ASynX — Cross-Platform Anime & Drama Sync Studio"
           isSyncing={isSyncing}
+        isOffline={isOffline}
           onTriggerSync={handleTriggerSync}
         />
 
@@ -407,6 +529,15 @@ export default function App() {
 
         {/* Main Content Body */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 15, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -15, filter: 'blur(4px)' }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+            >
+
           {activeTab === 'matrix' && (
             <SyncMatrixView
               items={items}
@@ -466,6 +597,12 @@ export default function App() {
           {activeTab === 'performance' && (
             <SyncPerformanceView />
           )}
+          {activeTab === 'health' && (
+            <SystemHealthView />
+          )}
+        
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
 
@@ -474,6 +611,7 @@ export default function App() {
         itemCount={items.length}
         conflictCount={conflictItems.length}
         isSyncing={isSyncing}
+        isOffline={isOffline}
         maintenanceMode={settings.maintenanceMode}
         onRefresh={fetchData}
       />

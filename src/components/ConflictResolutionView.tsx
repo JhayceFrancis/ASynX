@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LibraryItem, PlatformType, WatchStatus, AIConflictAnalysis, AppSettings } from '../types';
 import { Tooltip } from './Tooltip';
+import { MalLogo, AniListLogo, SimklLogo } from './PlatformLogos';
 import { 
   AlertTriangle, 
   Sparkles, 
@@ -40,7 +41,7 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
 
   // Bulk Action Selection state
   const [bulkSelectedIds, setBulkSelectedIds] = useState<string[]>([]);
-  const initialSOT = (settings?.syncRules?.defaultSourceOfTruth || settings?.sourceOfTruth || 'anilist') as 'anilist' | 'simkl' | 'mal' | 'highest_episode';
+  const initialSOT = (settings?.syncRules?.defaultSourceOfTruth || settings?.syncRules?.primarySource || 'anilist') as 'anilist' | 'simkl' | 'mal' | 'highest_episode';
   const [bulkStrategy, setBulkStrategy] = useState<'anilist' | 'simkl' | 'mal' | 'highest_episode'>(initialSOT);
   const [isBulkResolving, setIsBulkResolving] = useState<boolean>(false);
   const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string | null>(null);
@@ -322,10 +323,17 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Simkl Card */}
-                  <div className="bg-gray-50 dark:bg-black p-4 rounded-2xl border border-gray-200 dark:border-neutral-900 space-y-2">
+                  <div className="bg-gray-50 dark:bg-black p-4 rounded-2xl border border-gray-200 dark:border-neutral-900 space-y-2 hover:border-emerald-500/30 transition-colors group">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Simkl</span>
-                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                      <a 
+                        href={selectedItem.platforms.simkl?.id ? `https://simkl.com/${selectedItem.mediaType.includes('Anime') ? 'anime' : 'tv'}/${selectedItem.platforms.simkl.id}` : '#'} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center space-x-1.5 hover:opacity-80 transition cursor-pointer"
+                      >
+                        <SimklLogo className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200 group-hover:text-emerald-500 transition-colors">Simkl</span>
+                      </a>
                     </div>
                     <div>
                       <p className="text-2xl font-extrabold text-gray-900 dark:text-gray-100">
@@ -345,10 +353,17 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
                   </div>
 
                   {/* MAL Card */}
-                  <div className="bg-gray-50 dark:bg-black p-4 rounded-2xl border border-gray-200 dark:border-neutral-900 space-y-2">
+                  <div className="bg-gray-50 dark:bg-black p-4 rounded-2xl border border-gray-200 dark:border-neutral-900 space-y-2 hover:border-blue-500/30 transition-colors group">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-800 dark:text-gray-200">MyAnimeList</span>
-                      <span className="w-2 h-2 rounded-full bg-blue-400" />
+                      <a 
+                        href={selectedItem.platforms.mal?.id ? `https://myanimelist.net/anime/${selectedItem.platforms.mal.id}` : '#'} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center space-x-1.5 hover:opacity-80 transition cursor-pointer"
+                      >
+                        <MalLogo className="w-5 h-5 text-[#2e51a2] dark:text-blue-400 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200 group-hover:text-blue-500 transition-colors">MAL</span>
+                      </a>
                     </div>
                     <div>
                       <p className="text-2xl font-extrabold text-gray-900 dark:text-gray-100">
@@ -369,10 +384,17 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
                   </div>
 
                   {/* AniList Card */}
-                  <div className="bg-gray-50 dark:bg-black p-4 rounded-2xl border border-gray-200 dark:border-neutral-900 space-y-2">
+                  <div className="bg-gray-50 dark:bg-black p-4 rounded-2xl border border-gray-200 dark:border-neutral-900 space-y-2 hover:border-cyan-500/30 transition-colors group">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-800 dark:text-gray-200">AniList</span>
-                      <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                      <a 
+                        href={selectedItem.platforms.anilist?.id ? `https://anilist.co/anime/${selectedItem.platforms.anilist.id}` : '#'} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center space-x-1.5 hover:opacity-80 transition cursor-pointer"
+                      >
+                        <AniListLogo className="w-5 h-5 text-[#02A9FF] dark:text-cyan-400 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200 group-hover:text-cyan-500 transition-colors">AniList</span>
+                      </a>
                     </div>
                     <div>
                       <p className="text-2xl font-extrabold text-gray-900 dark:text-gray-100">
