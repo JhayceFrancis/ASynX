@@ -329,12 +329,18 @@ export default function App() {
     }
   };
 
-  const handleSubmitOverride = async (itemId: string, simklEp: number, malEp: number, anilistEp: number, status: WatchStatus) => {
+  const handleSubmitOverride = async (
+    itemId: string,
+    targetEpisode: number,
+    targetStatus: WatchStatus,
+    targetScore: number,
+    applyToPlatforms: PlatformType[]
+  ) => {
     try {
       const res = await fetch('/api/sync/override', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId, simklEp, malEp, anilistEp, status })
+        body: JSON.stringify({ itemId, targetEpisode, targetStatus, targetScore, applyToPlatforms })
       });
       if (res.ok) {
         await fetchData();

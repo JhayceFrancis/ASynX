@@ -237,7 +237,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
     if (!matchesSearch) return false;
 
     if (activeFilter === 'conflicts') return item.hasConflict;
-    if (activeFilter !== 'all' && activeFilter !== 'history' && activeFilter !== 'conflicts') return item.mediaType === activeFilter;
+    if (activeFilter !== 'all' && activeFilter !== 'history') return item.mediaType === activeFilter;
     return true;
   }).sort((a, b) => {
     let aVal: any = a[sortCol];
@@ -762,7 +762,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                             <span className="font-bold text-gray-900 dark:text-gray-100 text-base">{log.itemTitle}</span>
                             {renderPlatformChip(log.source)}
                           </div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{log.message}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{log.message ?? log.details}</p>
                           <p className="text-xs text-gray-500 dark:text-gray-500 mt-2 font-mono flex items-center space-x-1">
                             <Clock className="w-3 h-3" />
                             <span>{new Date(log.timestamp).toLocaleString()}</span>
@@ -772,7 +772,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                       
                       {onUndoAction && (
                         <button 
-                          onClick={() => onUndoAction(log.itemId)}
+                          onClick={() => onUndoAction(log.itemId ?? log.id)}
                           className="px-4 py-2 bg-white dark:bg-[#111] hover:bg-gray-50 dark:hover:bg-[#222] text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-neutral-800 rounded-xl text-sm font-semibold shadow-sm transition flex items-center justify-center space-x-2 w-full sm:w-auto cursor-pointer shrink-0 opacity-100 sm:opacity-50 sm:group-hover:opacity-100"
                         >
                           <ArrowUpDown className="w-4 h-4 text-gray-500 group-hover:text-indigo-400 transition-colors" />

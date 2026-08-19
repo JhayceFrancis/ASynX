@@ -5,6 +5,7 @@ import { ASynXLogo } from './ASynXLogo';
 interface Win11TitleBarProps {
   appName?: string;
   isSyncing?: boolean;
+  isOffline?: boolean;
   onTriggerSync?: () => void;
   progress?: number;
 }

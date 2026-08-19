@@ -61,12 +61,14 @@ export interface LibraryItem {
 
 export interface SyncLog {
   id: string;
+  itemId?: string;
   timestamp: string;
   source: string;
   itemTitle: string;
   action: string;
   platformsAffected: PlatformType[];
   status: 'success' | 'conflict' | 'warning' | 'failed';
+  message?: string;
   details: string;
 }
 
@@ -236,4 +238,3 @@ export interface HealthCheckStatus {
   emby: HealthCheckService;
   lastOverallPing: string;
 }
-
