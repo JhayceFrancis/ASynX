@@ -41,14 +41,14 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
 
   // Bulk Action Selection state
   const [bulkSelectedIds, setBulkSelectedIds] = useState<string[]>([]);
-  const initialSOT = (settings?.syncRules?.defaultSourceOfTruth || settings?.syncRules?.primarySource || 'anilist') as 'anilist' | 'simkl' | 'mal' | 'highest_episode';
+  const initialSOT = (settings?.syncRules?.defaultSourceOfTruth || 'anilist') as 'anilist' | 'simkl' | 'mal' | 'highest_episode';
   const [bulkStrategy, setBulkStrategy] = useState<'anilist' | 'simkl' | 'mal' | 'highest_episode'>(initialSOT);
   const [isBulkResolving, setIsBulkResolving] = useState<boolean>(false);
   const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (settings) {
-      const sot = (settings.syncRules?.defaultSourceOfTruth || settings.sourceOfTruth || 'anilist') as 'anilist' | 'simkl' | 'mal' | 'highest_episode';
+      const sot = (settings.syncRules?.defaultSourceOfTruth || 'anilist') as 'anilist' | 'simkl' | 'mal' | 'highest_episode';
       setBulkStrategy(sot);
     }
   }, [settings]);

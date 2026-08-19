@@ -19,7 +19,7 @@ export const ASynXLogo: React.FC<ASynXLogoProps> = ({
 }) => {
   const [localActive, setLocalActive] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
-  const requestRef = useRef<number>();
+  const requestRef = useRef<number | null>(null);
   const lastUpdateRef = useRef<number>(0);
   const [isHovered, setIsHovered] = useState(false);
   

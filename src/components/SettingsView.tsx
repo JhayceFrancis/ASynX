@@ -990,7 +990,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         }
                         
                         if (parsedData.length > 0) {
-                          setImportState({ file, parsedData, headers });
+                          setImportState({ id: `${file.name}-${Date.now()}`, file, parsedData, headers });
                         } else {
                           alert('No valid records found in file.');
                         }
