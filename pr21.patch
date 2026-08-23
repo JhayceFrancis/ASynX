@@ -1,0 +1,161 @@
+From 5f9da2e65992c699a2d97bd370d97409e894a98b Mon Sep 17 00:00:00 2001
+From: "copilot-swe-agent[bot]" <198982749+Copilot@users.noreply.github.com>
+Date: Wed, 19 Aug 2026 06:15:40 +0000
+Subject: [PATCH 1/2] Initial plan
+
+
+From 454378e942c084ca4d5de0aae47a837fe763f315 Mon Sep 17 00:00:00 2001
+From: "copilot-swe-agent[bot]" <198982749+Copilot@users.noreply.github.com>
+Date: Wed, 19 Aug 2026 06:18:58 +0000
+Subject: [PATCH 2/2] Fix TypeScript mismatches breaking Electron installer job
+
+Co-authored-by: JhayceFrancis <162052631+JhayceFrancis@users.noreply.github.com>
+---
+ src/App.tsx                               | 10 ++++++++--
+ src/components/ASynXLogo.tsx              |  2 +-
+ src/components/ConflictResolutionView.tsx |  4 ++--
+ src/components/SettingsView.tsx           |  2 +-
+ src/components/SyncMatrixView.tsx         |  6 +++---
+ src/components/Win11TitleBar.tsx          |  1 +
+ src/types.ts                              |  3 ++-
+ 7 files changed, 18 insertions(+), 10 deletions(-)
+
+diff --git a/src/App.tsx b/src/App.tsx
+index 18e992b..833a278 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -329,12 +329,18 @@ export default function App() {
+     }
+   };
+ 
+-  const handleSubmitOverride = async (itemId: string, simklEp: number, malEp: number, anilistEp: number, status: WatchStatus) => {
++  const handleSubmitOverride = async (
++    itemId: string,
++    targetEpisode: number,
++    targetStatus: WatchStatus,
++    targetScore: number,
++    applyToPlatforms: PlatformType[]
++  ) => {
+     try {
+       const res = await fetch('/api/sync/override', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ itemId, simklEp, malEp, anilistEp, status })
++        body: JSON.stringify({ itemId, targetEpisode, targetStatus, targetScore, applyToPlatforms })
+       });
+       if (res.ok) {
+         await fetchData();
+diff --git a/src/components/ASynXLogo.tsx b/src/components/ASynXLogo.tsx
+index 2d237d0..5c44689 100644
+--- a/src/components/ASynXLogo.tsx
++++ b/src/components/ASynXLogo.tsx
+@@ -19,7 +19,7 @@ export const ASynXLogo: React.FC<ASynXLogoProps> = ({
+ }) => {
+   const [localActive, setLocalActive] = useState(false);
+   const [frameIndex, setFrameIndex] = useState(0);
+-  const requestRef = useRef<number>();
++  const requestRef = useRef<number | null>(null);
+   const lastUpdateRef = useRef<number>(0);
+   const [isHovered, setIsHovered] = useState(false);
+   
+diff --git a/src/components/ConflictResolutionView.tsx b/src/components/ConflictResolutionView.tsx
+index e77504b..cb73830 100644
+--- a/src/components/ConflictResolutionView.tsx
++++ b/src/components/ConflictResolutionView.tsx
+@@ -41,14 +41,14 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
+ 
+   // Bulk Action Selection state
+   const [bulkSelectedIds, setBulkSelectedIds] = useState<string[]>([]);
+-  const initialSOT = (settings?.syncRules?.defaultSourceOfTruth || settings?.syncRules?.primarySource || 'anilist') as 'anilist' | 'simkl' | 'mal' | 'highest_episode';
++  const initialSOT = (settings?.syncRules?.defaultSourceOfTruth || 'anilist') as 'anilist' | 'simkl' | 'mal' | 'highest_episode';
+   const [bulkStrategy, setBulkStrategy] = useState<'anilist' | 'simkl' | 'mal' | 'highest_episode'>(initialSOT);
+   const [isBulkResolving, setIsBulkResolving] = useState<boolean>(false);
+   const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string | null>(null);
+ 
+   useEffect(() => {
+     if (settings) {
+-      const sot = (settings.syncRules?.defaultSourceOfTruth || settings.sourceOfTruth || 'anilist') as 'anilist' | 'simkl' | 'mal' | 'highest_episode';
++      const sot = (settings.syncRules?.defaultSourceOfTruth || 'anilist') as 'anilist' | 'simkl' | 'mal' | 'highest_episode';
+       setBulkStrategy(sot);
+     }
+   }, [settings]);
+diff --git a/src/components/SettingsView.tsx b/src/components/SettingsView.tsx
+index 1d00b8d..4475f90 100644
+--- a/src/components/SettingsView.tsx
++++ b/src/components/SettingsView.tsx
+@@ -990,7 +990,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
+                         }
+                         
+                         if (parsedData.length > 0) {
+-                          setImportState({ file, parsedData, headers });
++                          setImportState({ id: `${file.name}-${Date.now()}`, file, parsedData, headers });
+                         } else {
+                           alert('No valid records found in file.');
+                         }
+diff --git a/src/components/SyncMatrixView.tsx b/src/components/SyncMatrixView.tsx
+index 8d5945d..9250254 100644
+--- a/src/components/SyncMatrixView.tsx
++++ b/src/components/SyncMatrixView.tsx
+@@ -237,7 +237,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
+     if (!matchesSearch) return false;
+ 
+     if (activeFilter === 'conflicts') return item.hasConflict;
+-    if (activeFilter !== 'all' && activeFilter !== 'history' && activeFilter !== 'conflicts') return item.mediaType === activeFilter;
++    if (activeFilter !== 'all' && activeFilter !== 'history') return item.mediaType === activeFilter;
+     return true;
+   }).sort((a, b) => {
+     let aVal: any = a[sortCol];
+@@ -762,7 +762,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
+                             <span className="font-bold text-gray-900 dark:text-gray-100 text-base">{log.itemTitle}</span>
+                             {renderPlatformChip(log.source)}
+                           </div>
+-                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{log.message}</p>
++                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{log.message ?? log.details}</p>
+                           <p className="text-xs text-gray-500 dark:text-gray-500 mt-2 font-mono flex items-center space-x-1">
+                             <Clock className="w-3 h-3" />
+                             <span>{new Date(log.timestamp).toLocaleString()}</span>
+@@ -772,7 +772,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
+                       
+                       {onUndoAction && (
+                         <button 
+-                          onClick={() => onUndoAction(log.itemId)}
++                          onClick={() => onUndoAction(log.itemId ?? log.id)}
+                           className="px-4 py-2 bg-white dark:bg-[#111] hover:bg-gray-50 dark:hover:bg-[#222] text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-neutral-800 rounded-xl text-sm font-semibold shadow-sm transition flex items-center justify-center space-x-2 w-full sm:w-auto cursor-pointer shrink-0 opacity-100 sm:opacity-50 sm:group-hover:opacity-100"
+                         >
+                           <ArrowUpDown className="w-4 h-4 text-gray-500 group-hover:text-indigo-400 transition-colors" />
+diff --git a/src/components/Win11TitleBar.tsx b/src/components/Win11TitleBar.tsx
+index 49c5047..6b4edff 100644
+--- a/src/components/Win11TitleBar.tsx
++++ b/src/components/Win11TitleBar.tsx
+@@ -5,6 +5,7 @@ import { ASynXLogo } from './ASynXLogo';
+ interface Win11TitleBarProps {
+   appName?: string;
+   isSyncing?: boolean;
++  isOffline?: boolean;
+   onTriggerSync?: () => void;
+   progress?: number;
+ }
+diff --git a/src/types.ts b/src/types.ts
+index a418f8a..1a98662 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -61,12 +61,14 @@ export interface LibraryItem {
+ 
+ export interface SyncLog {
+   id: string;
++  itemId?: string;
+   timestamp: string;
+   source: string;
+   itemTitle: string;
+   action: string;
+   platformsAffected: PlatformType[];
+   status: 'success' | 'conflict' | 'warning' | 'failed';
++  message?: string;
+   details: string;
+ }
+ 
+@@ -236,4 +238,3 @@ export interface HealthCheckStatus {
+   emby: HealthCheckService;
+   lastOverallPing: string;
+ }
+-

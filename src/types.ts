@@ -12,7 +12,7 @@ export interface PanelConfig {
 
 export type TabLayouts = Record<string, PanelConfig[]>;
 
-export type PlatformType = 'simkl' | 'mal' | 'anilist';
+export type PlatformType = 'simkl' | 'mal' | 'anilist' | 'karakeep';
 
 export type WatchStatus = 'watching' | 'completed' | 'plan_to_watch' | 'paused' | 'dropped';
 
@@ -39,6 +39,7 @@ export interface LibraryItem {
     simkl?: PlatformProgress;
     mal?: PlatformProgress;
     anilist?: PlatformProgress;
+    karakeep?: PlatformProgress;
   };
   plexMatch?: {
     ratingKey: string;
@@ -75,7 +76,7 @@ export interface SyncLog {
 export interface WebhookLog {
   id: string;
   timestamp: string;
-  source: 'plex' | 'tautulli' | 'jellyfin' | 'emby';
+  source: 'plex' | 'tautulli' | 'jellyfin' | 'emby' | 'karakeep';
   event: 'media.play' | 'media.pause' | 'media.scrobble' | 'media.stop' | 'watched';
   mediaTitle: string;
   grandparentTitle?: string; // Anime / Series title
@@ -107,23 +108,38 @@ export interface BrowserExtensionState {
 }
 
 export interface AppSettings {
+  dashboardLayout?: PanelConfig[];
+  nexusTabName?: string;
   theme?: {
     accentColor?: string;
     isGradient?: boolean;
     gradientStart?: string;
     gradientEnd?: string;
     headerColor?: string;
+    headerIsGradient?: boolean;
+    headerGradientColors?: string[];
+    headerGradientDirection?: string;
     buttonColor?: string;
-    paddingSize?: string;
     buttonTextColor?: string;
+    iconColor?: string;
+    paddingSize?: string;
     gradientColors?: string[];
     gradientDirection?: string;
+    appBackgroundGradient?: string;
+    subheaderColor?: string;
+    subheadingText?: string;
+    borderRadius?: string;
+    fontFamily?: string;
+    layoutDensity?: 'compact' | 'comfortable' | 'spacious';
+    cardStyle?: 'flat' | 'glass' | 'neumorphic' | 'outlined';
+    animationSpeed?: 'fast' | 'normal' | 'slow' | 'none';
+    defaultViewMode?: 'grid' | 'list' | 'block';
   };
   simkl: {
     clientId: string;
     accessToken: string;
     connected: boolean;
-    username: string;
+    username?: string;
   };
   mal: {
     clientId: string;
@@ -132,6 +148,7 @@ export interface AppSettings {
     username: string;
   };
   anilist: {
+    clientId?: string;
     accessToken: string;
     connected: boolean;
     username: string;
@@ -159,6 +176,12 @@ export interface AppSettings {
     serverName: string;
     webhookUrl: string;
     autoScrobbleThreshold: number;
+  };
+  karakeep: {
+    apiUrl: string;
+    apiKey: string;
+    webhookUrl: string;
+    connected: boolean;
   };
   tautulli: {
     webhookUrl: string;
@@ -236,5 +259,6 @@ export interface HealthCheckStatus {
   tautulli: HealthCheckService;
   jellyfin: HealthCheckService;
   emby: HealthCheckService;
+  karakeep: HealthCheckService;
   lastOverallPing: string;
 }

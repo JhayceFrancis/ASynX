@@ -1,63 +1,48 @@
 const fs = require('fs');
-let code = fs.readFileSync('server.ts', 'utf8');
+let content = fs.readFileSync('server.ts', 'utf8');
 
-const target = `    const sslKeyPath = process.env.SSL_KEY_PATH;
-  const sslCertPath = process.env.SSL_CERT_PATH;
+const target = `
+if (!appSettings.remoteSync.apiKey) {
+  appSettings.remoteSync.apiKey = crypto.randomBytes(32).toString('hex');
+  const hostUrl = process.env.APP_URL || "http://<YOUR_DOCKER_IP>:3000";
+  console.log('\\n===============================================================');
+  console.log(' 🚀 ASynX Remote Sync Backend Initialized');
+  console.log('===============================================================');
+  console.log(' [!] A new API Key has been auto-generated for Remote Sync.');
+  console.log('');
+  console.log(\` 🔗 Server URL: \${hostUrl}\`);
+  console.log(\` 🔑 API Key:    \${appSettings.remoteSync.apiKey}\`);
+  console.log('');
+  console.log(' Use this Server URL and API Key in your Windows or Browser');
+  console.log(' Client settings to pair them with this Docker backend.');
+  console.log('===============================================================\\n');
+}
 
-  if (sslKeyPath && sslCertPath) {
-    try {
-      const privateKey = fs.readFileSync(sslKeyPath, 'utf8');
-      const certificate = fs.readFileSync(sslCertPath, 'utf8');
-      const credentials = { key: privateKey, cert: certificate };
-      const httpsServer = https.createServer(credentials, app);
-      httpsServer.listen(PORT, HOST, () => {
-        console.log(\`[SECURE] ASynX Server running with TLS/HTTPS on https://\${HOST}:\${PORT}\`);
-      });
-    } catch (err) {
-      console.error("[ERROR] Failed to load SSL certificates. Falling back to HTTP.", err);
-      app.listen(PORT, HOST, () => {
-        console.log(\`[WARNING] ASynX Server running on http://\${HOST}:\${PORT} (TLS FAILED)\`);
-      });
-    }
-  } else {
-    app.listen(PORT, HOST, () => {
-      console.log(\`[INSECURE] ASynX Server running on http://\${HOST}:\${PORT} (No TLS configured)\`);
-    });
-  }`;
+let libraryItems: LibraryItem[] = dbState.libraryItems || [];
+`;
 
-const replacement = `    const sslKeyPath = process.env.SSL_KEY_PATH;
-  const sslCertPath = process.env.SSL_CERT_PATH;
+const insert = `
+if (!appSettings.remoteSync.apiKey) {
+  appSettings.remoteSync.apiKey = crypto.randomBytes(32).toString('hex');
+  const hostUrl = process.env.APP_URL || "http://<YOUR_DOCKER_IP>:3000";
+  console.log('\\n===============================================================');
+  console.log(' 🚀 ASynX Remote Sync Backend Initialized');
+  console.log('===============================================================');
+  console.log(' [!] A new API Key has been auto-generated for Remote Sync.');
+  console.log('');
+  console.log(\` 🔗 Server URL: \${hostUrl}\`);
+  console.log(\` 🔑 API Key:    \${appSettings.remoteSync.apiKey}\`);
+  console.log('');
+  console.log(' Use this Server URL and API Key in your Windows or Browser');
+  console.log(' Client settings to pair them with this Docker backend.');
+  console.log('===============================================================\\n');
+  
+  // Persist it so it doesn't rotate on every boot
+  // We'll call persistDb after it's defined, or we can just inline saveDb if needed, 
+  // actually wait, persistDb is defined further down. 
+}
+let libraryItems: LibraryItem[] = dbState.libraryItems || [];
+`;
 
-  let httpServer;
-  if (sslKeyPath && sslCertPath) {
-    try {
-      const privateKey = fs.readFileSync(sslKeyPath, 'utf8');
-      const certificate = fs.readFileSync(sslCertPath, 'utf8');
-      const credentials = { key: privateKey, cert: certificate };
-      httpServer = https.createServer(credentials, app);
-    } catch (err) {
-      console.error("[ERROR] Failed to load SSL certificates. Falling back to HTTP.", err);
-      httpServer = http.createServer(app);
-    }
-  } else {
-    httpServer = http.createServer(app);
-  }
-
-  // Initialize WebSockets
-  const io = new SocketIOServer(httpServer, {
-    cors: { origin: "*" }
-  });
-  app.locals.io = io;
-
-  io.on('connection', (socket) => {
-    console.log('[Socket] Client connected:', socket.id);
-    socket.on('disconnect', () => {
-      console.log('[Socket] Client disconnected:', socket.id);
-    });
-  });
-
-  httpServer.listen(PORT, HOST, () => {
-    console.log(\`ASynX Server is listening on \${HOST}:\${PORT}\`);
-  });`;
-
-fs.writeFileSync('server.ts', code.replace(target, replacement));
+content = content.replace(target, insert);
+fs.writeFileSync('server.ts', content);

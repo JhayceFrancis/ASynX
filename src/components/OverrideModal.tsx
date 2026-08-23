@@ -19,18 +19,18 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
   onClose,
   onSubmitOverride
 }) => {
-  if (!item) return null;
-
   const [targetEpisode, setTargetEpisode] = useState<number>(
     Math.max(
-      item.platforms.simkl?.episode || 0,
-      item.platforms.mal?.episode || 0,
-      item.platforms.anilist?.episode || 0
+      item?.platforms.simkl?.episode || 0,
+      item?.platforms.mal?.episode || 0,
+      item?.platforms.anilist?.episode || 0
     )
   );
   const [targetStatus, setTargetStatus] = useState<WatchStatus>('watching');
   const [targetScore, setTargetScore] = useState<number>(9);
   const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformType[]>(['simkl', 'mal', 'anilist']);
+
+  if (!item) return null;
 
   const togglePlatform = (p: PlatformType) => {
     if (selectedPlatforms.includes(p)) {

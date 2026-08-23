@@ -18,6 +18,7 @@ import {
   Sparkles, 
   ExternalLink,
   ArrowRight,
+  Settings,
   ShieldCheck,
   RefreshCw,
   Film,
@@ -27,6 +28,7 @@ import {
   Layers,
   Zap,
   LayoutGrid,
+  LayoutTemplate,
   List,
   Upload,
   ArrowUpDown
@@ -45,6 +47,12 @@ import {
 } from 'recharts';
 import { Tooltip as UITooltip } from './Tooltip';
 import { motion, AnimatePresence } from 'motion/react';
+import { Responsive, WidthProvider } from 'react-grid-layout';
+import 'react-grid-layout/css/styles.css';
+import 'react-resizable/css/styles.css';
+import { PanelConfig } from '../types';
+
+const ResponsiveGridLayout = WidthProvider(Responsive);
 import { MalLogo, AniListLogo, SimklLogo, PlexLogo } from './PlatformLogos';
 
 interface SyncMatrixViewProps {
@@ -57,6 +65,8 @@ interface SyncMatrixViewProps {
   onNavigateSettings?: () => void;
   onImportCSV?: (items: LibraryItem[]) => void;
   onUndoAction?: (itemId: string) => void;
+  isEditMode?: boolean;
+  onSaveSettings?: (settings: AppSettings) => void;
 }
 
 export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
@@ -68,17 +78,46 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
   onTriggerSyncItem,
   onNavigateSettings,
   onImportCSV,
-  onUndoAction
+  onUndoAction,
+  isEditMode = false,
+  onSaveSettings
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'conflicts' | 'Anime TV Series' | 'Anime Film' | 'Film' | 'TV Series' | 'Anime Special' | 'Drama' | 'history'>('all');
   const [analyticsData, setAnalyticsData] = useState<SyncAnalyticsPoint[]>([]);
   const [chartMetric, setChartMetric] = useState<'frequency' | 'rates'>('frequency');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table' | 'block'>(
+    settings?.theme?.defaultViewMode === 'list' ? 'table' : (settings?.theme?.defaultViewMode || 'grid') as any
+  );
   const [sortCol, setSortCol] = useState<'title' | 'year' | 'episodes' | 'status'>('title');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showBulkModal, setShowBulkModal] = useState(false);
+
+  const storageKey = 'asynx_matrix_layout';
+  const [layout, setLayout] = useState<PanelConfig[]>(() => {
+    if (settings?.dashboardLayout) return settings.dashboardLayout;
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return [
+      { i: 'metrics', x: 0, y: 0, w: 12, h: 4 },
+      { i: 'recent', x: 0, y: 4, w: 12, h: 6 },
+      { i: 'historical', x: 0, y: 10, w: 12, h: 14 },
+      { i: 'library', x: 0, y: 24, w: 8, h: 28 },
+      { i: 'sidelog', x: 8, y: 24, w: 4, h: 28 }
+    ];
+  });
+
+  const handleLayoutChange = (newLayout: any) => {
+    const updated = newLayout.map((l: any) => ({ i: l.i, x: l.x, y: l.y, w: l.w, h: l.h }));
+    setLayout(updated);
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+    if (onSaveSettings && settings) {
+      onSaveSettings({ ...settings, dashboardLayout: updated });
+    }
+  };
 
   const handleSelectAll = (filteredItems: LibraryItem[]) => {
     if (selectedIds.length === filteredItems.length && filteredItems.length > 0) {
@@ -237,7 +276,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
     if (!matchesSearch) return false;
 
     if (activeFilter === 'conflicts') return item.hasConflict;
-    if (activeFilter !== 'all' && activeFilter !== 'history') return item.mediaType === activeFilter;
+    if (activeFilter !== 'all' && activeFilter !== 'history' ) return item.mediaType === activeFilter;
     return true;
   }).sort((a, b) => {
     let aVal: any = a[sortCol];
@@ -361,9 +400,33 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 h-full flex flex-col min-h-[800px]">
+      {isEditMode && (
+        <div className="mb-4 flex items-center justify-between p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl">
+          <div>
+            <h3 className="font-bold text-indigo-500 flex items-center space-x-2">
+              <Settings className="w-4 h-4" />
+              <span>Layout Edit Mode Active</span>
+            </h3>
+            <p className="text-xs text-indigo-400">Drag to reposition dashboard panels.</p>
+          </div>
+        </div>
+      )}
+      <ResponsiveGridLayout
+        className="layout"
+        layouts={{ lg: layout }}
+        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+        cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+        rowHeight={30}
+        onLayoutChange={handleLayoutChange}
+        isDraggable={isEditMode}
+        isResizable={isEditMode}
+        margin={[24, 24]}
+        useCSSTransforms={true}
+      >
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div key="metrics" className="w-full h-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 h-full">
         {/* Metric 1 */}
         <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-2xl p-4 shadow-sm relative overflow-hidden">
           <div className="flex items-center justify-between">
@@ -427,8 +490,10 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
           </div>
         </div>
       </div>
+      </div>
 
       {/* SUMMARY CARD: 5 Most Recent Sync Events */}
+      <div key="recent" className="w-full h-full">
       <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 shadow-md space-y-4">
         <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
           <div className="flex items-center space-x-2.5">
@@ -487,8 +552,10 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
           })}
         </div>
       </div>
+      </div>
 
       {/* DASHBOARD VISUALIZATION: Historical Sync Frequency & Success Rates (Recharts) */}
+      <div key="historical" className="w-full h-full">
       <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 shadow-md space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-neutral-900 pb-4">
           <div className="flex items-center space-x-2.5">
@@ -569,11 +636,10 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
           </ResponsiveContainer>
         </div>
       </div>
+      </div>
 
-      {/* Main Grid & Activity Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Table / Grid (2 cols on lg) */}
-        <div className="lg:col-span-2 space-y-4 min-w-0">
+      {/* Main Table / Grid */}
+      <div key="library" className="w-full h-full overflow-hidden flex flex-col space-y-4 min-w-0">
           {/* Controls Bar */}
           <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-2xl p-4 flex flex-col gap-4 shadow-sm">
             
@@ -604,16 +670,23 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                 <button
                   onClick={() => setViewMode('grid')}
                   className={`p-1.5 rounded-md transition ${viewMode === 'grid' ? 'bg-indigo-500 text-white' : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:text-gray-200'}`}
-                  title="Grid View"
+                  title="Grid View (Cards)"
                 >
                   <LayoutGrid className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setViewMode('table')}
                   className={`p-1.5 rounded-md transition ${viewMode === 'table' ? 'bg-indigo-500 text-white' : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:text-gray-200'}`}
-                  title="Table View"
+                  title="List View (Table)"
                 >
                   <List className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('block')}
+                  className={`p-1.5 rounded-md transition ${viewMode === 'block' ? 'bg-indigo-500 text-white' : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:text-gray-200'}`}
+                  title="Block View (Detailed Rows)"
+                >
+                  <LayoutTemplate className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -679,16 +752,23 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                 <button
                   onClick={() => setViewMode('table')}
                   className={`p-1.5 rounded-md transition ${viewMode === 'table' ? 'bg-indigo-500 text-white' : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:text-gray-200'}`}
-                  title="Table View"
+                  title="List View (Table)"
                 >
                   <List className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setViewMode('grid')}
                   className={`p-1.5 rounded-md transition ${viewMode === 'grid' ? 'bg-indigo-500 text-white' : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:text-gray-200'}`}
-                  title="Grid View"
+                  title="Grid View (Cards)"
                 >
                   <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('block')}
+                  className={`p-1.5 rounded-md transition ${viewMode === 'block' ? 'bg-indigo-500 text-white' : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:text-gray-200'}`}
+                  title="Block View (Detailed Rows)"
+                >
+                  <LayoutTemplate className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -762,7 +842,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                             <span className="font-bold text-gray-900 dark:text-gray-100 text-base">{log.itemTitle}</span>
                             {renderPlatformChip(log.source)}
                           </div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{log.message ?? log.details}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{log.details}</p>
                           <p className="text-xs text-gray-500 dark:text-gray-500 mt-2 font-mono flex items-center space-x-1">
                             <Clock className="w-3 h-3" />
                             <span>{new Date(log.timestamp).toLocaleString()}</span>
@@ -922,7 +1002,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                 </tbody>
               </table>
             </div>
-          ) : (
+          ) : viewMode === 'block' ? (
             <div className="space-y-3">
               <AnimatePresence>
               {filteredItems.map((item) => (
@@ -1080,11 +1160,72 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
               ))}
               </AnimatePresence>
             </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              <AnimatePresence>
+              {filteredItems.map((item) => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className={`bg-white dark:bg-[#0a0a0a] border rounded-2xl shadow-sm transition hover:shadow-md relative flex flex-col overflow-hidden group ${
+                    item.hasConflict 
+                      ? 'border-amber-500/40 bg-amber-950/10' 
+                      : 'border-gray-200 dark:border-neutral-900 hover:border-gray-300 dark:border-neutral-800'
+                  }`}
+                >
+                  <div className="absolute top-2 left-2 z-10 bg-white/80 dark:bg-black/80 rounded p-1 backdrop-blur shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                    <input 
+                      type="checkbox"
+                      checked={selectedIds.includes(item.id)}
+                      onChange={() => handleToggleSelect(item.id)}
+                      className="w-4 h-4 rounded border-gray-300 dark:border-neutral-700 text-indigo-600 focus:ring-indigo-500 bg-transparent cursor-pointer"
+                    />
+                  </div>
+                  
+                  <div className="relative aspect-[2/3] w-full overflow-hidden">
+                    <img
+                      src={item.coverImage}
+                      alt={item.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
+                       <h4 className="font-semibold text-white text-sm line-clamp-1">
+                         {item.title}
+                       </h4>
+                       <span className="text-[10px] text-gray-300">{item.year}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 flex-1 flex flex-col">
+                    <div className="flex items-center space-x-1.5 mb-2">
+                       {item.platforms.simkl?.id && <SimklLogo className="w-3.5 h-3.5 text-emerald-400" />}
+                       {item.platforms.mal?.id && <MalLogo className="w-4 h-4 text-[#2e51a2] dark:text-blue-400" />}
+                       {item.platforms.anilist?.id && <AniListLogo className="w-4 h-4 text-[#02A9FF] dark:text-cyan-400" />}
+                    </div>
+                    {item.hasConflict && (
+                      <div className="mt-auto pt-2">
+                        <button
+                          onClick={onOpenConflictView}
+                          className="w-full py-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-semibold hover:bg-amber-500/30 transition cursor-pointer flex items-center justify-center space-x-1"
+                        >
+                          <AlertTriangle className="w-3 h-3" />
+                          <span>Resolve</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+              </AnimatePresence>
+            </div>
           )}
         </div>
 
         {/* Side Log / Activity Feed (1 col) */}
-        <div className="space-y-4">
+        <div key="sidelog" className="w-full h-full overflow-hidden space-y-4">
           <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-2xl p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center space-x-2">
@@ -1123,7 +1264,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
             </div>
           </div>
         </div>
-      </div>
+      </ResponsiveGridLayout>
 
       {/* Bulk Sync Modal */}
       <AnimatePresence>

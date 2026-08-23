@@ -22,17 +22,19 @@ export function PreImportModal({ file, parsedData, headers, onClose, onImport }:
 
   // Auto-guess mappings
   useEffect(() => {
-    const guess = { ...mapping };
-    headers.forEach(h => {
-      const lower = h.toLowerCase();
-      if (lower.includes('title') || lower === 'name') guess.title = h;
-      else if (lower.includes('type') || lower === 'format') guess.type = h;
-      else if (lower === 'status' || lower === 'state') guess.status = h;
-      else if (lower === 'episode' || lower === 'progress' || lower === 'ep') guess.episode = h;
-      else if (lower.includes('total') || lower === 'episodes' || lower === 'length') guess.totalEpisodes = h;
-      else if (lower.includes('image') || lower.includes('poster') || lower.includes('cover') || lower.includes('art')) guess.coverImage = h;
+    setMapping((prev) => {
+      const guess = { ...prev };
+      headers.forEach(h => {
+        const lower = h.toLowerCase();
+        if (lower.includes('title') || lower === 'name') guess.title = h;
+        else if (lower.includes('type') || lower === 'format') guess.type = h;
+        else if (lower === 'status' || lower === 'state') guess.status = h;
+        else if (lower === 'episode' || lower === 'progress' || lower === 'ep') guess.episode = h;
+        else if (lower.includes('total') || lower === 'episodes' || lower === 'length') guess.totalEpisodes = h;
+        else if (lower.includes('image') || lower.includes('poster') || lower.includes('cover') || lower.includes('art')) guess.coverImage = h;
+      });
+      return guess;
     });
-    setMapping(guess);
   }, [headers]);
 
   const internalFields = [

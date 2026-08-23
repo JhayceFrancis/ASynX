@@ -13,13 +13,21 @@ export const AniListLogo = ({ className }: { className?: string }) => (
 );
 
 export const SimklLogo = ({ className }: { className?: string }) => (
-  <div className={`flex items-center justify-center font-black bg-[#ffeb3b] text-black rounded ${className}`} style={{ width: '1em', height: '1em', fontSize: 'inherit' }}>
-    <span style={{ fontSize: '0.7em', marginTop: '-0.1em' }}>S</span>
-  </div>
+  <svg role="img" viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2L22 20H2L12 2Z" fill="currentColor"/>
+  </svg>
 );
 
 export const PlexLogo = ({ className }: { className?: string }) => (
   <svg role="img" viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg">
     <path d="M11.643 0H4.68v24h6.963l7.677-12z" fill="currentColor"/>
+  </svg>
+);
+
+
+export const KarakeepLogo = ({ className }: { className?: string }) => (
+  <svg role="img" viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg">
+    <rect width="24" height="24" rx="4" fill="currentColor"/>
+    <path d="M7 6v12h2.5v-4.5L13.5 18H17l-5-5.5 4.5-6h-3.5L10 11V6H7z" fill="white"/>
   </svg>
 );

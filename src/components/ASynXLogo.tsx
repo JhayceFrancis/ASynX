@@ -1,111 +1,68 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
+import loopSvg from './ASynX (loop).svg';
+import staticSvg from './ASynX (static).svg';
 
 interface ASynXLogoProps {
+  isSyncing?: boolean;
+  size?: number | string;
   className?: string;
-  animated?: boolean;
   onClick?: () => void;
   title?: string;
-  interactive?: boolean;
-  useImageFallback?: boolean;
 }
 
-export const ASynXLogo: React.FC<ASynXLogoProps> = ({ 
-  className = "w-8 h-8", 
-  animated = false,
+export const ASynXLogo: React.FC<ASynXLogoProps> = ({
+  isSyncing = false,
+  size = '100%',
+  className = '',
   onClick,
-  title = "ASynX Synchronization Engine — Click to trigger manual sync cycle",
-  interactive = true,
-  useImageFallback = false
+  title,
 }) => {
-  const [localActive, setLocalActive] = useState(false);
-  const [frameIndex, setFrameIndex] = useState(0);
-  const requestRef = useRef<number | null>(null);
-  const lastUpdateRef = useRef<number>(0);
-  const [isHovered, setIsHovered] = useState(false);
-  
-  const TOTAL_FRAMES = 324;
-  const FPS = 60;
-  const FRAME_DUR = 1000 / FPS;
-
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (interactive) {
-      setLocalActive(true);
-      setTimeout(() => setLocalActive(false), 5400); // 324 frames at 60fps = 5.4s
-    }
-    if (onClick) {
-      onClick();
-    }
+  const commonImageStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+    transformOrigin: 'center',
+    backfaceVisibility: 'hidden',
+    pointerEvents: 'none',
   };
 
-  const isAnimating = animated || localActive || isHovered;
-
-  // Preload frames optimization (optional, but good if we want smooth playback without canvas)
-  useEffect(() => {
-    // Only preload a few to save bandwidth unless we are animating
-  }, []);
-
-  const animate = (time: number) => {
-    if (lastUpdateRef.current === 0) {
-      lastUpdateRef.current = time;
-    }
-    const deltaTime = time - lastUpdateRef.current;
-
-    if (deltaTime > FRAME_DUR) {
-      setFrameIndex(prev => (prev + 1) % TOTAL_FRAMES);
-      lastUpdateRef.current = time;
-    }
-    
-    if (isAnimating) {
-      requestRef.current = requestAnimationFrame(animate);
-    }
+  const loopStyle: React.CSSProperties = {
+    ...commonImageStyle,
+    opacity: isSyncing ? 1 : 0,
+    transform: isSyncing ? 'rotateY(0deg)' : 'rotateY(180deg)',
   };
 
-  useEffect(() => {
-    if (isAnimating) {
-      requestRef.current = requestAnimationFrame(animate);
-    } else {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      lastUpdateRef.current = 0;
-      setFrameIndex(0); // Reset to first frame when not animating
-    }
-    return () => {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
-    };
-  }, [isAnimating]);
-
-  const frameStr = String(frameIndex).padStart(3, '0');
-  const imageSrc = `/ASynX-split/ASynX_${frameStr}.png`;
+  const staticStyle: React.CSSProperties = {
+    ...commonImageStyle,
+    opacity: isSyncing ? 0 : 1,
+    transform: isSyncing ? 'rotateY(-180deg)' : 'rotateY(0deg)',
+  };
 
   return (
-    <div 
-      className={`inline-flex items-center justify-center transition-transform duration-300 ${interactive ? 'cursor-pointer hover:scale-110 active:scale-95' : ''}`}
-      onClick={handleClick}
-      onMouseEnter={() => {
-         setIsHovered(true);
-         if (!isAnimating) {
-            requestRef.current = requestAnimationFrame(animate);
-         }
-      }}
-      onMouseLeave={() => {
-         setIsHovered(false);
-      }}
+    <div
+      className={`relative inline-flex items-center justify-center rounded-full bg-transparent overflow-hidden select-none cursor-pointer ${className}`}
+      style={{ width: size, height: size, perspective: '1000px' }}
+      aria-label="ASynX Logo"
+      onClick={onClick}
       title={title}
-      role={onClick ? "button" : "img"}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={(e) => {
-        if (onClick && (e.key === 'Enter' || e.key === ' ')) {
-          e.preventDefault();
-          handleClick(e as any);
-        }
-      }}
     >
-      <img 
-         src={imageSrc} 
-         alt="ASynX Logo" 
-         className={`${className} object-contain`}
-         draggable={false}
+      <object
+        data={staticSvg}
+        type="image/svg+xml"
+        aria-label="ASynX Static Logo"
+        style={staticStyle}
+      />
+      <object
+        data={loopSvg}
+        type="image/svg+xml"
+        aria-label="ASynX Loop Logo"
+        style={loopStyle}
       />
     </div>
   );
 };
+
+export default ASynXLogo;

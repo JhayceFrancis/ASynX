@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, Server, Clock, Cpu, Database, RefreshCw, CheckCircle2, WifiOff, Box } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { GridLayoutEngine } from './GridLayoutEngine';
+import { ASynXLogo } from './ASynXLogo';
+import { SimklLogo, MalLogo, AniListLogo, PlexLogo, KarakeepLogo } from './PlatformLogos';
 
 // Default layout for System Health
 const defaultLayout = [
@@ -71,7 +73,7 @@ export const SystemHealthView: React.FC<{ isEditMode?: boolean }> = ({ isEditMod
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center space-x-2">
-                <Activity className="w-6 h-6 text-indigo-500" />
+                <ASynXLogo className="w-6 h-6 text-indigo-500" />
                 <span>System Health Dashboard</span>
               </h2>
               <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
@@ -187,7 +189,12 @@ export const SystemHealthView: React.FC<{ isEditMode?: boolean }> = ({ isEditMod
                 <div key={key} className="p-3 rounded-xl border bg-gray-50 dark:bg-neutral-900/40 border-gray-200 dark:border-neutral-800 shadow-sm">
                   <div className="flex justify-between items-center mb-2">
                     <div className="flex items-center space-x-2">
-                      <Box className="w-4 h-4 text-indigo-500" />
+                      {key.toLowerCase() === 'simkl' ? <SimklLogo className="w-4 h-4 text-emerald-400" /> : 
+                       key.toLowerCase() === 'mal' ? <MalLogo className="w-4 h-4 text-[#2E51A2] dark:text-blue-400" /> : 
+                       key.toLowerCase() === 'anilist' ? <AniListLogo className="w-4 h-4 text-[#02A9FF] dark:text-cyan-400" /> :
+                       key.toLowerCase() === 'plex' ? <PlexLogo className="w-4 h-4 text-[#E5A00D]" /> :
+                       key.toLowerCase() === 'karakeep' ? <KarakeepLogo className="w-4 h-4 text-pink-500" /> :
+                       <Box className="w-4 h-4 text-indigo-500" />}
                       <span className="font-bold text-gray-800 dark:text-gray-200 capitalize text-xs">{key}</span>
                     </div>
                     <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold flex items-center space-x-1 ${getStatusColor(data.status)}`}>

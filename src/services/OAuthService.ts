@@ -2,27 +2,23 @@ import { AppSettings } from '../types';
 
 export class OAuthService {
   /**
-   * Initiates the OAuth flow for the given provider by fetching the Auth URL
-   * and opening a popup window.
+   * Initiates the OAuth flow for the given provider by opening a popup window
+   * pointing to the backend login route.
    */
-  static async initiateLogin(provider: string): Promise<void> {
-    try {
-      const response = await fetch(`/api/auth/${provider}/url`);
-      if (!response.ok) throw new Error('Failed to get auth URL');
-      const { url } = await response.json();
-      
-      const authWindow = window.open(
-        url,
-        'oauth_popup',
-        'width=600,height=700'
-      );
-      
-      if (!authWindow) {
-        alert('Please allow popups for this site to connect your account.');
-      }
-    } catch (error) {
-      console.error('OAuth initiation error:', error);
-      alert('OAuth integration is currently unavailable.');
+  static initiateLogin(provider: string): void {
+    const width = 600;
+    const height = 700;
+    const left = window.innerWidth / 2 - width / 2 + window.screenX;
+    const top = window.innerHeight / 2 - height / 2 + window.screenY;
+
+    const authWindow = window.open(
+      `/api/auth/${provider}/login`,
+      'oauth_popup',
+      `width=${width},height=${height},left=${left},top=${top}`
+    );
+
+    if (!authWindow) {
+      alert('Please allow popups for this site to connect your account.');
     }
   }
 

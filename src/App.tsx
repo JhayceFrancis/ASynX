@@ -13,16 +13,20 @@ import {
 import { Win11TitleBar } from './components/Win11TitleBar';
 import { Win11StatusBar } from './components/Win11StatusBar';
 import { Navbar } from './components/Navbar';
-import { SyncMatrixView } from './components/SyncMatrixView';
-import { ConflictResolutionView } from './components/ConflictResolutionView';
-import { PlexWebhookView } from './components/PlexWebhookView';
-import { ExtensionCompanionView } from './components/ExtensionCompanionView';
-import { SettingsView } from './components/SettingsView';
-import { DatabaseView } from './components/DatabaseView';
-import { ApiDocumentationView } from './components/ApiDocumentationView';
-import { DockerBackendView } from './components/DockerBackendView';
-import { SystemHealthView } from './components/SystemHealthView';
-import { SyncPerformanceView } from './components/SyncPerformanceView';
+import { ASynXLoader } from './components/ASynXLoader';
+import { QuickCustomizePanel } from './components/QuickCustomizePanel';
+import { Server, Activity, Database, Terminal, Compass, Tv, AlertTriangle } from 'lucide-react';
+const SyncMatrixView = React.lazy(() => import('./components/SyncMatrixView').then(module => ({ default: module.SyncMatrixView })));
+const ConflictResolutionView = React.lazy(() => import('./components/ConflictResolutionView').then(module => ({ default: module.ConflictResolutionView })));
+const PlexWebhookView = React.lazy(() => import('./components/PlexWebhookView').then(module => ({ default: module.PlexWebhookView })));
+const ExtensionCompanionView = React.lazy(() => import('./components/ExtensionCompanionView').then(module => ({ default: module.ExtensionCompanionView })));
+const SettingsView = React.lazy(() => import('./components/SettingsView').then(module => ({ default: module.SettingsView })));
+const DatabaseView = React.lazy(() => import('./components/DatabaseView').then(module => ({ default: module.DatabaseView })));
+const ApiDocumentationView = React.lazy(() => import('./components/ApiDocumentationView').then(module => ({ default: module.ApiDocumentationView })));
+const DockerBackendView = React.lazy(() => import('./components/DockerBackendView').then(module => ({ default: module.DockerBackendView })));
+const SystemHealthView = React.lazy(() => import('./components/SystemHealthView').then(module => ({ default: module.SystemHealthView })));
+const SyncPerformanceView = React.lazy(() => import('./components/SyncPerformanceView').then(module => ({ default: module.SyncPerformanceView })));
+const BookmarkTab = React.lazy(() => import('./components/bookmarks/BookmarkTab').then(module => ({ default: module.BookmarkTab })));
 import { OverrideModal } from './components/OverrideModal';
 import { ScrobblePrompt } from './components/ScrobblePrompt';
 import { ToastContainer, ToastMessage, ToastType } from './components/ToastContainer';
@@ -31,7 +35,8 @@ import { useKeyboardShortcut } from './hooks/useKeyboardShortcut';
 
 export default function App() {
   const [isEditMode, setIsEditMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'matrix' | 'conflicts' | 'plex' | 'extension' | 'settings' | 'api-docs' | 'docker-backend' | 'performance' | 'health' | 'database'>(() => {
+  const [isCustomizePanelOpen, setIsCustomizePanelOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>(() => {
     const saved = localStorage.getItem('asynx_activeTab');
     return (saved as any) || 'matrix';
   });
@@ -66,6 +71,7 @@ export default function App() {
     plex: { connected: false, serverUrl: '', token: '', serverName: '', webhookUrl: '', autoScrobbleThreshold: 85 },
     jellyfin: { connected: false, serverUrl: '', apiKey: '', serverName: '', webhookUrl: '', autoScrobbleThreshold: 85 },
     emby: { connected: false, serverUrl: '', apiKey: '', serverName: '', webhookUrl: '', autoScrobbleThreshold: 85 },
+    karakeep: { connected: false, apiUrl: '', apiKey: '', webhookUrl: '' },
     tautulli: { connected: false, webhookUrl: '', secretKey: '' },
     remoteSync: { enabled: false, serverUrl: '', apiKey: '' },
     daemonSettings: { runOnStartup: false, enableLocalMediaDetection: false, autoScrobbleLocal: false },
@@ -80,6 +86,22 @@ export default function App() {
   });
 
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // IPC Bridge for Windows App Wrapper
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).require) {
+      try {
+        const { ipcRenderer } = (window as any).require('electron');
+        if (isSyncing) {
+          ipcRenderer.send('sync-started');
+        } else {
+          ipcRenderer.send('sync-stopped');
+        }
+      } catch (err) {
+        // Not running in Electron environment
+      }
+    }
+  }, [isSyncing]);
   const [isOffline, setIsOffline] = useState(false);
   const [overrideItem, setOverrideItem] = useState<LibraryItem | null>(null);
   const [showSyncValidation, setShowSyncValidation] = useState(false);
@@ -211,6 +233,7 @@ export default function App() {
             plex: { ...prev.plex, ...settingsData.plex },
             jellyfin: { ...prev.jellyfin, ...settingsData.jellyfin },
             emby: { ...prev.emby, ...settingsData.emby },
+            karakeep: { ...prev.karakeep, ...settingsData.karakeep },
             tautulli: { ...prev.tautulli, ...settingsData.tautulli },
             remoteSync: { ...prev.remoteSync, ...settingsData.remoteSync },
             daemonSettings: { ...prev.daemonSettings, ...settingsData.daemonSettings },
@@ -247,6 +270,7 @@ export default function App() {
     return () => {
       socket.disconnect();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleTriggerSync = () => {
@@ -329,13 +353,7 @@ export default function App() {
     }
   };
 
-  const handleSubmitOverride = async (
-    itemId: string,
-    targetEpisode: number,
-    targetStatus: WatchStatus,
-    targetScore: number,
-    applyToPlatforms: PlatformType[]
-  ) => {
+  const handleSubmitOverride = async (itemId: string, targetEpisode: number, targetStatus: WatchStatus, targetScore: number, applyToPlatforms: PlatformType[]) => {
     try {
       const res = await fetch('/api/sync/override', {
         method: 'POST',
@@ -370,6 +388,7 @@ export default function App() {
           plex: { ...prev.plex, ...settingsData.plex },
           jellyfin: { ...prev.jellyfin, ...settingsData.jellyfin },
           emby: { ...prev.emby, ...settingsData.emby },
+            karakeep: { ...prev.karakeep, ...settingsData.karakeep },
           tautulli: { ...prev.tautulli, ...settingsData.tautulli },
           remoteSync: { ...prev.remoteSync, ...settingsData.remoteSync },
           daemonSettings: { ...prev.daemonSettings, ...settingsData.daemonSettings },
@@ -399,6 +418,7 @@ export default function App() {
       '--accent-gradient-start': settings.theme.gradientStart,
       '--accent-gradient-end': settings.theme.gradientEnd,
     }),
+    ...(settings.theme?.appBackgroundGradient && { background: settings.theme.appBackgroundGradient }),
   } as React.CSSProperties;
 
   const CustomTheme = () => {
@@ -414,12 +434,63 @@ export default function App() {
       : (t.accentColor || '#4f46e5');
 
     const buttonStyle = t.buttonColor || gradient;
-    const headerBg = t.headerColor || 'transparent';
+    
+    // Header background (gradient or solid)
+    let headerBg = t.headerColor || 'transparent';
+    if (t.headerIsGradient && t.headerGradientColors && t.headerGradientColors.length > 0) {
+       const hGradColors = t.headerGradientColors.join(', ');
+       headerBg = t.headerGradientDirection === 'circle at center'
+         ? `radial-gradient(${t.headerGradientDirection}, ${hGradColors})`
+         : `linear-gradient(${t.headerGradientDirection || 'to right'}, ${hGradColors})`;
+    }
+    
     const paddingSz = t.paddingSize || '1.5rem';
     const btnText = t.buttonTextColor || '#ffffff';
+    const icnColor = t.iconColor || 'currentColor';
+
+    const radius = t.borderRadius || '0.75rem';
+    const fontFam = t.fontFamily || 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
+    const animDuration = t.animationSpeed === 'none' ? '0s' : (t.animationSpeed === 'slow' ? '0.7s' : (t.animationSpeed === 'fast' ? '0.15s' : '0.3s'));
+    
+    let baseFontSize = '16px';
+    if (t.layoutDensity === 'compact') baseFontSize = '14px';
+    if (t.layoutDensity === 'spacious') baseFontSize = '18px';
+
+    // Card style css injection
+    let cardCss = '';
+    if (t.cardStyle === 'glass') {
+      cardCss = `
+        .bg-white, .dark\\:bg-\\[\\#0a0a0a\\], .dark\\:bg-\\[\\#111\\] {
+          background: ${isDarkMode ? 'rgba(20, 20, 20, 0.6)' : 'rgba(255, 255, 255, 0.6)'} !important;
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          border: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'} !important;
+          box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1) !important;
+        }
+      `;
+    } else if (t.cardStyle === 'neumorphic') {
+      cardCss = `
+        .bg-white, .dark\\:bg-\\[\\#0a0a0a\\], .dark\\:bg-\\[\\#111\\] {
+          background: ${isDarkMode ? '#0a0a0a' : '#f9fafb'} !important;
+          border: none !important;
+          box-shadow: ${isDarkMode 
+            ? '6px 6px 12px #040404, -6px -6px 12px #101010' 
+            : '6px 6px 12px #e1e2e3, -6px -6px 12px #ffffff'} !important;
+        }
+      `;
+    } else if (t.cardStyle === 'outlined') {
+      cardCss = `
+        .bg-white, .dark\\:bg-\\[\\#0a0a0a\\], .dark\\:bg-\\[\\#111\\] {
+          background: transparent !important;
+          border: 2px solid ${isDarkMode ? '#222' : '#e5e7eb'} !important;
+          box-shadow: none !important;
+        }
+      `;
+    }
 
     return (
       <style dangerouslySetInnerHTML={{__html: `
+        html { font-size: ${baseFontSize} !important; }
         :root {
           --accent-base: ${t.accentColor || '#4f46e5'};
           --accent-gradient: ${gradient};
@@ -427,16 +498,34 @@ export default function App() {
           --button-text: ${btnText};
           --header-bg: ${headerBg};
           --app-padding: ${paddingSz};
+          --app-radius: ${radius};
+        }
+        body {
+          font-family: ${fontFam} !important;
+        }
+        * {
+          transition-duration: ${animDuration} !important;
         }
         /* Buttons overriding */
         button.bg-indigo-600, button.bg-indigo-500, .bg-indigo-600, .bg-indigo-500, .bg-purple-600 {
           background: var(--button-bg) !important;
           color: var(--button-text) !important;
-          transition: opacity 0.2s ease;
         }
+        
+        /* Border Radius Overrides */
+        .rounded-xl { border-radius: var(--app-radius) !important; }
+        .rounded-2xl { border-radius: calc(var(--app-radius) + 0.25rem) !important; }
+        .rounded-lg { border-radius: calc(var(--app-radius) - 0.25rem) !important; }
+        
+        ${cardCss}
         button.bg-indigo-600:hover, button.bg-indigo-500:hover, .bg-indigo-600:hover, .bg-indigo-500:hover, .bg-purple-600:hover {
           opacity: 0.9 !important;
         }
+        /* Icon overriding */
+        svg.lucide {
+           color: ${icnColor} !important;
+        }
+        
         /* Text overriding */
         .text-indigo-500:not(:hover), .text-indigo-600:not(:hover), .text-purple-500:not(:hover), .text-purple-600:not(:hover) {
           color: var(--accent-base) !important;
@@ -483,7 +572,7 @@ export default function App() {
           padding: var(--app-padding) !important;
         }
         header, .win11-titlebar-container, nav {
-          background-color: var(--header-bg) !important;
+          background: var(--header-bg) !important;
         }
       `}} />
     );
@@ -509,14 +598,14 @@ export default function App() {
   };
 
   return (
-    <div style={themeStyle} className={`min-h-screen font-sans antialiased flex flex-col justify-between ${isDarkMode ? 'dark bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+    <div style={themeStyle} className={`min-h-screen font-sans antialiased flex flex-col justify-between ${isDarkMode ? 'dark text-gray-100' : 'text-gray-900'} ${!settings.theme?.appBackgroundGradient ? (isDarkMode ? 'bg-black' : 'bg-gray-50') : ''}`}>
       <CustomTheme />
       <div>
         {/* Windows 11 Title Bar */}
         <Win11TitleBar
           appName="ASynX — Cross-Platform Anime & Drama Sync Studio"
           isSyncing={isSyncing}
-        isOffline={isOffline}
+        
           onTriggerSync={handleTriggerSync}
         />
 
@@ -531,6 +620,17 @@ export default function App() {
           extensionState={extensionState}
           isDarkMode={isDarkMode}
           toggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+          isEditMode={isEditMode}
+          onToggleEditMode={() => setIsEditMode(!isEditMode)}
+          isCustomizePanelOpen={isCustomizePanelOpen}
+          onToggleCustomizePanel={() => setIsCustomizePanelOpen(!isCustomizePanelOpen)}
+        />
+
+        <QuickCustomizePanel 
+          isOpen={isCustomizePanelOpen}
+          onClose={() => setIsCustomizePanelOpen(false)}
+          settings={settings}
+          onSaveSettings={setSettings}
         />
 
         {/* Main Content Body */}
@@ -543,6 +643,7 @@ export default function App() {
               exit={{ opacity: 0, y: -15, filter: 'blur(4px)' }}
               transition={{ duration: 0.25, ease: "easeOut" }}
             >
+          <React.Suspense fallback={<div className="flex items-center justify-center h-full min-h-[400px]"><ASynXLoader size={120} /></div>}>
 
           {activeTab === 'matrix' && (
             <SyncMatrixView
@@ -555,6 +656,8 @@ export default function App() {
               onNavigateSettings={() => setActiveTab('settings')}
               onImportCSV={handleImportCSV}
               onUndoAction={handleUndoSync}
+              isEditMode={isEditMode}
+              onSaveSettings={handleSaveSettings}
             />
           )}
 
@@ -568,22 +671,14 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'plex' && (
-            <PlexWebhookView
-              settings={settings}
-              webhookLogs={webhookLogs}
-              libraryItems={items}
-              onTriggerSimulatedWebhook={handleTriggerSimulatedWebhook}
-            />
-          )}
-
-          {activeTab === 'extension' && (
-            <ExtensionCompanionView
-              state={extensionState}
-              libraryItems={items}
-              onTriggerExtensionAction={handleTriggerExtensionAction}
-            />
-          )}
+          
+          {activeTab === 'health' && <SystemHealthView isEditMode={isEditMode} />}
+          {activeTab === 'performance' && <SyncPerformanceView isEditMode={isEditMode} />}
+          {activeTab === 'docker-backend' && <DockerBackendView />}
+          {activeTab === 'database' && <DatabaseView />}
+          {activeTab === 'plex' && <PlexWebhookView settings={settings} webhookLogs={webhookLogs} libraryItems={items} onTriggerSimulatedWebhook={handleTriggerSimulatedWebhook} />}
+          {activeTab === 'extension' && <ExtensionCompanionView state={extensionState} libraryItems={items} onTriggerExtensionAction={handleTriggerExtensionAction} />}
+          {activeTab === 'api-docs' && <ApiDocumentationView />}
 
           {activeTab === 'settings' && (
             <SettingsView
@@ -591,21 +686,10 @@ export default function App() {
               onSaveSettings={handleSaveSettings}
             />
           )}
-          {activeTab === 'database' && (
-            <DatabaseView />
+          {activeTab === 'bookmarks' && (
+            <BookmarkTab settings={settings} />
           )}
-          {activeTab === 'api-docs' && (
-            <ApiDocumentationView />
-          )}
-          {activeTab === 'docker-backend' && (
-            <DockerBackendView />
-          )}
-          {activeTab === 'performance' && (
-            <SyncPerformanceView />
-          )}
-          {activeTab === 'health' && (
-            <SystemHealthView />
-          )}
+          </React.Suspense>
         
             </motion.div>
           </AnimatePresence>

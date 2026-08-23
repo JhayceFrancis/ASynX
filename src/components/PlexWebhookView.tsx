@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { WebhookLog, AppSettings, LibraryItem, HealthCheckStatus } from '../types';
+import { PlexLogo } from './PlatformLogos';
 import { 
   Tv, 
   Terminal, 
@@ -40,6 +41,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
   const [copiedTautulli, setCopiedTautulli] = useState(false);
   const [copiedJellyfin, setCopiedJellyfin] = useState(false);
   const [copiedEmby, setCopiedEmby] = useState(false);
+  const [copiedKarakeep, setCopiedKarakeep] = useState(false);
 
   // Automated Health Checker state
   const [healthData, setHealthData] = useState<HealthCheckStatus | null>(null);
@@ -58,10 +60,11 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
   const [matchResult, setMatchResult] = useState<any>(null);
   const [isMatching, setIsMatching] = useState(false);
 
-  const plexUrl = window.location.origin + '/api/webhooks/plex';
-  const tautulliUrl = window.location.origin + '/api/webhooks/tautulli';
-  const jellyfinUrl = window.location.origin + '/api/webhooks/jellyfin';
-  const embyUrl = window.location.origin + '/api/webhooks/emby';
+  const plexUrl = settings.plex?.webhookUrl || window.location.origin + '/api/webhooks/plex';
+  const tautulliUrl = settings.tautulli?.webhookUrl || window.location.origin + '/api/webhooks/tautulli';
+  const jellyfinUrl = settings.jellyfin?.webhookUrl || window.location.origin + '/api/webhooks/jellyfin';
+  const embyUrl = settings.emby?.webhookUrl || window.location.origin + '/api/webhooks/emby';
+  const karakeepUrl = settings.karakeep?.webhookUrl || window.location.origin + '/api/webhooks/karakeep';
 
   // Fetch initial health check
   const fetchHealth = async () => {
@@ -82,7 +85,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
   }, []);
 
   // Run ping health check
-  const handlePingWebhooks = async (service?: 'plex' | 'tautulli' | 'jellyfin' | 'emby') => {
+  const handlePingWebhooks = async (service?: 'plex' | 'tautulli' | 'jellyfin' | 'emby' | 'karakeep') => {
     setIsPinging(true);
     try {
       const res = await fetch('/api/webhooks/health/ping', {
@@ -100,7 +103,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
     }
   };
 
-  const handleCopy = (text: string, type: 'plex' | 'tautulli' | 'jellyfin' | 'emby') => {
+  const handleCopy = (text: string, type: 'plex' | 'tautulli' | 'jellyfin' | 'emby' | 'karakeep') => {
     navigator.clipboard.writeText(text).catch(err => console.error("Clipboard error:", err));
     if (type === 'plex') {
       setCopiedPlex(true);
@@ -197,7 +200,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
             <span className="p-1.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30">
-              <Tv className="w-5 h-5" />
+              <PlexLogo className="w-5 h-5" />
             </span>
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Plex Media Server & Tautulli Automation Suite</h2>
           </div>
@@ -272,7 +275,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
           }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <Server className="w-4 h-4 text-purple-400" />
+                <PlexLogo className="w-4 h-4 text-[#E5A00D]" />
                 <span className="font-bold text-gray-800 dark:text-gray-200 text-sm">Plex Media Server</span>
               </div>
 
@@ -557,6 +560,26 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
               >
                 {copiedEmby ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedEmby ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Karakeep URL */}
+          <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-neutral-900">
+            <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Karakeep Webhook Target URL</label>
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                readOnly
+                value={karakeepUrl}
+                className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-xs font-mono text-indigo-400 focus:outline-none"
+              />
+              <button
+                onClick={() => handleCopy(karakeepUrl, 'karakeep')}
+                className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition cursor-pointer flex items-center space-x-1 flex-shrink-0"
+              >
+                {copiedKarakeep ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedKarakeep ? 'Copied' : 'Copy'}</span>
               </button>
             </div>
           </div>

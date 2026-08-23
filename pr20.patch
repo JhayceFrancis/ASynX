@@ -1,0 +1,43 @@
+From eed13436171b0279e178fbfe60da71f1fea8f11e Mon Sep 17 00:00:00 2001
+From: "copilot-swe-agent[bot]" <198982749+Copilot@users.noreply.github.com>
+Date: Wed, 19 Aug 2026 05:45:43 +0000
+Subject: [PATCH 1/2] Initial plan
+
+
+From e2d6b04ffa8f925b4379098609d6b9b483b6a496 Mon Sep 17 00:00:00 2001
+From: "copilot-swe-agent[bot]" <198982749+Copilot@users.noreply.github.com>
+Date: Wed, 19 Aug 2026 05:47:16 +0000
+Subject: [PATCH 2/2] Fix release bump workflow push failures
+
+Co-authored-by: JhayceFrancis <162052631+JhayceFrancis@users.noreply.github.com>
+---
+ .github/workflows/ci-cd.yml | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/.github/workflows/ci-cd.yml b/.github/workflows/ci-cd.yml
+index da9dff0..0d278be 100644
+--- a/.github/workflows/ci-cd.yml
++++ b/.github/workflows/ci-cd.yml
+@@ -16,7 +16,7 @@ concurrency:
+ 
+ jobs:
+   # ==========================================
+-  # JOB 1: Version Bumper & Auto-Tag
++  # JOB 1: Version Bumper
+   # ==========================================
+   bump-version:
+     name: Bump Release Version
+@@ -39,8 +39,11 @@ jobs:
+ 
+       - name: Bump Version and Push
+         run: |
+-          npm version patch -m "chore(release): bump version to %s [skip ci]"
+-          git push origin HEAD:${{ github.ref }} --follow-tags
++          npm version patch --no-git-tag-version
++          git add package.json package-lock.json
++          git commit -m "chore(release): bump version [skip ci]"
++          git pull --rebase origin ${{ github.ref_name }}
++          git push origin HEAD:${{ github.ref }}
+ 
+   # ==========================================
+   # JOB 2: Windows Electron (.exe) Publisher

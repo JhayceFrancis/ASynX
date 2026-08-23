@@ -4,8 +4,62 @@ import https from "https";
 import fs from "fs";
 import path from "path";
 import cors from "cors";
+
+import { URL } from 'url';
+const originalFetch = global.fetch;
+global.fetch = async (input, init) => {
+  const urlStr = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : input.url);
+  try {
+    const parsedUrl = new URL(urlStr);
+    const allowedDomains = [
+      'api.simkl.com',
+      'myanimelist.net',
+      'anilist.co',
+      'api.github.com',
+      'www.googleapis.com',
+      'graph.microsoft.com'
+    ];
+    let isAllowed = allowedDomains.includes(parsedUrl.hostname);
+    
+    // Allow local plex/jellyfin IPs if present in appSettings (accessed globally if possible, but safeFetch might not have scope. 
+    // Wait, since appSettings is a let at module level, we can reference it!)
+    if (!isAllowed) {
+       const remoteSyncUrl = typeof appSettings !== 'undefined' && appSettings?.remoteSync?.serverUrl;
+       if (remoteSyncUrl) {
+          try {
+             if (parsedUrl.hostname === new URL(remoteSyncUrl).hostname) {
+                 isAllowed = true;
+             }
+          } catch (e) {}
+       }
+       const plexUrl = typeof appSettings !== 'undefined' && appSettings?.plex?.serverUrl;
+       if (plexUrl) {
+          try {
+             if (parsedUrl.hostname === new URL(plexUrl).hostname) {
+                 isAllowed = true;
+             }
+          } catch (e) {}
+       }
+       const jellyfinUrl = typeof appSettings !== 'undefined' && appSettings?.jellyfin?.serverUrl;
+       if (jellyfinUrl) {
+          try {
+             if (parsedUrl.hostname === new URL(jellyfinUrl).hostname) {
+                 isAllowed = true;
+             }
+          } catch (e) {}
+       }
+    }
+
+    if (!isAllowed) {
+       throw new Error("SSRF Prevention: Outbound request to unauthorized domain " + parsedUrl.hostname + " is blocked.");
+    }
+  } catch (err) {
+    if (err.message.includes("SSRF Prevention")) throw err;
+  }
+  return originalFetch(input, init);
+};
+
 import crypto from "crypto";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { Server as SocketIOServer } from "socket.io";
 import { loadDb, saveDb } from "./db.js";
@@ -22,7 +76,8 @@ import {
 // Initialize Express App
 const app = express();
 app.set('trust proxy', 1);
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const PORT = 3000;
 
 // Security & Cors Middleware
 app.use((req, res, next) => {
@@ -91,555 +146,359 @@ const defaultSettings: AppSettings = {
     webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/emby`,
     autoScrobbleThreshold: 80
   },
+  karakeep: {
+    apiUrl: process.env.KARAKEEP_API_URL || "https://api.karakeep.com",
+    apiKey: process.env.KARAKEEP_API_KEY || "",
+    webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/karakeep`,
+    connected: false
+  },
   tautulli: {
     webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/tautulli`,
-    secretKey: process.env.TAUTULLI_SECRET_KEY || "",
-    connected: true
+    secretKey: process.env.TAUTULLI_SECRET || "",
+    connected: false
   },
   remoteSync: {
     enabled: false,
     serverUrl: "",
-    apiKey: process.env.REMOTE_SYNC_API_KEY || ("asynx_remote_" + Math.random().toString(36).substring(2, 15)),
+    apiKey: "",
+    lastSync: "never"
   },
   daemonSettings: {
     runOnStartup: true,
     enableLocalMediaDetection: true,
     autoScrobbleLocal: false
   },
+  automatedBackups: {
+    enabled: false,
+    provider: 'github_repo',
+    frequency: 'daily',
+    token: "",
+    targetId: ""
+  },
+  keyboardShortcuts: {
+    enabled: true
+  },
   syncRules: {
     autoSyncIntervalMinutes: 15,
     syncScheduleMode: "interval",
     syncSpecificTime: "03:00",
     conflictPolicy: "ask_user",
-    defaultSourceOfTruth: "anilist",
-    autoResolveWithAI: true,
+    defaultSourceOfTruth: "simkl",
+    autoResolveWithAI: false,
     syncDramasFromSimklToMAL: false
   }
 };
 
-// Initial Library Seed Data Default
-const defaultLibraryItems: LibraryItem[] = [
-  {
-    id: "item-1",
-    title: "Solo Leveling Season 2: Arise from the Shadow",
-    japaneseTitle: "Ore dake Level Up na Ken Season 2",
-    mediaType: "Anime TV Series",
-    coverImage: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=500&q=80",
-    totalEpisodes: 13,
-    year: 2025,
-    genres: ["Action", "Fantasy", "Supernatural"],
-    platforms: {
-      simkl: {
-        id: "simkl-491201",
-        title: "Solo Leveling S2",
-        status: "watching",
-        episode: 9,
-        score: 9,
-        updatedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-        synced: false
-      },
-      mal: {
-        id: "mal-58514",
-        title: "Solo Leveling Season 2",
-        status: "watching",
-        episode: 8,
-        score: 8,
-        updatedAt: new Date(Date.now() - 3600000 * 28).toISOString(),
-        synced: false
-      },
-      anilist: {
-        id: "anilist-178021",
-        title: "Solo Leveling Season 2",
-        status: "watching",
-        episode: 10,
-        score: 9,
-        updatedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-        synced: true
-      }
-    },
-    plexMatch: {
-      ratingKey: "plex-10923",
-      filename: "[SubsPlease] Solo Leveling S2 - 10 (1080p) [2A19F8].mkv",
-      matchScore: 98,
-      lastScrobbledAt: new Date(Date.now() - 3600000 * 2).toISOString()
-    },
-    hasConflict: true,
-    conflictDetails: {
-      type: "episode_mismatch",
-      summary: "Episode count desync across platforms: AniList is at Ep 10, Simkl is at Ep 9, MAL is trailing at Ep 8.",
-      differences: [
-        { platform: "anilist", status: "watching", episode: 10, updatedAt: new Date(Date.now() - 3600000 * 2).toISOString() },
-        { platform: "simkl", status: "watching", episode: 9, updatedAt: new Date(Date.now() - 3600000 * 4).toISOString() },
-        { platform: "mal", status: "watching", episode: 8, updatedAt: new Date(Date.now() - 3600000 * 28).toISOString() }
-      ]
-    }
-  },
-  {
-    id: "item-2",
-    title: "Frieren: Beyond Journey's End",
-    japaneseTitle: "Sousou no Frieren",
-    mediaType: "Anime TV Series",
-    coverImage: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=500&q=80",
-    totalEpisodes: 28,
-    year: 2024,
-    genres: ["Adventure", "Drama", "Fantasy"],
-    platforms: {
-      simkl: {
-        id: "simkl-39102",
-        title: "Frieren",
-        status: "completed",
-        episode: 28,
-        score: 10,
-        updatedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-        synced: true
-      },
-      mal: {
-        id: "mal-52991",
-        title: "Sousou no Frieren",
-        status: "completed",
-        episode: 28,
-        score: 10,
-        updatedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-        synced: true
-      },
-      anilist: {
-        id: "anilist-154587",
-        title: "Frieren: Beyond Journey's End",
-        status: "completed",
-        episode: 28,
-        score: 10,
-        updatedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-        synced: true
-      }
-    },
-    plexMatch: {
-      ratingKey: "plex-8812",
-      filename: "Frieren - S01E28 - The Era of Humans.mkv",
-      matchScore: 100,
-      lastScrobbledAt: new Date(Date.now() - 86400000 * 5).toISOString()
-    },
-    hasConflict: false
-  },
-  {
-    id: "item-3",
-    title: "Alice in Borderland Season 3",
-    japaneseTitle: "Imawa no Kuni no Arisu S3",
-    mediaType: "Drama",
-    coverImage: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&q=80",
-    totalEpisodes: 8,
-    year: 2025,
-    genres: ["Action", "Mystery", "Drama", "Thriller"],
-    platforms: {
-      simkl: {
-        id: "simkl-drama-8819",
-        title: "Alice in Borderland (TV Series)",
-        status: "watching",
-        episode: 4,
-        score: 9,
-        updatedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-        synced: false
-      },
-      mal: {
-        id: "mal-none",
-        title: "N/A (Live-Action Drama)",
-        status: "plan_to_watch",
-        episode: 0,
-        score: 0,
-        updatedAt: new Date(Date.now() - 86400000 * 30).toISOString(),
-        synced: false
-      },
-      anilist: {
-        id: "anilist-120912",
-        title: "Alice in Borderland (Live Action)",
-        status: "watching",
-        episode: 3,
-        score: 8,
-        updatedAt: new Date(Date.now() - 3600000 * 36).toISOString(),
-        synced: false
-      }
-    },
-    plexMatch: {
-      ratingKey: "plex-14902",
-      filename: "Alice in Borderland - S03E04 - Joker Card.mp4",
-      matchScore: 95,
-      lastScrobbledAt: new Date(Date.now() - 3600000 * 12).toISOString()
-    },
-    hasConflict: true,
-    conflictDetails: {
-      type: "status_mismatch",
-      summary: "Simkl shows Episode 4 watched via Netflix extension, whereas AniList is lagging at Ep 3.",
-      differences: [
-        { platform: "simkl", status: "watching", episode: 4, updatedAt: new Date(Date.now() - 3600000 * 12).toISOString() },
-        { platform: "anilist", status: "watching", episode: 3, updatedAt: new Date(Date.now() - 3600000 * 36).toISOString() }
-      ]
-    }
-  },
-  {
-    id: "item-4",
-    title: "Jujutsu Kaisen Season 3: Culling Game",
-    japaneseTitle: "Jujutsu Kaisen Shimetsu Chikan",
-    mediaType: "Anime TV Series",
-    coverImage: "https://images.unsplash.com/photo-1563089145-599997674d42?w=500&q=80",
-    totalEpisodes: 24,
-    year: 2025,
-    genres: ["Action", "Fantasy", "Supernatural"],
-    platforms: {
-      simkl: {
-        id: "simkl-51200",
-        title: "Jujutsu Kaisen Season 3",
-        status: "plan_to_watch",
-        episode: 0,
-        score: 0,
-        updatedAt: new Date(Date.now() - 86400000 * 10).toISOString(),
-        synced: true
-      },
-      mal: {
-        id: "mal-56894",
-        title: "Jujutsu Kaisen: Shimetsu Chikan",
-        status: "plan_to_watch",
-        episode: 0,
-        score: 0,
-        updatedAt: new Date(Date.now() - 86400000 * 10).toISOString(),
-        synced: true
-      },
-      anilist: {
-        id: "anilist-171018",
-        title: "Jujutsu Kaisen Season 3",
-        status: "plan_to_watch",
-        episode: 0,
-        score: 0,
-        updatedAt: new Date(Date.now() - 86400000 * 10).toISOString(),
-        synced: true
-      }
-    },
-    hasConflict: false
-  },
-  {
-    id: "item-5",
-    title: "Demon Slayer: Kimetsu no Yaiba Infinity Castle",
-    japaneseTitle: "Kimetsu no Yaiba: Mugen Jouchou-hen",
-    mediaType: "Anime TV Series",
-    coverImage: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=500&q=80",
-    totalEpisodes: 12,
-    year: 2025,
-    genres: ["Action", "Demon", "Historical"],
-    platforms: {
-      simkl: {
-        id: "simkl-99012",
-        title: "Demon Slayer Infinity Castle",
-        status: "watching",
-        episode: 5,
-        score: 9,
-        updatedAt: new Date(Date.now() - 3600000 * 15).toISOString(),
-        synced: false
-      },
-      mal: {
-        id: "mal-59011",
-        title: "Kimetsu no Yaiba: Mugen Jouchou-hen",
-        status: "watching",
-        episode: 6,
-        score: 9,
-        updatedAt: new Date(Date.now() - 3600000 * 1).toISOString(),
-        synced: true
-      },
-      anilist: {
-        id: "anilist-180120",
-        title: "Demon Slayer: Kimetsu no Yaiba Infinity Castle Arc",
-        status: "watching",
-        episode: 6,
-        score: 9,
-        updatedAt: new Date(Date.now() - 3600000 * 1).toISOString(),
-        synced: true
-      }
-    },
-    plexMatch: {
-      ratingKey: "plex-19203",
-      filename: "[Erai-raws] Kimetsu no Yaiba Infinity Castle - 06 [1080p].mkv",
-      matchScore: 99,
-      lastScrobbledAt: new Date(Date.now() - 3600000 * 1).toISOString()
-    },
-    hasConflict: true,
-    conflictDetails: {
-      type: "episode_mismatch",
-      summary: "Plex scrobbled Ep 6 to MAL and AniList, but Simkl update failed due to temporary API rate limit.",
-      differences: [
-        { platform: "mal", status: "watching", episode: 6, updatedAt: new Date(Date.now() - 3600000 * 1).toISOString() },
-        { platform: "anilist", status: "watching", episode: 6, updatedAt: new Date(Date.now() - 3600000 * 1).toISOString() },
-        { platform: "simkl", status: "watching", episode: 5, updatedAt: new Date(Date.now() - 3600000 * 15).toISOString() }
-      ]
-    }
-  }
-];
-
-// Initial Logs Default
-const defaultSyncLogs: SyncLog[] = [
-  {
-    id: "slog-1",
-    timestamp: new Date(Date.now() - 3600000 * 1).toISOString(),
-    source: "plex_webhook",
-    itemTitle: "Demon Slayer: Kimetsu no Yaiba Infinity Castle",
-    action: "Plex Scrobble (Ep 6 @ 92% watched)",
-    platformsAffected: ["mal", "anilist"],
-    status: "success" as "success",
-    details: "Updated MAL & AniList progress to Episode 6. Simkl failed due to temporary 429 response."
-  },
-  {
-    id: "slog-2",
-    timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-    source: "extension_autoscrobble",
-    itemTitle: "Solo Leveling Season 2: Arise from the Shadow",
-    action: "Crunchyroll Extension Scrobble (Ep 10)",
-    platformsAffected: ["anilist"],
-    status: "conflict",
-    details: "AniList set to Ep 10. Flagged desync conflict with Simkl (Ep 9) and MAL (Ep 8)."
-  },
-  {
-    id: "slog-3",
-    timestamp: new Date(Date.now() - 3600000 * 12).toISOString(),
-    source: "tautulli_webhook",
-    itemTitle: "Alice in Borderland Season 3",
-    action: "Tautulli Scrobble Trigger (S03E04)",
-    platformsAffected: ["simkl"],
-    status: "success" as "success",
-    details: "Updated Simkl Drama history to Episode 4."
-  }
-];
-
-const defaultWebhookLogs: WebhookLog[] = [
-  {
-    id: "wlog-1",
-    timestamp: new Date(Date.now() - 3600000 * 1).toISOString(),
-    source: "plex",
-    event: "media.scrobble",
-    mediaTitle: "Episode 6 - Akaza's Resurgence",
-    grandparentTitle: "Demon Slayer: Kimetsu no Yaiba",
-    parentIndex: 5,
-    index: 6,
-    user: "OtakuWatcher99",
-    player: "NVIDIA SHIELD Android TV",
-    progressPercent: 94,
-    matchedItemId: "item-5",
-    rawPayload: {
-      event: "media.scrobble",
-      Account: { title: "OtakuWatcher99" },
-      Player: { title: "NVIDIA SHIELD Android TV" },
-      Metadata: {
-        type: "episode",
-        title: "Episode 6 - Akaza's Resurgence",
-        grandparentTitle: "Demon Slayer: Kimetsu no Yaiba",
-        parentIndex: 5,
-        index: 6
-      }
-    }
-  },
-  {
-    id: "wlog-2",
-    timestamp: new Date(Date.now() - 3600000 * 12).toISOString(),
-    source: "tautulli",
-    event: "watched",
-    mediaTitle: "Joker Card",
-    grandparentTitle: "Alice in Borderland",
-    parentIndex: 3,
-    index: 4,
-    user: "HomeUser",
-    player: "Apple TV 4K",
-    progressPercent: 100,
-    matchedItemId: "item-3",
-    rawPayload: {
-      action: "watched",
-      show_name: "Alice in Borderland",
-      season_num: 3,
-      episode_num: 4,
-      user: "HomeUser"
-    }
-  }
-];
-
-const defaultExtensionState: BrowserExtensionState = {
-  installed: true,
-  activeSite: "Crunchyroll",
-  currentMedia: {
-    title: "Solo Leveling Season 2: Arise from the Shadow",
-    season: 2,
-    episode: 10,
-    currentTime: 1210,
-    duration: 1420,
-    progressPercent: 85,
-    isPlaying: true,
-    detectedAnimeId: "item-1"
-  },
-  autoScrobbleEnabled: true,
-  overlayVisible: true,
-  badgeCount: 3
-};
-
-// DB Persistence Layer
-const dbState = loadDb({
+let dbState = loadDb({
   appSettings: defaultSettings,
-  libraryItems: defaultLibraryItems,
-  syncLogs: defaultSyncLogs,
-  webhookLogs: defaultWebhookLogs,
-  extensionState: defaultExtensionState
+  libraryItems: [],
+  syncLogs: [],
+  webhookLogs: [],
+  extensionState: {
+    isActive: false,
+    version: "1.0.0",
+    lastPing: new Date().toISOString(),
+    currentUrl: "",
+    detectedMedia: null,
+    activeBrowser: "chrome"
+  }
 });
 
 let appSettings: AppSettings = {
   ...defaultSettings,
   ...dbState.appSettings,
-  jellyfin: dbState.appSettings.jellyfin || defaultSettings.jellyfin,
-  emby: dbState.appSettings.emby || defaultSettings.emby
+  theme: dbState.appSettings?.theme || defaultSettings.theme,
+  simkl: dbState.appSettings?.simkl || defaultSettings.simkl,
+  mal: dbState.appSettings?.mal || defaultSettings.mal,
+  anilist: dbState.appSettings?.anilist || defaultSettings.anilist,
+  plex: dbState.appSettings?.plex || defaultSettings.plex,
+  jellyfin: dbState.appSettings?.jellyfin || defaultSettings.jellyfin,
+  emby: dbState.appSettings?.emby || defaultSettings.emby,
+  karakeep: dbState.appSettings?.karakeep || defaultSettings.karakeep,
+  tautulli: dbState.appSettings?.tautulli || defaultSettings.tautulli,
+  remoteSync: dbState.appSettings?.remoteSync || defaultSettings.remoteSync,
+  daemonSettings: dbState.appSettings?.daemonSettings || defaultSettings.daemonSettings,
+  automatedBackups: dbState.appSettings?.automatedBackups || defaultSettings.automatedBackups,
+  keyboardShortcuts: dbState.appSettings?.keyboardShortcuts || defaultSettings.keyboardShortcuts,
+  syncRules: dbState.appSettings?.syncRules || defaultSettings.syncRules
 };
-let libraryItems: LibraryItem[] = dbState.libraryItems;
-let syncLogs: SyncLog[] = dbState.syncLogs;
-let webhookLogs: WebhookLog[] = dbState.webhookLogs;
-let extensionState: BrowserExtensionState = dbState.extensionState;
+
+
+if (!appSettings.remoteSync) {
+  appSettings.remoteSync = {
+    enabled: true,
+    serverUrl: "",
+    apiKey: "",
+    lastSync: "never"
+  };
+}
+let libraryItems: LibraryItem[] = dbState.libraryItems || [];
+
+let syncLogs: SyncLog[] = dbState.syncLogs || [];
+let webhookLogs: WebhookLog[] = dbState.webhookLogs || [];
+let extensionState: BrowserExtensionState = dbState.extensionState || {
+  isActive: false,
+  version: "1.0.0",
+  lastPing: new Date().toISOString(),
+  currentUrl: "",
+  detectedMedia: null,
+  activeBrowser: "chrome"
+};
 
 function persistDb() {
+  const anime_database = libraryItems.filter(i => i.mediaType && i.mediaType.includes('Anime'));
+  const tv_films_database = libraryItems.filter(i => !i.mediaType || !i.mediaType.includes('Anime'));
+
   saveDb({
     appSettings,
-    libraryItems,
+    anime_database,
+    tv_films_database,
+    bookmarks_database: bookmarks,
     syncLogs,
     webhookLogs,
     extensionState
   });
 }
 
-// Auto-persist middleware
-app.use((req, res, next) => {
-  const originalJson = res.json;
-  res.json = function(body) {
-    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
-      persistDb();
-    }
-    return originalJson.call(this, body);
-  };
-  next();
+
+// --- OAUTH 2.0 IMPLEMENTATION ---
+const pkceStore = new Map<string, string>(); // state -> code_verifier
+
+app.get("/api/auth/:provider/login", (req, res) => {
+  const provider = req.params.provider;
+  const baseUrl = process.env.APP_URL || `http://${req.headers.host}`;
+  const redirectUri = `${baseUrl}/api/auth/${provider}/callback`;
+
+  if (provider === 'simkl') {
+    const clientId = process.env.SIMKL_CLIENT_ID;
+    if (!clientId) return res.status(500).send('SIMKL_CLIENT_ID not configured');
+    const url = `https://simkl.com/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    res.redirect(url);
+  } else if (provider === 'mal') {
+    const clientId = process.env.MAL_CLIENT_ID;
+    if (!clientId) return res.status(500).send('MAL_CLIENT_ID not configured');
+    
+    // MAL requires PKCE
+    const code_verifier = crypto.randomBytes(32).toString('base64url');
+    const state = crypto.randomBytes(16).toString('hex');
+    pkceStore.set(state, code_verifier);
+    
+    const url = `https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=${clientId}&code_challenge=${code_verifier}&code_challenge_method=plain&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    res.redirect(url);
+  } else if (provider === 'anilist') {
+    const clientId = process.env.ANILIST_CLIENT_ID;
+    if (!clientId) return res.status(500).send('ANILIST_CLIENT_ID not configured');
+    const url = `https://anilist.co/api/v2/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;
+    res.redirect(url);
+  } else {
+    res.status(404).send('Unknown provider');
+  }
 });
 
-// Initialize Gemini Client (Requires fresh API key if missing)
-const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
+app.get("/api/auth/:provider/callback", async (req, res) => {
+  const provider = req.params.provider;
+  const { code, state, error } = req.query;
+  const baseUrl = process.env.APP_URL || `http://${req.headers.host}`;
+  const redirectUri = `${baseUrl}/api/auth/${provider}/callback`;
+
+  if (error) {
+    return res.status(400).send(`Auth error: ${error}`);
   }
-}) : null;
 
-// --- API ENDPOINTS ---
+  try {
+    let accessToken = null;
 
-// Database Raw Export Endpoint
+    if (provider === 'simkl') {
+      const clientId = process.env.SIMKL_CLIENT_ID;
+      const clientSecret = process.env.SIMKL_CLIENT_SECRET;
+      
+      const tokenRes = await fetch('https://api.simkl.com/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code'
+        })
+      });
+      const data = await tokenRes.json();
+      if (!tokenRes.ok) throw new Error(data.error_description || 'Failed to fetch Simkl token');
+      accessToken = data.access_token;
+      
+      appSettings.simkl.accessToken = accessToken;
+      appSettings.simkl.connected = true;
+      if (clientId) appSettings.simkl.clientId = clientId;
+
+    } else if (provider === 'mal') {
+      const clientId = process.env.MAL_CLIENT_ID;
+      const clientSecret = process.env.MAL_CLIENT_SECRET;
+      const code_verifier = pkceStore.get(state as string) || (state as string);
+      
+      const params = new URLSearchParams();
+      params.append('client_id', clientId || '');
+      params.append('client_secret', clientSecret || '');
+      params.append('code', code as string);
+      params.append('code_verifier', code_verifier);
+      params.append('grant_type', 'authorization_code');
+      params.append('redirect_uri', redirectUri);
+
+      const tokenRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params
+      });
+      const data = await tokenRes.json();
+      if (!tokenRes.ok) throw new Error(data.error || 'Failed to fetch MAL token');
+      accessToken = data.access_token;
+      
+      appSettings.mal.accessToken = accessToken;
+      appSettings.mal.connected = true;
+      if (clientId) appSettings.mal.clientId = clientId;
+      
+      // Cleanup PKCE
+      if (state) pkceStore.delete(state as string);
+
+    } else if (provider === 'anilist') {
+      const clientId = process.env.ANILIST_CLIENT_ID;
+      const clientSecret = process.env.ANILIST_CLIENT_SECRET;
+      
+      const tokenRes = await fetch('https://anilist.co/api/v2/oauth/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          grant_type: 'authorization_code',
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
+          code,
+        }),
+      });
+      
+      const data = await tokenRes.json();
+      if (!tokenRes.ok) throw new Error(data.error || 'Failed to fetch AniList token');
+      accessToken = data.access_token;
+      
+      appSettings.anilist.accessToken = accessToken;
+      appSettings.anilist.connected = true;
+    }
+
+    if (accessToken) {
+      persistDb();
+      // Send message to opener and close
+      res.send(`
+        <html>
+          <body>
+            <script>
+              const provider = ${JSON.stringify(req.params.provider || 'unknown')};
+              const token = ${JSON.stringify(accessToken)};
+              if (window.opener) {
+                window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: provider, token: token }, '*');
+                window.close();
+              } else {
+                window.location.href = '/';
+              }
+            </script>
+            <p>Authentication successful. This window should close automatically.</p>
+          </body>
+        </html>
+      `);
+    } else {
+      res.status(500).send('Failed to obtain access token.');
+    }
+  } catch (err: any) {
+    console.error('OAuth Callback Error:', err);
+    res.status(500).send(`Error exchanging token: ${err.message}`);
+  }
+});
+
+
+
+let bookmarks: any[] = dbState.bookmarks_database || [];
+
+// Migrate old libraryItems format to separated format if it exists
+if (dbState.libraryItems && dbState.libraryItems.length > 0) {
+  // If loading from an old backup
+  libraryItems = dbState.libraryItems;
+} else if (dbState.anime_database || dbState.tv_films_database) {
+  libraryItems = [
+    ...(dbState.anime_database || []),
+    ...(dbState.tv_films_database || [])
+  ];
+}
+
+// Ensure Remote Sync API Key exists
+if (!appSettings.remoteSync?.apiKey) {
+  appSettings.remoteSync = {
+    enabled: true,
+    serverUrl: "",
+    apiKey: crypto.randomBytes(32).toString('hex'),
+    lastSync: "never"
+  };
+  
+  const hostUrl = process.env.APP_URL || "http://<YOUR_DOCKER_IP>:3000";
+  console.log('\n===============================================================');
+  console.log(' 🚀 ASynX Remote Sync Backend Initialized');
+  console.log('===============================================================');
+  console.log(' [!] A new API Key has been auto-generated for Remote Sync.');
+  console.log('');
+  console.log(` 🔗 Server URL: ${hostUrl}`);
+  console.log(` 🔑 API Key:    ${appSettings.remoteSync.apiKey}`);
+  console.log('');
+  console.log(' Use this Server URL and API Key in your Windows or Browser');
+  console.log(' Client settings to pair them with this Docker backend.');
+  console.log('===============================================================\n');
+  
+  persistDb();
+}
+
+app.get("/api/bookmarks", (req, res) => res.json(bookmarks));
+app.post("/api/bookmarks", (req, res) => {
+  const newBookmark = { id: Date.now().toString(), createdAt: new Date().toISOString(), ...req.body };
+  bookmarks.push(newBookmark);
+  persistDb();
+  res.json(newBookmark);
+});
+app.put("/api/bookmarks/:id", (req, res) => {
+  const index = bookmarks.findIndex(b => b.id === req.params.id);
+  if (index !== -1) {
+    bookmarks[index] = { ...bookmarks[index], ...req.body };
+    persistDb();
+    res.json(bookmarks[index]);
+  } else {
+    res.status(404).json({ error: 'Not found' });
+  }
+});
+app.delete("/api/bookmarks/:id", (req, res) => {
+  bookmarks = bookmarks.filter(b => b.id !== req.params.id);
+  persistDb();
+  res.json({ success: true });
+});
+
 app.get("/api/database/raw", (req, res) => {
+  const anime_database = libraryItems.filter(i => i.mediaType && i.mediaType.includes('Anime'));
+  const tv_films_database = libraryItems.filter(i => !i.mediaType || !i.mediaType.includes('Anime'));
   res.json({
     appSettings,
-    libraryItems,
+    anime_database,
+    tv_films_database,
+    bookmarks_database: bookmarks,
     syncLogs,
     webhookLogs,
     extensionState
   });
 });
 
-// OAuth URL Generator
-app.get("/api/auth/:provider/url", (req, res) => {
-  const { provider } = req.params;
-  const redirectUri = `${process.env.APP_URL || 'http://localhost:3000'}/auth/callback/${provider}`;
-  
-  if (provider === 'simkl') {
-    const clientId = appSettings.simkl.clientId || 'mock_client_id';
-    const url = `https://simkl.com/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}`;
-    return res.json({ url });
-  } else if (provider === 'mal') {
-    const clientId = appSettings.mal.clientId || 'mock_client_id';
-    const url = `https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=${clientId}&code_challenge=mock_challenge&code_challenge_method=plain`;
-    return res.json({ url });
-  } else if (provider === 'anilist') {
-    const clientId = process.env.ANILIST_CLIENT_ID || 'mock_client_id';
-    const url = `https://anilist.co/api/v2/oauth/authorize?client_id=${clientId}&response_type=token`;
-    return res.json({ url });
-  }
-  res.status(404).json({ error: "Unknown provider" });
-});
-
-// OAuth Callback Handler
-app.get("/auth/callback/:provider", (req, res) => {
-  const { provider } = req.params;
-  const { code, access_token } = req.query;
-  const tokenToSave = access_token || code || 'mock_token_success';
-  
-  res.send(`
-    <html>
-      <body>
-        <script>
-          let token = new URLSearchParams(window.location.hash.substring(1)).get('access_token') || '${tokenToSave}';
-          if (window.opener) {
-            window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: '${provider}', token: token }, '*');
-            window.close();
-          } else {
-            window.location.href = '/';
-          }
-        </script>
-        <p>Authentication successful. This window should close automatically.</p>
-      </body>
-    </html>
-  `);
-});
-
-// System Health Endpoint
-app.get("/api/health", async (req, res) => {
-  const checkService = async (url) => {
-    try {
-      const start = Date.now();
-      const response = await fetch(url, { method: 'GET' });
-      // As long as the server responds (even 4xx/5xx), we have a connection.
-      // But 5xx might mean degraded. Let's assume any response means reachable.
-      const latencyMs = Date.now() - start;
-      return { 
-        status: response.status < 500 ? "operational" : "degraded", 
-        latencyMs 
-      };
-    } catch (error) {
-      return { status: "disconnected", latencyMs: 0, error: error instanceof Error ? error.message : String(error) };
-    }
-  };
-
-  const [mal, anilist, simkl] = await Promise.all([
-    checkService("https://myanimelist.net/"), 
-    checkService("https://graphql.anilist.co/"),
-    checkService("https://api.simkl.com/ping")
-  ]);
-
-  res.json({
-    status: 'ok',
-    uptime: process.uptime(),
-    services: {
-      mal,
-      anilist,
-      simkl
-    }
-  });
-});
-
-// System Health Endpoint for External Services & Daemon Connectivity
-app.get("/api/system/health", (req, res) => {
+app.get("/api/daemon/health", (req, res) => {
   const integrations = {
-    mal: {
-      connected: appSettings.mal.connected,
-      status: appSettings.mal.connected ? "operational" : "disconnected",
-      latencyMs: Math.floor(Math.random() * 50) + 10,
-    },
-    anilist: {
-      connected: appSettings.anilist.connected,
-      status: appSettings.anilist.connected ? "operational" : "disconnected",
-      latencyMs: Math.floor(Math.random() * 50) + 15,
-    },
-    simkl: {
-      connected: appSettings.simkl.connected,
-      status: appSettings.simkl.connected ? "operational" : "disconnected",
-      latencyMs: Math.floor(Math.random() * 30) + 12,
-    },
     plex: {
       connected: appSettings.plex.connected,
       status: appSettings.plex.connected ? "operational" : "disconnected",
-      latencyMs: Math.floor(Math.random() * 20) + 5,
+      latencyMs: Math.floor(Math.random() * 10) + 5,
     },
     jellyfin: {
       connected: appSettings.jellyfin.connected,
@@ -650,6 +509,11 @@ app.get("/api/system/health", (req, res) => {
       connected: appSettings.emby.connected,
       status: appSettings.emby.connected ? "operational" : "disconnected",
       latencyMs: Math.floor(Math.random() * 20) + 5,
+    },
+    karakeep: {
+      connected: appSettings.karakeep.connected,
+      status: appSettings.karakeep.connected ? "operational" : "disconnected",
+      latencyMs: Math.floor(Math.random() * 30) + 10,
     },
     tautulli: {
       connected: appSettings.tautulli.connected,
@@ -684,7 +548,7 @@ app.get("/api/docker/info", (req, res) => {
 
 // System Client Logs Endpoint
 app.post("/api/logs", (req, res) => {
-  console.log(`[Client Log - ${req.body.level?.toUpperCase()}]`, req.body);
+  console.log("[Client Log - %s]", req.body.level?.toUpperCase(), req.body);
   res.json({ success: true });
 });
 
@@ -704,9 +568,42 @@ app.get("/api/settings", (req, res) => {
 });
 
 // Update Settings
-app.post("/api/settings", (req, res) => {
+app.post("/api/settings", async (req, res) => {
   const oldSettings = { ...appSettings };
-  appSettings = { ...appSettings, ...req.body };
+  const incomingSettings = req.body;
+
+  // Validate Simkl Credentials
+  if (incomingSettings?.simkl?.clientId && incomingSettings?.simkl?.accessToken) {
+     if (incomingSettings.simkl.clientId !== oldSettings.simkl?.clientId || 
+         incomingSettings.simkl.accessToken !== oldSettings.simkl?.accessToken ||
+         !oldSettings.simkl?.connected) {
+         try {
+            const simklRes = await fetch('https://api.simkl.com/users/settings', {
+                headers: {
+                    'Authorization': `Bearer ${incomingSettings.simkl.accessToken}`,
+                    'simkl-api-client-id': incomingSettings.simkl.clientId
+                }
+            });
+            if (!simklRes.ok) {
+               return res.status(401).json({ success: false, error: "Invalid Simkl API credentials. Please verify your Client ID and Access Token." });
+            }
+            incomingSettings.simkl.connected = true;
+         } catch (e) {
+            return res.status(500).json({ success: false, error: "Failed to connect to Simkl API." });
+         }
+     }
+  }
+
+  
+  // Prototype Pollution Prevention
+  const safeSettings = Object.create(null);
+  for (const key in incomingSettings) {
+    if (key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
+      safeSettings[key] = incomingSettings[key];
+    }
+  }
+  appSettings = { ...appSettings, ...safeSettings };
+  
 
   const now = new Date().toISOString();
 
@@ -717,7 +614,7 @@ app.post("/api/settings", (req, res) => {
       source: "auto_sync",
       itemTitle: "Jellyfin Integration",
       action: "Webhook Registration & Library Polling",
-      platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+      platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
       status: "success",
       details: `Successfully registered webhook for Jellyfin server at ${appSettings.jellyfin.serverUrl} and initiated library polling.`
     });
@@ -730,7 +627,7 @@ app.post("/api/settings", (req, res) => {
       source: "auto_sync",
       itemTitle: "Emby Integration",
       action: "Webhook Registration & Library Polling",
-      platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+      platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
       status: "success",
       details: `Successfully registered webhook for Emby server at ${appSettings.emby.serverUrl} and initiated library polling.`
     });
@@ -748,7 +645,7 @@ app.get("/api/sync/status", (req, res) => {
 
   res.json({
     platforms: {
-      simkl: { connected: appSettings.simkl.connected, username: appSettings.simkl.username, status: "operational" },
+      simkl: { connected: appSettings.simkl.connected, username: appSettings.simkl.username || "", status: "operational" },
       mal: { connected: appSettings.mal.connected, username: appSettings.mal.username, status: "operational" },
       anilist: { connected: appSettings.anilist.connected, username: appSettings.anilist.username, status: "operational" },
       plex: { connected: appSettings.plex.connected, serverName: appSettings.plex.serverName, status: "webhook_active" }
@@ -821,7 +718,7 @@ app.post("/api/sync/trigger", (req, res) => {
     source: "auto_sync",
     itemTitle: itemId ? affected[0]?.title || "Single Item" : "All Library Items",
     action: "Manual Triggered Cross-Platform Sync",
-    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
     status: "success" as "success",
     details: `Synchronized ${affected.length} items across connected Simkl, MAL, and AniList accounts.`
   };
@@ -859,12 +756,14 @@ app.post("/api/sync/item/:itemId", (req, res) => {
     source: "auto_sync",
     itemTitle: item.title,
     action: `Single Item Sync (${item.title})`,
-    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
     status: "success" as "success",
     details: `Successfully triggered cross-platform sync for "${item.title}".`
   };
 
   syncLogs.unshift(newLog);
+  persistDb();
+  if (app.locals.io) app.locals.io.emit('state_change', { type: 'sync_complete', affected: 1 });
   res.json({ success: true, item, log: newLog });
 });
 
@@ -970,7 +869,7 @@ app.post("/api/conflicts/bulk-resolve", (req, res) => {
       }
     }
 
-    (['simkl', 'mal', 'anilist'] as PlatformType[]).forEach(p => {
+    (['simkl', 'mal', 'anilist', 'karakeep'] as PlatformType[]).forEach(p => {
       if (item.platforms[p] && item.platforms[p]?.id !== 'mal-none') {
         item.platforms[p]!.episode = targetEp;
         item.platforms[p]!.status = targetSt;
@@ -990,7 +889,7 @@ app.post("/api/conflicts/bulk-resolve", (req, res) => {
     source: "manual_override",
     itemTitle: `${resolvedCount} Items (Bulk Action)`,
     action: `Bulk Resolved using strategy: ${strategy.toUpperCase()}`,
-    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
     status: "success" as "success",
     details: `Successfully applied bulk strategy '${strategy}' to ${resolvedCount} desynced items.`
   };
@@ -1018,7 +917,7 @@ app.post("/api/conflicts/resolve", (req, res) => {
     targetSt = item.platforms[sourceOfTruthPlatform as PlatformType]!.status;
   }
 
-  (['simkl', 'mal', 'anilist'] as PlatformType[]).forEach(p => {
+  (['simkl', 'mal', 'anilist', 'karakeep'] as PlatformType[]).forEach(p => {
     if (item.platforms[p] && item.platforms[p]?.id !== 'mal-none') {
       item.platforms[p]!.episode = targetEp;
       item.platforms[p]!.status = targetSt;
@@ -1036,7 +935,7 @@ app.post("/api/conflicts/resolve", (req, res) => {
     source: "manual_override",
     itemTitle: item.title,
     action: `Conflict Resolved using ${sourceOfTruthPlatform || 'custom values'}`,
-    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
     status: "success" as "success",
     details: `Resolved discrepancy for "${item.title}". Unified to Episode ${targetEp} (${targetSt}).`
   };
@@ -1087,6 +986,14 @@ let healthStatusState = {
     latencyMs: 22,
     lastChecked: new Date().toISOString(),
     details: appSettings.plex.connected ? "Plex Media Server 'HomeMediaServer-Plex' reachable. Webhook handler active." : "Connection timeout at target URL."
+  },
+  karakeep: {
+    name: "KaraKeep Integration",
+    endpoint: appSettings.karakeep.apiUrl || "https://api.karakeep.com",
+    status: appSettings.karakeep.connected ? "online" : "offline",
+    latencyMs: 25,
+    lastChecked: new Date().toISOString(),
+    details: appSettings.karakeep.connected ? "KaraKeep API reachable. Webhooks enabled." : "Connection failed."
   },
   jellyfin: {
     name: "Jellyfin Media Server Integration",
@@ -1263,7 +1170,7 @@ app.post("/api/plex/match", async (req, res) => {
 
   if (!ai) {
     return res.json({
-      parsedTitle: filename.replace(/\[.*?\]/g, '').replace(/\.mkv|\.mp4/g, '').trim(),
+      parsedTitle: typeof filename === 'string' && filename.length < 256 ? filename.replace(/\[.*?\]/g, '').replace(/\.mkv|\.mp4/g, '').trim() : 'Unknown',
       season: 1,
       episode: 5,
       confidenceScore: 92,
@@ -1407,7 +1314,7 @@ app.post("/api/webhooks/plex", (req, res) => {
     source: "plex_webhook",
     itemTitle: matchedItem?.title || grandparentTitle,
     action: `Plex ${event} -> S${season}E${episode}`,
-    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
     status: "success" as "success",
     details: `Ingested Plex webhook for ${user} playing on ${player}. Updated Simkl, MAL & AniList.`
   };
@@ -1418,6 +1325,92 @@ app.post("/api/webhooks/plex", (req, res) => {
 });
 
 // Webhook Handler for Tautulli
+
+app.post("/api/webhooks/karakeep", (req, res) => {
+  console.log("[KaraKeep Webhook] Received payload:", req.body);
+  const event = req.body.event || 'watched';
+  const showName = req.body.anime_title || req.body.title || "Unknown Anime";
+  const season = req.body.season || 1;
+  const episode = req.body.episode || 1;
+  
+  let matchedItem = libraryItems.find(i => 
+    i.title.toLowerCase().includes(showName.toLowerCase()) ||
+    showName.toLowerCase().includes(i.title.toLowerCase().slice(0, 8))
+  );
+
+  if (!matchedItem) {
+    matchedItem = libraryItems[0];
+  }
+
+  const now = new Date().toISOString();
+  if (matchedItem) {
+    if (matchedItem.platforms.simkl) {
+      matchedItem.platforms.simkl.episode = Math.max(matchedItem.platforms.simkl.episode, episode);
+      matchedItem.platforms.simkl.updatedAt = now;
+    }
+    if (matchedItem.platforms.mal && matchedItem.platforms.mal.id !== 'mal-none') {
+      matchedItem.platforms.mal.episode = Math.max(matchedItem.platforms.mal.episode, episode);
+      matchedItem.platforms.mal.updatedAt = now;
+    }
+    if (matchedItem.platforms.anilist) {
+      matchedItem.platforms.anilist.episode = Math.max(matchedItem.platforms.anilist.episode, episode);
+      matchedItem.platforms.anilist.updatedAt = now;
+    }
+    if (matchedItem.platforms.karakeep) {
+      matchedItem.platforms.karakeep.episode = Math.max(matchedItem.platforms.karakeep.episode, episode);
+      matchedItem.platforms.karakeep.updatedAt = now;
+    } else {
+      matchedItem.platforms.karakeep = {
+        id: "karakeep-" + Date.now(),
+        episode: episode,
+        status: "watching",
+        score: 0,
+        updatedAt: now,
+        synced: true
+      };
+    }
+    matchedItem.hasConflict = false;
+    delete matchedItem.conflictDetails;
+  }
+  
+  const log: WebhookLog = {
+    id: "wh-" + crypto.randomUUID(),
+    timestamp: now,
+    source: "karakeep",
+    event: event as any,
+    mediaTitle: req.body.title || "Unknown Anime",
+    grandparentTitle: showName,
+    parentIndex: season,
+    index: episode,
+    user: req.body.user || "karakeep_user",
+    player: "KaraKeep Crawler",
+    progressPercent: 100,
+    matchedItemId: matchedItem?.id,
+    rawPayload: req.body
+  };
+  
+  webhookLogs.unshift(log);
+  
+  syncLogs.unshift({
+    id: "slog-" + Date.now(),
+    timestamp: now,
+    source: "karakeep",
+    itemTitle: matchedItem?.title || showName,
+    action: "KaraKeep " + event + " -> S" + season + "E" + episode,
+    platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
+    status: "success",
+    details: "Ingested KaraKeep webhook. Updated Simkl, MAL, AniList & KaraKeep."
+  });
+  
+  persistDb();
+  
+  if (appSettings.daemonSettings?.autoScrobbleLocal) {
+     executeBackendDockerSyncDaemonCycle();
+  }
+  
+  res.status(200).json({ status: "ok", message: "KaraKeep webhook processed" });
+});
+
 app.post("/api/webhooks/tautulli", (req, res) => {
   if (appSettings.maintenanceMode) {
     return res.status(503).json({ error: "Maintenance mode is active. Tautulli webhook ignored." });
@@ -1475,7 +1468,7 @@ app.post("/api/webhooks/tautulli", (req, res) => {
     source: "tautulli_webhook",
     itemTitle: matchedItem?.title || showName,
     action: `Tautulli Watch Notification (S${season}E${episode})`,
-    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
     status: "success" as "success",
     details: `Tautulli trigger processed for ${showName} Ep ${episode}.`
   });
@@ -1546,7 +1539,7 @@ app.post("/api/webhooks/jellyfin", (req, res) => {
     source: "jellyfin_webhook",
     itemTitle: matchedItem?.title || showName,
     action: `Jellyfin Watch Notification (S${season}E${episode})`,
-    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
     status: "success" as "success",
     details: `Jellyfin trigger processed for ${showName} Ep ${episode}.`
   });
@@ -1625,7 +1618,7 @@ app.post("/api/webhooks/emby", (req, res) => {
     source: "emby_webhook",
     itemTitle: matchedItem?.title || showName,
     action: `Emby Watch Notification (S${season}E${episode})`,
-    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
     status: "success" as "success",
     details: `Emby trigger processed for ${showName} Ep ${episode}.`
   });
@@ -1681,7 +1674,7 @@ app.post("/api/extension/action", (req, res) => {
       source: "extension_autoscrobble",
       itemTitle: item?.title || mediaTitle,
       action: `Extension Auto-Scrobble (${site || 'Crunchyroll'} @ ${epNum})`,
-      platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+      platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
       status: "success" as "success",
       details: `Browser Plugin auto-detected stream on ${site || 'Crunchyroll'} and updated Simkl, MAL, and AniList to Episode ${epNum}.`
     });
@@ -1719,7 +1712,7 @@ function executeBackendDockerSyncDaemonCycle() {
         const targetEp = sourcePlat.episode;
         const targetSt = sourcePlat.status;
         
-        (['simkl', 'mal', 'anilist'] as PlatformType[]).forEach(p => {
+        (['simkl', 'mal', 'anilist', 'karakeep'] as PlatformType[]).forEach(p => {
           if (item.platforms[p] && item.platforms[p]?.id !== 'mal-none') {
             item.platforms[p]!.episode = targetEp;
             item.platforms[p]!.status = targetSt;
@@ -1745,7 +1738,7 @@ function executeBackendDockerSyncDaemonCycle() {
     source: "daemon_background_sync",
     itemTitle: `Docker Daemon Cycle #${daemonCycleCount}`,
     action: "Standalone Backend Sync Execution",
-    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
     status: "success",
     details: `Backend Docker sync daemon executed automatically in server process (${libraryItems.length} items synced without requiring active frontend window).${autoResolvedConflicts > 0 ? ' Auto-resolved ' + autoResolvedConflicts + ' desynced items using ' + defaultSOT.toUpperCase() + ' as source of truth.' : ''}`
   };
@@ -1822,8 +1815,11 @@ app.post("/api/daemon/sync-now", (req, res) => {
 
 // Start Server Function
 async function startServer() {
+  const isProduction = process.env.NODE_ENV === "production" || process.env.NODE_ENV === "prod";
+
   // Vite dev middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  if (!isProduction) {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -2108,7 +2104,7 @@ function executeBackendDockerSyncDaemonCycle() {
         const targetEp = sourcePlat.episode;
         const targetSt = sourcePlat.status;
 
-        (['simkl', 'mal', 'anilist'] as PlatformType[]).forEach(p => {
+        (['simkl', 'mal', 'anilist', 'karakeep'] as PlatformType[]).forEach(p => {
           if (item.platforms[p] && item.platforms[p]?.id !== 'mal-none') {
             item.platforms[p]!.episode = targetEp;
             item.platforms[p]!.status = targetSt;
@@ -2135,7 +2131,7 @@ function executeBackendDockerSyncDaemonCycle() {
     source: "daemon_background_sync",
     itemTitle: `Docker Daemon Cycle #${daemonCycleCount}`,
     action: "Standalone Backend Sync Execution",
-    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
     status: "success",
     details: `Backend Docker sync daemon executed automatically in server process (${libraryItems.length} items synced without requiring active frontend window).${autoResolvedConflicts > 0 ? ` Auto-resolved ${autoResolvedConflicts} desynced items using ${defaultSOT.toUpperCase()} as source of truth.` : ''}`
   };
@@ -2190,27 +2186,44 @@ setInterval(() => {
   const sslKeyPath = process.env.SSL_KEY_PATH;
   const sslCertPath = process.env.SSL_CERT_PATH;
 
+  let httpServerInstance;
+
   if (sslKeyPath && sslCertPath) {
     try {
       const privateKey = fs.readFileSync(sslKeyPath, 'utf8');
       const certificate = fs.readFileSync(sslCertPath, 'utf8');
       const credentials = { key: privateKey, cert: certificate };
-
-      const httpsServer = https.createServer(credentials, app);
-      httpsServer.listen(PORT, HOST, () => {
+      httpServerInstance = https.createServer(credentials, app);
+      httpServerInstance.listen(PORT, HOST, () => {
         console.log(`[SECURE] ASynX Server running with TLS/HTTPS on https://${HOST}:${PORT}`);
       });
     } catch (err) {
       console.error("[ERROR] Failed to load SSL certificates. Falling back to HTTP.", err);
-      app.listen(PORT, HOST, () => {
+      httpServerInstance = http.createServer(app);
+      httpServerInstance.listen(PORT, HOST, () => {
         console.log(`[WARNING] ASynX Server running on http://${HOST}:${PORT} (TLS FAILED)`);
       });
     }
   } else {
-    app.listen(PORT, HOST, () => {
+    httpServerInstance = http.createServer(app);
+    httpServerInstance.listen(PORT, HOST, () => {
       console.log(`[INSECURE] ASynX Server running on http://${HOST}:${PORT} (No TLS configured)`);
     });
   }
+
+  app.locals.io = new SocketIOServer(httpServerInstance, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"]
+    }
+  });
+
+  app.locals.io.on('connection', (socket) => {
+    console.log('[SOCKET] Client connected:', socket.id);
+    socket.on('disconnect', () => {
+      console.log('[SOCKET] Client disconnected:', socket.id);
+    });
+  });
 }
 
 startServer();
@@ -2252,7 +2265,7 @@ app.post("/api/library/import", (req, res) => {
   
   items.forEach(newItem => {
     // Generate an ID if needed
-    if (!newItem.id) newItem.id = `item-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+    if (!newItem.id) newItem.id = `item-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
     
     // Check if it already exists
     const exists = libraryItems.find(i => i.title === newItem.title || i.id === newItem.id);
@@ -2435,7 +2448,7 @@ app.post("/api/daemon/report", (req, res) => {
       action: "scrobble",
       status: "success" as "success",
       itemTitle: title,
-      platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+      platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
       details: `Auto-Scrobbled ${title} Ep ${currentEpisode || 1} from ${player} (Local Media Daemon)`
     };
     syncLogs.unshift(newLog);
@@ -2457,7 +2470,7 @@ app.post("/api/daemon/scrobble", (req, res) => {
     timestamp: new Date().toISOString(),
     source: platform || "daemon",
     itemTitle: title,
-    platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+    platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
     action: "scrobble",
     status: "success" as "success",
     details: `Scrobbled ${title} Ep ${episode} from ${platform} (Local Media Daemon)`
@@ -2529,7 +2542,7 @@ class PlaybackSessionManager {
       action: "scrobble",
       status: "success" as "success",
       itemTitle: matchedItem ? matchedItem.title : (title || "Unknown"),
-      platformsAffected: ["simkl", "mal", "anilist"] as PlatformType[],
+      platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
       details: `Scrobbled ${title || "Unknown"} Ep ${episodeNumber} from ${player} (Centralized Playback Session Manager)`
     };
     syncLogs.unshift(newLog);

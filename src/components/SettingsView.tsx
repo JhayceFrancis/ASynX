@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { PreImportModal } from './PreImportModal';
 import { BackupSettingsView } from './BackupSettingsView';
+import { OAuthConnectButton } from './OAuthConnectButton';
 import { AppSettings, PlatformType } from '../types';
 import { OAuthService } from '../services/OAuthService';
+import { SimklLogo, MalLogo, AniListLogo, PlexLogo, KarakeepLogo } from './PlatformLogos';
+import { ASynXLogo } from './ASynXLogo';
 import { 
   Database, FileSpreadsheet, Settings, Radio, Cloud, 
   Palette,
@@ -178,6 +181,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Theme & UI Customization</h3>
         </div>
         <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Nexus Tab Name</label>
+              <input
+                type="text"
+                placeholder="e.g., Nexus Bookmarks"
+                value={formState.nexusTabName || ''}
+                onChange={(e) => setFormState(prev => ({ ...prev, nexusTabName: e.target.value }))}
+                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 text-xs"
+              />
+            </div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div>
               <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Accent Text Color</label>
@@ -213,6 +228,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <option value="3rem">Ultra Wide (3rem)</option>
               </select>
             </div>
+            
+            {/* New extended theme options */}
+            <div>
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Gradient Start (Hero)</label>
+              <input
+                type="color"
+                value={formState.theme?.gradientStart || '#4f46e5'}
+                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, gradientStart: e.target.value } }))}
+                className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Gradient End (Hero)</label>
+              <input
+                type="color"
+                value={formState.theme?.gradientEnd || '#9333ea'}
+                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, gradientEnd: e.target.value } }))}
+                className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Primary Button Color</label>
+              <input
+                type="color"
+                value={formState.theme?.buttonColor || '#4f46e5'}
+                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, buttonColor: e.target.value } }))}
+                className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
+              />
+            </div>
+
           </div>
 
           <div className="border-t border-gray-100 dark:border-neutral-900/50 pt-4">
@@ -288,7 +333,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           className="w-10 h-10 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
                         />
                         {(formState.theme?.gradientColors?.length || 2) > 2 && (
-                          <button
+                          <button 
                             type="button"
                             onClick={() => {
                               const newColors = [...(formState.theme?.gradientColors || ['#4f46e5', '#ec4899'])];
@@ -303,7 +348,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       </div>
                     ))}
                     
-                    <button
+                    <button 
                       type="button"
                       onClick={() => {
                         const newColors = [...(formState.theme?.gradientColors || ['#4f46e5', '#ec4899']), '#ffffff'];
@@ -327,6 +372,110 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             )}
           </div>
+          
+          <div className="border-t border-gray-200 dark:border-neutral-900 pt-6 mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div>
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Global Font Family</label>
+              <select
+                value={formState.theme?.fontFamily || 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif'}
+                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, fontFamily: e.target.value } }))}
+                className="w-full mt-1 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
+              >
+                <option value='ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif'>System UI / Sans (Default)</option>
+                <option value='Inter, "Inter Variable", sans-serif'>Inter</option>
+                <option value='"Plus Jakarta Sans", sans-serif'>Plus Jakarta Sans</option>
+                <option value='"Fira Code", "JetBrains Mono", monospace'>Monospace (Dev)</option>
+                <option value='"Playfair Display", serif'>Serif (Elegant)</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Base Border Radius</label>
+              <select
+                value={formState.theme?.borderRadius || '0.75rem'}
+                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, borderRadius: e.target.value } }))}
+                className="w-full mt-1 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
+              >
+                <option value='0px'>Sharp (0px)</option>
+                <option value='0.25rem'>Subtle (4px)</option>
+                <option value='0.5rem'>Standard (8px)</option>
+                <option value='0.75rem'>Rounded (12px, Default)</option>
+                <option value='1rem'>Extra Rounded (16px)</option>
+                <option value='1.5rem'>Pill (24px)</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">UI Card Style</label>
+              <select
+                value={formState.theme?.cardStyle || 'flat'}
+                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, cardStyle: e.target.value as any } }))}
+                className="w-full mt-1 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
+              >
+                <option value='flat'>Standard / Flat</option>
+                <option value='glass'>Glassmorphism (Blur)</option>
+                <option value='neumorphic'>Neumorphic (Soft 3D)</option>
+                <option value='outlined'>Outlined (High Contrast)</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Animation Speed</label>
+              <select
+                value={formState.theme?.animationSpeed || 'normal'}
+                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, animationSpeed: e.target.value as any } }))}
+                className="w-full mt-1 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
+              >
+                <option value='none'>None (Instant)</option>
+                <option value='fast'>Fast (150ms)</option>
+                <option value='normal'>Normal (300ms)</option>
+                <option value='slow'>Slow / Cinematic (700ms)</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Layout Density & Padding</label>
+              <select
+                value={formState.theme?.layoutDensity || 'comfortable'}
+                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, layoutDensity: e.target.value as any } }))}
+                className="w-full mt-1 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
+              >
+                <option value='compact'>Compact (Dense)</option>
+                <option value='comfortable'>Comfortable (Default)</option>
+                <option value='spacious'>Spacious (Relaxed)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 0.5: Dashboard Configuration */}
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm mb-6">
+        <div className="flex items-center space-x-2 border-b border-gray-200 dark:border-neutral-900 pb-3">
+          <Sliders className="w-5 h-5 text-indigo-400" />
+          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Dashboard Panel Customization</h3>
+        </div>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            ASynX uses a modular widget-based dashboard system across the Health, Matrix, and Performance tabs.
+            You can customize the layout visually by clicking the "Toggle Layout Edit Mode" button in the top navigation bar.
+          </p>
+          <div className="pt-2">
+            <button type="button"
+              onClick={() => {
+                if (confirm("Are you sure you want to reset all dashboard panel layouts back to their default factory configurations?")) {
+                  localStorage.removeItem('asynx_layout_matrix');
+                  localStorage.removeItem('asynx_layout_health');
+                  localStorage.removeItem('asynx_layout_performance');
+                  alert("Dashboard layouts have been reset. Reload the application to apply.");
+                  window.location.reload();
+                }
+              }}
+              className="px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 rounded-lg text-sm font-semibold transition"
+            >
+              Reset All Dashboard Layouts to Default
+            </button>
+          </div>
         </div>
       </div>
 
@@ -335,54 +484,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
             <div className="flex items-center space-x-2">
-              <span className="w-3 h-3 rounded-full bg-emerald-400" />
+              <SimklLogo className="w-4 h-4 text-emerald-400" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Simkl API Connection</h3>
             </div>
             <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
               Connected
             </span>
           </div>
-
           <div className="space-y-3 text-xs">
-            <div>
-              <label className="text-gray-600 dark:text-gray-400 font-medium">Username</label>
-              <input
-                type="text"
-                value={formState.simkl.username}
-                onChange={(e) => setFormState({
-                  ...formState,
-                  simkl: { ...formState.simkl, username: e.target.value }
-                })}
-                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="text-gray-600 dark:text-gray-400 font-medium">Simkl Client ID</label>
-              <input
-                type="text"
-                value={formState.simkl.clientId}
-                onChange={(e) => setFormState({
-                  ...formState,
-                  simkl: { ...formState.simkl, clientId: e.target.value }
-                })}
-                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 font-mono"
-              />
-            </div>
-
             <div className="pt-2">
-              <label className="text-gray-600 dark:text-gray-400 font-medium mb-1 block">Authentication</label>
-              <button
-                type="button"
-                onClick={() => handleConnect('simkl')}
-                className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl text-sm font-bold transition shadow-sm ${
-                  formState.simkl?.connected
-                    ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
-                    : 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                }`}
-              >
-                <span>{formState.simkl?.connected ? 'Simkl Connected ✓' : 'Connect with Simkl'}</span>
-              </button>
+              <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">Simkl Client ID</label>
+              <input
+                type="text"
+                placeholder="Enter your Simkl API Client ID"
+                value={formState.simkl?.clientId || ''}
+                onChange={(e) => setFormState({ ...formState, simkl: { ...(formState.simkl as any), clientId: e.target.value } })}
+                className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none mb-3"
+              />
+              <p className="text-gray-600 dark:text-gray-400 font-medium mb-3">1-Click OAuth 2.0 Authorization</p>
+              <OAuthConnectButton provider="simkl" connected={!!formState.simkl?.connected} onConnect={handleConnect} />
             </div>
           </div>
         </div>
@@ -391,56 +511,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
             <div className="flex items-center space-x-2">
-              <span className="w-3 h-3 rounded-full bg-blue-400" />
+              <MalLogo className="w-4 h-4 text-[#2E51A2] dark:text-blue-400" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">MyAnimeList (MAL) API Connection</h3>
             </div>
             <span className="text-xs text-blue-400 font-semibold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
               Connected
             </span>
           </div>
-
           <div className="space-y-3 text-xs">
-            <div>
-              <label className="text-gray-600 dark:text-gray-400 font-medium">Username</label>
-              <input
-                type="text"
-                value={formState.mal?.username || ''}
-                onChange={(e) => setFormState({
-                  ...formState,
-                  mal: { ...formState.mal, username: e.target.value }
-                })}
-                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                placeholder="Enter MAL username"
-              />
-            </div>
-
-            <div>
-              <label className="text-gray-600 dark:text-gray-400 font-medium">MAL Client ID</label>
-              <input
-                type="text"
-                value={formState.mal?.clientId || ''}
-                onChange={(e) => setFormState({
-                  ...formState,
-                  mal: { ...formState.mal, clientId: e.target.value }
-                })}
-                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 font-mono"
-                placeholder="Enter MAL Client ID"
-              />
-            </div>
-
             <div className="pt-2">
-              <label className="text-gray-600 dark:text-gray-400 font-medium mb-1 block">Authentication</label>
-              <button
-                type="button"
-                onClick={() => handleConnect('mal')}
-                className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl text-sm font-bold transition shadow-sm ${
-                  formState.mal?.connected
-                    ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
-                    : 'bg-blue-600 hover:bg-blue-500 text-white'
-                }`}
-              >
-                <span>{formState.mal?.connected ? 'MyAnimeList Connected ✓' : 'Connect with MyAnimeList'}</span>
-              </button>
+              <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">MAL Client ID</label>
+              <input
+                type="text"
+                placeholder="Enter your MAL API Client ID"
+                value={formState.mal?.clientId || ''}
+                onChange={(e) => setFormState({ ...formState, mal: { ...(formState.mal as any), clientId: e.target.value } })}
+                className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none mb-3"
+              />
+              <p className="text-gray-600 dark:text-gray-400 font-medium mb-3">1-Click OAuth 2.0 Authorization</p>
+              <OAuthConnectButton provider="mal" connected={!!formState.mal?.connected} onConnect={handleConnect} />
             </div>
           </div>
         </div>
@@ -449,51 +538,97 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
             <div className="flex items-center space-x-2">
-              <span className="w-3 h-3 rounded-full bg-cyan-400" />
+              <AniListLogo className="w-4 h-4 text-[#02A9FF] dark:text-cyan-400" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">AniList API Connection</h3>
             </div>
             <span className="text-xs text-cyan-400 font-semibold bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
               Connected
             </span>
           </div>
-
           <div className="space-y-3 text-xs">
-            <div>
-              <label className="text-gray-600 dark:text-gray-400 font-medium">Username</label>
+            <div className="pt-2">
+              <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">AniList Client ID</label>
               <input
                 type="text"
-                value={formState.anilist.username}
-                onChange={(e) => setFormState({
-                  ...formState,
-                  anilist: { ...formState.anilist, username: e.target.value }
-                })}
-                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                placeholder="Enter your AniList API Client ID"
+                value={formState.anilist?.clientId || ''}
+                onChange={(e) => setFormState({ ...formState, anilist: { ...(formState.anilist as any), clientId: e.target.value } })}
+                className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none mb-3"
               />
-            </div>
-
-            <div className="pt-2">
-              <label className="text-gray-600 dark:text-gray-400 font-medium mb-1 block">Authentication</label>
-              <button
-                type="button"
-                onClick={() => handleConnect('anilist')}
-                className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl text-sm font-bold transition shadow-sm ${
-                  formState.anilist?.connected
-                    ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
-                    : 'bg-sky-600 hover:bg-sky-500 text-white'
-                }`}
-              >
-                <span>{formState.anilist?.connected ? 'AniList Connected ✓' : 'Connect with AniList'}</span>
-              </button>
+              <p className="text-gray-600 dark:text-gray-400 font-medium mb-3">1-Click OAuth 2.0 Authorization</p>
+              <OAuthConnectButton provider="anilist" connected={!!formState.anilist?.connected} onConnect={handleConnect} />
             </div>
           </div>
         </div>
 
-        {/* Section 4: Media Servers & Scrobbler */}
+
+        {/* Section 4: KaraKeep Tracker */}
         <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
             <div className="flex items-center space-x-2">
-              <Tv className="w-4 h-4 text-purple-400" />
-              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Media Servers (Plex, Jellyfin, Emby)</h3>
+              <KarakeepLogo className="w-4 h-4 text-pink-500" />
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">KaraKeep Integration</h3>
+            </div>
+            <button type="button"
+              onClick={() => setFormState(prev => ({ ...prev, karakeep: { apiUrl: '', apiKey: '', webhookUrl: '', ...prev.karakeep, connected: !prev.karakeep?.connected } }))}
+              className={`w-10 h-5 rounded-full transition-colors relative ${formState.karakeep?.connected ? 'bg-pink-500' : 'bg-gray-200 dark:bg-gray-800'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform ${formState.karakeep?.connected ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+          
+          {formState.karakeep?.connected && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs mt-2">
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium">KaraKeep API URL</label>
+                <input
+                  type="text"
+                  value={formState.karakeep.apiUrl || ''}
+                  onChange={(e) => setFormState({
+                    ...formState,
+                    karakeep: { ...formState.karakeep, apiUrl: e.target.value }
+                  })}
+                  className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-pink-500"
+                  placeholder="https://api.karakeep.com"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium">API Key</label>
+                <input
+                  type="password"
+                  value={formState.karakeep.apiKey || ''}
+                  onChange={(e) => setFormState({
+                    ...formState,
+                    karakeep: { ...formState.karakeep, apiKey: e.target.value }
+                  })}
+                  className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-pink-500"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-gray-600 dark:text-gray-400 font-medium flex items-center space-x-1">
+                  <span>Generated Webhook URL (For ASynX Inbound)</span>
+                  <span className="bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400 px-1.5 py-0.5 rounded text-[10px] font-bold">READY</span>
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={formState.karakeep.webhookUrl || `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/api/webhooks/karakeep`}
+                  className="w-full mt-1 bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-500 dark:text-gray-400 cursor-not-allowed font-mono text-[10px]"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Provide this URL in your KaraKeep settings so ASynX can receive watch updates.</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* Section 5: Media Servers & Scrobbler */}
+        <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
+            <div className="flex items-center space-x-2">
+              <PlexLogo className="w-4 h-4 text-[#E5A00D]" />
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Media Servers & Scrobblers (Plex, Jellyfin, Emby)</h3>
             </div>
             <span className="text-xs text-purple-400 font-semibold bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
               Webhooks Active
@@ -538,7 +673,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="space-y-3">
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
                 <h4 className="font-semibold text-gray-800 dark:text-gray-200">Jellyfin</h4>
-                <button
+                <button type="button"
                   onClick={() => setFormState(prev => ({ ...prev, jellyfin: { serverUrl: '', apiKey: '', serverName: '', webhookUrl: '', autoScrobbleThreshold: 85, ...prev.jellyfin, connected: !prev.jellyfin?.connected } }))}
                   className={`w-8 h-4 rounded-full transition-colors relative ${formState.jellyfin?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
                 >
@@ -588,12 +723,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               )}
             </div>
-
             {/* Emby */}
             <div className="space-y-3">
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
                 <h4 className="font-semibold text-gray-800 dark:text-gray-200">Emby</h4>
-                <button
+                <button type="button"
                   onClick={() => setFormState(prev => ({ ...prev, emby: { serverUrl: '', apiKey: '', serverName: '', webhookUrl: '', autoScrobbleThreshold: 85, ...prev.emby, connected: !prev.emby?.connected } }))}
                   className={`w-8 h-4 rounded-full transition-colors relative ${formState.emby?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
                 >
@@ -646,7 +780,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             
           </div>
         </div>
-      </div>
 
       
 
@@ -658,7 +791,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Remote Sync (Docker Backend)</h3>
           </div>
           <div className="flex items-center space-x-2">
-            <button
+            <button type="button"
               onClick={async () => {
                 try {
                   const res = await fetch('/api/remote-sync/push', { method: 'POST' });
@@ -677,7 +810,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             >
               Push
             </button>
-            <button
+            <button type="button"
               onClick={async () => {
                 try {
                   const res = await fetch('/api/remote-sync/pull', { method: 'POST' });
@@ -703,7 +836,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div>
             <label className="text-gray-600 dark:text-gray-400 font-medium text-xs">Enable Remote Sync</label>
             <div className="mt-2 flex items-center space-x-3">
-              <button
+              <button type="button"
                 onClick={() => setFormState(prev => ({ ...prev, remoteSync: { ...prev.remoteSync, enabled: !prev.remoteSync.enabled } }))}
                 className={`w-12 h-6 rounded-full transition-colors relative ${formState.remoteSync?.enabled ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
               >
@@ -756,7 +889,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           <div className="sm:col-span-2 flex justify-end">
-             <button
+             <button type="button"
               onClick={async () => {
                 if (!formState.remoteSync?.serverUrl) {
                    alert("Please enter a Remote Server URL.");
@@ -800,7 +933,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span className="block text-gray-800 dark:text-gray-200 font-semibold">Run on System Startup</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">Launch ASynX as a background daemon when you log into Windows.</span>
             </div>
-            <button
+            <button type="button"
               onClick={() => setFormState(prev => ({ ...prev, daemonSettings: { ...prev.daemonSettings, runOnStartup: !prev.daemonSettings?.runOnStartup } }))}
               className={`w-12 h-6 rounded-full transition-colors relative ${formState.daemonSettings?.runOnStartup ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
             >
@@ -813,7 +946,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span className="block text-gray-800 dark:text-gray-200 font-semibold">Local Media Detection</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">Enable tracking of web-based streaming (Netflix, Crunchyroll, Hi-Dive, Plex, Stremio) and native Windows apps (MPC-BE, VLC, Plex Desktop, Netflix Desktop, Stremio Desktop).</span>
             </div>
-            <button
+            <button type="button"
               onClick={() => setFormState(prev => ({ ...prev, daemonSettings: { ...prev.daemonSettings, enableLocalMediaDetection: !prev.daemonSettings?.enableLocalMediaDetection } }))}
               className={`w-12 h-6 rounded-full transition-colors relative ${formState.daemonSettings?.enableLocalMediaDetection ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
             >
@@ -826,7 +959,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span className="block text-gray-800 dark:text-gray-200 font-semibold">Automated Scrobbling (No Prompt)</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">If enabled, detected media will be scrobbled automatically without asking for confirmation.</span>
             </div>
-            <button
+            <button type="button"
               onClick={() => setFormState(prev => ({ ...prev, daemonSettings: { ...prev.daemonSettings, autoScrobbleLocal: !prev.daemonSettings?.autoScrobbleLocal } }))}
               className={`w-12 h-6 rounded-full transition-colors relative ${formState.daemonSettings?.autoScrobbleLocal ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
             >
@@ -990,7 +1123,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         }
                         
                         if (parsedData.length > 0) {
-                          setImportState({ id: `${file.name}-${Date.now()}`, file, parsedData, headers });
+                          setImportState({ id: Math.random().toString(), file, parsedData, headers });
                         } else {
                           alert('No valid records found in file.');
                         }
@@ -1026,7 +1159,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 }
               }}
             />
-            <button
+            <button 
               type="button"
               className="pointer-events-none px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition"
             >
@@ -1111,7 +1244,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <span className="block text-gray-800 dark:text-gray-200 font-semibold">Enable Keyboard Shortcuts</span>
             <span className="text-xs text-gray-500 dark:text-gray-400">Use keyboard combinations (e.g. Ctrl+S to sync, Alt+1/2/3 to switch tabs) to navigate the app efficiently.</span>
           </div>
-          <button
+          <button 
             type="button"
             onClick={() => setFormState({
               ...formState,
@@ -1144,7 +1277,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span className="block text-gray-800 dark:text-gray-200 font-semibold">Maintenance Mode</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">Pause all incoming webhooks, background syncs, and auto-scrobblers. Useful during manual database cleanup or mass imports to prevent accidental overrides.</span>
             </div>
-            <button
+            <button 
               type="button"
               onClick={() => {
                 setFormState(prev => ({ 

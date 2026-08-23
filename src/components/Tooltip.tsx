@@ -4,7 +4,7 @@ interface TooltipProps {
   title: string;
   description?: string;
   children: React.ReactNode;
-  position?: 'top' | 'bottom' | 'left' | 'right';
+  position?: 'top' | 'bottom' | 'left' | 'right' | 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
   className?: string;
 }
 
@@ -21,7 +21,11 @@ export const Tooltip: React.FC<TooltipProps> = ({
     top: 'bottom-full mb-2 left-1/2 -translate-x-1/2',
     bottom: 'top-full mt-2 left-1/2 -translate-x-1/2',
     left: 'right-full mr-2 top-1/2 -translate-y-1/2',
-    right: 'left-full ml-2 top-1/2 -translate-y-1/2'
+    right: 'left-full ml-2 top-1/2 -translate-y-1/2',
+    'bottom-right': 'top-full mt-2 right-0',
+    'bottom-left': 'top-full mt-2 left-0',
+    'top-right': 'bottom-full mb-2 right-0',
+    'top-left': 'bottom-full mb-2 left-0'
   };
 
   return (
