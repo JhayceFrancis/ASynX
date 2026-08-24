@@ -9,6 +9,11 @@ updates:
       time: "09:00"
       timezone: "Europe/Dublin"
     open-pull-requests-limit: 5
+    reviewers:
+      - "JhayceFrancis"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
     labels:
       - "dependencies"
       - "github-actions"
@@ -22,10 +27,24 @@ updates:
       time: "09:00"
       timezone: "Europe/Dublin"
     open-pull-requests-limit: 5
+    reviewers:
+      - "JhayceFrancis"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
     labels:
       - "dependencies"
       - "npm"
-    
+      
+    # Ignore major version bumps for risky architectural packages
+    ignore:
+      - dependency-name: "electron"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+
     # Custom grouping based on ASynX package.json architecture
     groups:
       core-ui-ecosystem:
@@ -53,6 +72,7 @@ updates:
           - "typescript"
           - "tsx"
           - "@types/*"
+          - "express-rate-limit"
 
       desktop-electron:
         patterns:
