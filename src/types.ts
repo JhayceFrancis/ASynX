@@ -33,6 +33,7 @@ export interface LibraryItem {
   mediaType: 'Anime TV Series' | 'Anime Film' | 'Film' | 'TV Series' | 'Anime Special' | 'Drama';
   coverImage: string;
   totalEpisodes: number;
+  episodes?: number;
   year: number;
   genres: string[];
   platforms: {

@@ -22,7 +22,7 @@ describe('ASynX Security & Persistence Validation Suite', () => {
         enabled: true,
         serverUrl: 'file:///etc/passwd',
         apiKey: 'test-key',
-        lastSync: null
+        lastSync: undefined
       };
 
       const res = await request(app)

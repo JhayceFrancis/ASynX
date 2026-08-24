@@ -279,8 +279,8 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
     if (activeFilter !== 'all' && activeFilter !== 'history' ) return item.mediaType === activeFilter;
     return true;
   }).sort((a, b) => {
-    let aVal: any = a[sortCol];
-    let bVal: any = b[sortCol];
+    let aVal: any = (a as any)[sortCol];
+    let bVal: any = (b as any)[sortCol];
 
     if (sortCol === 'status') {
       aVal = a.platforms?.anilist?.status || '';

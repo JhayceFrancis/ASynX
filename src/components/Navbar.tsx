@@ -50,24 +50,24 @@ const Navbar: React.FC<NavbarProps> = ({ isEditMode, onToggleEditMode, isCustomi
               <div className="flex flex-col">
                                 <h1 className="text-3xl font-extrabold tracking-tight flex items-center">
                   <span style={
-                    settings?.theme?.isGradient && settings.theme.gradientColors?.length >= 2 
-                      ? { backgroundImage: `linear-gradient(to right, ${settings.theme.gradientColors[0]}, ${settings.theme.gradientColors[1]})`, WebkitBackgroundClip: 'text', color: 'transparent' }
+                    settings?.theme?.isGradient && (settings?.theme?.gradientColors?.length ?? 0) >= 2 
+                      ? { backgroundImage: `linear-gradient(to right, ${settings?.theme?.gradientColors?.[0]}, ${settings?.theme?.gradientColors?.[1]})`, WebkitBackgroundClip: 'text', color: 'transparent' }
                       : { color: settings?.theme?.accentColor || '#4f46e5' }
                   }>ASyn</span>
                   <span 
                     className="text-5xl font-black italic -ml-0.5 font-serif drop-shadow-sm translate-y-1" 
                     style={{ 
-                      backgroundImage: settings?.theme?.isGradient && settings.theme.gradientColors?.length >= 2 
-                        ? `linear-gradient(to bottom right, ${settings.theme.gradientColors[1]}, ${settings.theme.gradientColors[0]})`
+                      backgroundImage: settings?.theme?.isGradient && (settings?.theme?.gradientColors?.length ?? 0) >= 2 
+                        ? `linear-gradient(to bottom right, ${settings?.theme?.gradientColors?.[1]}, ${settings?.theme?.gradientColors?.[0]})`
                         : 'linear-gradient(to bottom right, #f43f5e, #f97316)',
                       WebkitBackgroundClip: 'text',
                       color: 'transparent'
                     }}
                   >X</span>
                 </h1>
-                {settings.theme?.subheadingText && (
+                {settings?.theme?.subheadingText && (
                   <span className="text-sm text-gray-500 dark:text-gray-400 font-medium tracking-wide -mt-1">
-                    {settings.theme.subheadingText}
+                    {settings?.theme?.subheadingText}
                   </span>
                 )}
               </div>
@@ -106,7 +106,7 @@ const Navbar: React.FC<NavbarProps> = ({ isEditMode, onToggleEditMode, isCustomi
       </div>
 
       {/* Windows 11 Fluent Tab Bar */}
-      <div className="bg-transparent" style={settings.theme?.subheaderColor ? { backgroundColor: settings.theme.subheaderColor } : {}}>
+      <div className="bg-transparent" style={settings?.theme?.subheaderColor ? { backgroundColor: settings?.theme?.subheaderColor } : {}}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-0.5 flex items-center justify-between gap-4 overflow-x-auto scrollbar-none">
           
           {/* Active Tab Display (Left aligned) */}

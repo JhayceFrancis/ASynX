@@ -84,8 +84,8 @@ global.fetch = async (input, init) => {
     if (!isAllowed) {
        throw new Error("SSRF Prevention: Outbound request to unauthorized domain " + parsedUrl.hostname + " is blocked.");
     }
-  } catch (err) {
-    if (err.message.includes("SSRF Prevention")) throw err;
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.includes("SSRF Prevention")) throw err;
   }
   return originalFetch(input, init);
 };
@@ -109,7 +109,7 @@ import {
 export interface SystemLog {
   id: string;
   timestamp: string;
-  level: 'info' | 'warn' | 'error' | 'success';
+  level: 'info' | 'warn' | 'error' | 'success' | 'maintenance';
   message: string;
   category?: string;
 }
@@ -802,7 +802,7 @@ app.post("/api/settings", async (req, res) => {
   try {
     persistDb();
     res.status(200).json({ success: true, settings: appSettings });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("[Settings] Persistence Error:", err);
     res.status(500).json({ success: false, error: "Failed to persist configuration." });
   }
@@ -1389,7 +1389,7 @@ Return JSON in this format:
       ...parsed,
       matchedItem
     });
-  } catch (err) {
+  } catch (err: unknown) {
     res.json({
       parsedTitle: filename,
       season: 1,
@@ -2178,7 +2178,7 @@ async function runAutomatedBackup() {
             throw new Error(await res.text());
         }
     }
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("Backup failed", err);
   }
 }
@@ -2371,7 +2371,7 @@ setInterval(() => {
       const certificate = fs.readFileSync(sslCertPath, 'utf8');
       const credentials = { key: privateKey, cert: certificate };
       httpServerInstance = https.createServer(credentials, app);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("[ERROR] Failed to load SSL certificates. Falling back to HTTP.", err);
       httpServerInstance = http.createServer(app);
     }
@@ -2381,8 +2381,8 @@ setInterval(() => {
 
   const initialPort = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
   
-  const startListening = (port) => {
-    httpServerInstance.once('error', (err) => {
+  const startListening = (port: number) => {
+    httpServerInstance.once('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
         console.warn(`[WARNING] Port ${port} is in use. Falling back to OS-assigned port (0)...`);
         // Fallback to random port
@@ -2394,8 +2394,8 @@ setInterval(() => {
 
     httpServerInstance.once('listening', () => {
       const addr = httpServerInstance.address();
-      const actualPort = typeof addr === 'string' ? addr : addr.port;
-      activeServerPort = actualPort;
+      const actualPort = typeof addr === 'string' ? addr : addr?.port;
+      activeServerPort = actualPort as number;
       console.log(`[ELECTRON_PORT_BIND] Successfully bound to port: ${actualPort}`);
       console.log(`[ASynX] Server running on http://${HOST}:${actualPort}`);
       
@@ -2417,7 +2417,7 @@ setInterval(() => {
     }
   });
 
-  app.locals.io.on('connection', (socket) => {
+  app.locals.io.on('connection', (socket: import("socket.io").Socket) => {
     console.log('[SOCKET] Client connected:', socket.id);
     socket.on('disconnect', () => {
       console.log('[SOCKET] Client disconnected:', socket.id);

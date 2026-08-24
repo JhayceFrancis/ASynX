@@ -613,7 +613,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">KaraKeep Integration</h3>
             </div>
             <button type="button"
-              onClick={() => setFormState(prev => ({ ...prev, karakeep: { apiUrl: '', apiKey: '', webhookUrl: '', ...prev.karakeep, connected: !prev.karakeep?.connected } }))}
+              onClick={() => setFormState(prev => ({ ...prev, karakeep: { apiUrl: prev.karakeep?.apiUrl ?? '', apiKey: prev.karakeep?.apiKey ?? '', webhookUrl: prev.karakeep?.webhookUrl ?? '', connected: !(prev.karakeep?.connected ?? false) } }))}
               className={`w-10 h-5 rounded-full transition-colors relative ${formState.karakeep?.connected ? 'bg-pink-500' : 'bg-gray-200 dark:bg-gray-800'}`}
             >
               <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform ${formState.karakeep?.connected ? 'translate-x-5' : 'translate-x-0.5'}`} />
@@ -743,7 +743,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
                 <h4 className="font-semibold text-gray-800 dark:text-gray-200">Jellyfin</h4>
                 <button type="button"
-                  onClick={() => setFormState(prev => ({ ...prev, jellyfin: { serverUrl: '', apiKey: '', serverName: '', webhookUrl: '', autoScrobbleThreshold: 85, ...prev.jellyfin, connected: !prev.jellyfin?.connected } }))}
+                  onClick={() => setFormState(prev => ({ ...prev, jellyfin: { serverUrl: prev.jellyfin?.serverUrl ?? '', apiKey: prev.jellyfin?.apiKey ?? '', serverName: prev.jellyfin?.serverName ?? '', webhookUrl: prev.jellyfin?.webhookUrl ?? '', autoScrobbleThreshold: prev.jellyfin?.autoScrobbleThreshold ?? 85, connected: !(prev.jellyfin?.connected ?? false) } }))}
                   className={`w-8 h-4 rounded-full transition-colors relative ${formState.jellyfin?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
                 >
                   <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.jellyfin?.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
@@ -797,7 +797,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
                 <h4 className="font-semibold text-gray-800 dark:text-gray-200">Emby</h4>
                 <button type="button"
-                  onClick={() => setFormState(prev => ({ ...prev, emby: { serverUrl: '', apiKey: '', serverName: '', webhookUrl: '', autoScrobbleThreshold: 85, ...prev.emby, connected: !prev.emby?.connected } }))}
+                  onClick={() => setFormState(prev => ({ ...prev, emby: { serverUrl: prev.emby?.serverUrl ?? '', apiKey: prev.emby?.apiKey ?? '', serverName: prev.emby?.serverName ?? '', webhookUrl: prev.emby?.webhookUrl ?? '', autoScrobbleThreshold: prev.emby?.autoScrobbleThreshold ?? 85, connected: !(prev.emby?.connected ?? false) } }))}
                   className={`w-8 h-4 rounded-full transition-colors relative ${formState.emby?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
                 >
                   <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.emby?.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
@@ -866,7 +866,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   const res = await fetch('/api/remote-sync/push', { method: 'POST' });
                   const data = await res.json();
                   if (data.success) {
-                    setFormState(prev => ({ ...prev, remoteSync: { ...prev.remoteSync, lastSync: data.timestamp } }));
+                    setFormState(prev => ({ ...prev, remoteSync: { enabled: prev.remoteSync?.enabled ?? false, serverUrl: prev.remoteSync?.serverUrl ?? '', apiKey: prev.remoteSync?.apiKey ?? '', lastSync: data.timestamp } }));
                     alert('Successfully pushed to remote server.');
                   } else {
                     alert(data.error || 'Failed to push');
@@ -906,7 +906,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <label className="text-gray-600 dark:text-gray-400 font-medium text-xs">Enable Remote Sync</label>
             <div className="mt-2 flex items-center space-x-3">
               <button type="button"
-                onClick={() => setFormState(prev => ({ ...prev, remoteSync: { ...prev.remoteSync, enabled: !prev.remoteSync.enabled } }))}
+                onClick={() => setFormState(prev => ({ ...prev, remoteSync: { 
+                  enabled: !(prev.remoteSync?.enabled ?? false),
+                  serverUrl: prev.remoteSync?.serverUrl ?? '',
+                  apiKey: prev.remoteSync?.apiKey ?? '',
+                  lastSync: prev.remoteSync?.lastSync
+                } }))}
                 className={`w-12 h-6 rounded-full transition-colors relative ${formState.remoteSync?.enabled ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
               >
                 <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${formState.remoteSync?.enabled ? 'translate-x-7' : 'translate-x-1'}`} />
@@ -936,10 +941,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <input
               type="text"
               value={formState.remoteSync?.serverUrl || ''}
-              onChange={(e) => setFormState({
-                ...formState,
-                remoteSync: { ...formState.remoteSync, serverUrl: e.target.value }
-              })}
+              onChange={(e) => setFormState(prev => ({
+                ...prev,
+                remoteSync: { 
+                  enabled: prev.remoteSync?.enabled ?? false,
+                  apiKey: prev.remoteSync?.apiKey ?? '',
+                  lastSync: prev.remoteSync?.lastSync,
+                  serverUrl: e.target.value 
+                }
+              }))}
               className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -949,10 +959,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <input
               type="text"
               value={formState.remoteSync?.apiKey || ''}
-              onChange={(e) => setFormState({
-                ...formState,
-                remoteSync: { ...formState.remoteSync, apiKey: e.target.value }
-              })}
+              onChange={(e) => setFormState(prev => ({
+                ...prev,
+                remoteSync: { 
+                  enabled: prev.remoteSync?.enabled ?? false,
+                  serverUrl: prev.remoteSync?.serverUrl ?? '',
+                  lastSync: prev.remoteSync?.lastSync,
+                  apiKey: e.target.value 
+                }
+              }))}
               className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -1003,7 +1018,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span className="text-xs text-gray-500 dark:text-gray-400">Launch ASynX as a background daemon when you log into Windows.</span>
             </div>
             <button type="button"
-              onClick={() => setFormState(prev => ({ ...prev, daemonSettings: { ...prev.daemonSettings, runOnStartup: !prev.daemonSettings?.runOnStartup } }))}
+              onClick={() => setFormState(prev => ({ ...prev, daemonSettings: { 
+                runOnStartup: !(prev.daemonSettings?.runOnStartup ?? false),
+                enableLocalMediaDetection: prev.daemonSettings?.enableLocalMediaDetection ?? false,
+                autoScrobbleLocal: prev.daemonSettings?.autoScrobbleLocal ?? false
+              } }))}
               className={`w-12 h-6 rounded-full transition-colors relative ${formState.daemonSettings?.runOnStartup ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
             >
               <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${formState.daemonSettings?.runOnStartup ? 'translate-x-7' : 'translate-x-1'}`} />
@@ -1016,7 +1035,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span className="text-xs text-gray-500 dark:text-gray-400">Enable tracking of web-based streaming (Netflix, Crunchyroll, Hi-Dive, Plex, Stremio) and native Windows apps (MPC-BE, VLC, Plex Desktop, Netflix Desktop, Stremio Desktop).</span>
             </div>
             <button type="button"
-              onClick={() => setFormState(prev => ({ ...prev, daemonSettings: { ...prev.daemonSettings, enableLocalMediaDetection: !prev.daemonSettings?.enableLocalMediaDetection } }))}
+              onClick={() => setFormState(prev => ({ ...prev, daemonSettings: { 
+                runOnStartup: prev.daemonSettings?.runOnStartup ?? false,
+                enableLocalMediaDetection: !(prev.daemonSettings?.enableLocalMediaDetection ?? false),
+                autoScrobbleLocal: prev.daemonSettings?.autoScrobbleLocal ?? false
+              } }))}
               className={`w-12 h-6 rounded-full transition-colors relative ${formState.daemonSettings?.enableLocalMediaDetection ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
             >
               <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${formState.daemonSettings?.enableLocalMediaDetection ? 'translate-x-7' : 'translate-x-1'}`} />
@@ -1029,7 +1052,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span className="text-xs text-gray-500 dark:text-gray-400">If enabled, detected media will be scrobbled automatically without asking for confirmation.</span>
             </div>
             <button type="button"
-              onClick={() => setFormState(prev => ({ ...prev, daemonSettings: { ...prev.daemonSettings, autoScrobbleLocal: !prev.daemonSettings?.autoScrobbleLocal } }))}
+              onClick={() => setFormState(prev => ({ ...prev, daemonSettings: { 
+                runOnStartup: prev.daemonSettings?.runOnStartup ?? false,
+                enableLocalMediaDetection: prev.daemonSettings?.enableLocalMediaDetection ?? false,
+                autoScrobbleLocal: !(prev.daemonSettings?.autoScrobbleLocal ?? false)
+              } }))}
               className={`w-12 h-6 rounded-full transition-colors relative ${formState.daemonSettings?.autoScrobbleLocal ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
             >
               <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${formState.daemonSettings?.autoScrobbleLocal ? 'translate-x-7' : 'translate-x-1'}`} />

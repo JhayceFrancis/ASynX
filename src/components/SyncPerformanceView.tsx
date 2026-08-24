@@ -158,7 +158,7 @@ export const SyncPerformanceView: React.FC<{ isEditMode?: boolean }> = ({ isEdit
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '12px', color: '#fff' }}
                   itemStyle={{ color: '#e5e5e5' }}
-                  formatter={(value: number) => [`${value}ms`, 'Latency']}
+                  formatter={(value: any) => [`${value}ms`, 'Latency']}
                 />
                 <Line type="monotone" dataKey="avgLatencyMs" name="Avg Latency" stroke="#a855f7" strokeWidth={3} dot={{ r: 4, fill: '#a855f7', strokeWidth: 0 }} activeDot={{ r: 6 }} />
               </LineChart>
