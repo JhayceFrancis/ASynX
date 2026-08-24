@@ -4,8 +4,39 @@ import https from "https";
 import fs from "fs";
 import path from "path";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 
 import { URL } from 'url';
+
+// CodeQL SSRF Mitigation Helpers
+function createSafeUrl(urlString: string, allowedHostnames?: string[]): URL {
+  try {
+    const parsedUrl = new URL(urlString);
+    if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+      throw new Error(`Unsupported protocol: ${parsedUrl.protocol}`);
+    }
+    if (allowedHostnames && allowedHostnames.length > 0) {
+       if (!allowedHostnames.includes(parsedUrl.hostname)) {
+          throw new Error(`Hostname ${parsedUrl.hostname} is not allowed`);
+       }
+    }
+    if (parsedUrl.pathname.includes('..') || decodeURIComponent(parsedUrl.pathname).includes('..')) {
+      throw new Error('Path traversal detected in URL.');
+    }
+    return parsedUrl;
+  } catch (error: any) {
+    throw new Error(`Invalid URL: ${error.message}`);
+  }
+}
+
+function sanitizeIdParam(id: string | undefined): string {
+  if (!id) return '';
+  if (id.includes("..") || id.includes("?") || id.includes("#") || id.includes("\n") || id.includes("\r")) {
+    throw new Error('Invalid path parameter format.');
+  }
+  return id;
+}
+
 const originalFetch = global.fetch;
 global.fetch = async (input, init) => {
   const urlStr = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : input.url);
@@ -62,7 +93,7 @@ global.fetch = async (input, init) => {
 import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import { Server as SocketIOServer } from "socket.io";
-import { loadDb, saveDb } from "./db.js";
+import { loadDb, saveDb, setDbLogger } from "./db.js";
 import { 
   LibraryItem, 
   SyncLog, 
@@ -73,11 +104,64 @@ import {
   WatchStatus
 } from "./src/types";
 
+
+// System Logger Implementation
+export interface SystemLog {
+  id: string;
+  timestamp: string;
+  level: 'info' | 'warn' | 'error' | 'success';
+  message: string;
+  category?: string;
+}
+
+const systemLogs: SystemLog[] = [];
+export const SystemLogger = {
+  log: (level: 'info' | 'warn' | 'error' | 'success' | 'maintenance', category: string, message: string) => {
+    const logEntry: SystemLog = {
+      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      category
+    };
+    systemLogs.push(logEntry);
+    if (systemLogs.length > 200) systemLogs.shift();
+    if (app.locals.io) {
+      app.locals.io.emit('system_log', logEntry);
+    }
+    // Also log to terminal
+    if (level === 'error') console.error(`[${category}] ${message}`);
+    else if (level === 'warn') console.warn(`[${category}] ${message}`);
+    else if (level === 'maintenance') console.log(`[${category}] [MAINTENANCE] ${message}`);
+    else console.log(`[${category}] ${message}`);
+  },
+  info: (cat: string, msg: string) => SystemLogger.log('info', cat, msg),
+  warn: (cat: string, msg: string) => SystemLogger.log('warn', cat, msg),
+  error: (cat: string, msg: string) => SystemLogger.log('error', cat, msg),
+  success: (cat: string, msg: string) => SystemLogger.log('success', cat, msg),
+  maintenance: (cat: string, msg: string) => SystemLogger.log('maintenance', cat, msg)
+};
+
+setDbLogger(SystemLogger);
+
+
+
 // Initialize Express App
-const app = express();
+export const app = express();
 app.set('trust proxy', 1);
+
+
+// Server Status Route
+export let activeServerPort: number | string = process.env.PORT || 4000;
+app.get('/api/status', (req, res) => {
+  res.json({ status: 'running', port: activeServerPort });
+});
+
+// API Route for Logs
+app.get('/api/system-logs', (req, res) => {
+  res.json({ logs: systemLogs });
+});
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-const PORT = 3000;
 
 // Security & Cors Middleware
 app.use((req, res, next) => {
@@ -91,6 +175,20 @@ app.use((req, res, next) => {
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Rate Limiting Middlewares
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 auth requests per windowMs
+  message: { error: 'Too many authentication requests from this IP, please try again after 15 minutes.' }
+});
+
+const proxyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300, // Limit each IP to 300 API requests per windowMs
+  message: { error: 'Too many API requests from this IP, please try again after 15 minutes.' }
+});
+
 
 // Initial Settings Default
 const defaultSettings: AppSettings = {
@@ -204,7 +302,7 @@ let dbState = loadDb({
   }
 });
 
-let appSettings: AppSettings = {
+export let appSettings: AppSettings = {
   ...defaultSettings,
   ...dbState.appSettings,
   theme: dbState.appSettings?.theme || defaultSettings.theme,
@@ -264,19 +362,19 @@ function persistDb() {
 // --- OAUTH 2.0 IMPLEMENTATION ---
 const pkceStore = new Map<string, string>(); // state -> code_verifier
 
-app.get("/api/auth/:provider/login", (req, res) => {
+app.get("/api/auth/:provider/login", authLimiter, (req, res) => {
   const provider = req.params.provider;
   const baseUrl = process.env.APP_URL || `http://${req.headers.host}`;
   const redirectUri = `${baseUrl}/api/auth/${provider}/callback`;
 
   if (provider === 'simkl') {
     const clientId = process.env.SIMKL_CLIENT_ID;
-    if (!clientId) return res.status(500).send('SIMKL_CLIENT_ID not configured');
+    if (!clientId) return res.status(500).type('text/plain').send('SIMKL_CLIENT_ID not configured');
     const url = `https://simkl.com/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
     res.redirect(url);
   } else if (provider === 'mal') {
     const clientId = process.env.MAL_CLIENT_ID;
-    if (!clientId) return res.status(500).send('MAL_CLIENT_ID not configured');
+    if (!clientId) return res.status(500).type('text/plain').send('MAL_CLIENT_ID not configured');
     
     // MAL requires PKCE
     const code_verifier = crypto.randomBytes(32).toString('base64url');
@@ -287,22 +385,22 @@ app.get("/api/auth/:provider/login", (req, res) => {
     res.redirect(url);
   } else if (provider === 'anilist') {
     const clientId = process.env.ANILIST_CLIENT_ID;
-    if (!clientId) return res.status(500).send('ANILIST_CLIENT_ID not configured');
+    if (!clientId) return res.status(500).type('text/plain').send('ANILIST_CLIENT_ID not configured');
     const url = `https://anilist.co/api/v2/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;
     res.redirect(url);
   } else {
-    res.status(404).send('Unknown provider');
+    res.status(404).type('text/plain').send('Unknown provider');
   }
 });
 
-app.get("/api/auth/:provider/callback", async (req, res) => {
+app.get("/api/auth/:provider/callback", authLimiter, async (req, res) => {
   const provider = req.params.provider;
   const { code, state, error } = req.query;
   const baseUrl = process.env.APP_URL || `http://${req.headers.host}`;
   const redirectUri = `${baseUrl}/api/auth/${provider}/callback`;
 
   if (error) {
-    return res.status(400).send(`Auth error: ${error}`);
+    return res.status(400).type('text/plain').send(`Auth error: ${error}`);
   }
 
   try {
@@ -312,7 +410,7 @@ app.get("/api/auth/:provider/callback", async (req, res) => {
       const clientId = process.env.SIMKL_CLIENT_ID;
       const clientSecret = process.env.SIMKL_CLIENT_SECRET;
       
-      const tokenRes = await fetch('https://api.simkl.com/oauth/token', {
+      const tokenRes = await fetch(createSafeUrl('https://api.simkl.com/oauth/token', ['api.simkl.com']), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -344,7 +442,7 @@ app.get("/api/auth/:provider/callback", async (req, res) => {
       params.append('grant_type', 'authorization_code');
       params.append('redirect_uri', redirectUri);
 
-      const tokenRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
+      const tokenRes = await fetch(createSafeUrl('https://myanimelist.net/v1/oauth2/token', ['myanimelist.net']), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: params
@@ -364,7 +462,7 @@ app.get("/api/auth/:provider/callback", async (req, res) => {
       const clientId = process.env.ANILIST_CLIENT_ID;
       const clientSecret = process.env.ANILIST_CLIENT_SECRET;
       
-      const tokenRes = await fetch('https://anilist.co/api/v2/oauth/token', {
+      const tokenRes = await fetch(createSafeUrl('https://anilist.co/api/v2/oauth/token', ['anilist.co']), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -394,8 +492,8 @@ app.get("/api/auth/:provider/callback", async (req, res) => {
         <html>
           <body>
             <script>
-              const provider = ${JSON.stringify(req.params.provider || 'unknown')};
-              const token = ${JSON.stringify(accessToken)};
+              const provider = ${JSON.stringify(req.params.provider || 'unknown').replace(/</g, '\\u003c')};
+              const token = ${JSON.stringify(accessToken).replace(/</g, '\\u003c')};
               if (window.opener) {
                 window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: provider, token: token }, '*');
                 window.close();
@@ -408,11 +506,11 @@ app.get("/api/auth/:provider/callback", async (req, res) => {
         </html>
       `);
     } else {
-      res.status(500).send('Failed to obtain access token.');
+      res.status(500).type('text/plain').send('Failed to obtain access token.');
     }
   } catch (err: any) {
     console.error('OAuth Callback Error:', err);
-    res.status(500).send(`Error exchanging token: ${err.message}`);
+    res.status(500).type('text/plain').send(`Error exchanging token: ${err.message}`);
   }
 });
 
@@ -578,18 +676,86 @@ app.post("/api/settings", async (req, res) => {
          incomingSettings.simkl.accessToken !== oldSettings.simkl?.accessToken ||
          !oldSettings.simkl?.connected) {
          try {
-            const simklRes = await fetch('https://api.simkl.com/users/settings', {
+            SystemLogger.info('Handshake', 'Validating Simkl API credentials...');
+            const simklRes = await fetch(createSafeUrl('https://api.simkl.com/users/settings', ['api.simkl.com']), {
                 headers: {
                     'Authorization': `Bearer ${incomingSettings.simkl.accessToken}`,
                     'simkl-api-client-id': incomingSettings.simkl.clientId
                 }
             });
             if (!simklRes.ok) {
+               SystemLogger.error('Handshake', 'Simkl credentials rejected (401 Unauthorized).');
                return res.status(401).json({ success: false, error: "Invalid Simkl API credentials. Please verify your Client ID and Access Token." });
             }
             incomingSettings.simkl.connected = true;
+            SystemLogger.success('Handshake', 'Simkl credentials validated successfully.');
          } catch (e) {
             return res.status(500).json({ success: false, error: "Failed to connect to Simkl API." });
+         }
+     }
+  }
+
+  // Validate MyAnimeList Credentials
+  if (incomingSettings?.mal?.accessToken) {
+     if (incomingSettings.mal.accessToken !== oldSettings.mal?.accessToken || !oldSettings.mal?.connected) {
+         try {
+            SystemLogger.info('Handshake', 'Validating MyAnimeList API credentials...');
+            const malRes = await fetch(createSafeUrl('https://api.myanimelist.net/v2/users/@me', ['api.myanimelist.net']), {
+                headers: {
+                    'Authorization': `Bearer ${incomingSettings.mal.accessToken}`
+                }
+            });
+            if (!malRes.ok) {
+               SystemLogger.error('Handshake', 'MyAnimeList credentials rejected (401 Unauthorized).');
+               return res.status(401).json({ success: false, error: "Invalid MyAnimeList API credentials. Please verify your Access Token." });
+            }
+            const malData = await malRes.json();
+            if (malData.name) {
+                incomingSettings.mal.username = malData.name;
+            }
+            incomingSettings.mal.connected = true;
+            SystemLogger.success('Handshake', 'MyAnimeList credentials validated successfully.');
+         } catch (e) {
+            return res.status(500).json({ success: false, error: "Failed to connect to MyAnimeList API." });
+         }
+     }
+  }
+
+  // Validate AniList Credentials
+  if (incomingSettings?.anilist?.accessToken) {
+     if (incomingSettings.anilist.accessToken !== oldSettings.anilist?.accessToken || !oldSettings.anilist?.connected) {
+         try {
+            SystemLogger.info('Handshake', 'Validating AniList API credentials...');
+            const anilistRes = await fetch(createSafeUrl('https://graphql.anilist.co', ['graphql.anilist.co']), {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${incomingSettings.anilist.accessToken}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    query: `
+                        query {
+                            Viewer {
+                                id
+                                name
+                            }
+                        }
+                    `
+                })
+            });
+            if (!anilistRes.ok) {
+               SystemLogger.error('Handshake', 'AniList credentials rejected (401 Unauthorized).');
+               return res.status(401).json({ success: false, error: "Invalid AniList API credentials. Please verify your Access Token." });
+            }
+            const anilistData = await anilistRes.json();
+            if (anilistData.data && anilistData.data.Viewer) {
+                incomingSettings.anilist.username = anilistData.data.Viewer.name;
+            }
+            incomingSettings.anilist.connected = true;
+            SystemLogger.success('Handshake', 'AniList credentials validated successfully.');
+         } catch (e) {
+            return res.status(500).json({ success: false, error: "Failed to connect to AniList API." });
          }
      }
   }
@@ -633,8 +799,13 @@ app.post("/api/settings", async (req, res) => {
     });
   }
 
-  persistDb();
-  res.json({ success: true, settings: appSettings });
+  try {
+    persistDb();
+    res.status(200).json({ success: true, settings: appSettings });
+  } catch (err) {
+    console.error("[Settings] Persistence Error:", err);
+    res.status(500).json({ success: false, error: "Failed to persist configuration." });
+  }
 });
 
 // Get Sync Metrics & Status
@@ -785,6 +956,7 @@ app.post("/api/sync/override", (req, res) => {
   const now = new Date().toISOString();
 
   applyToPlatforms.forEach(p => {
+    if ((p as string) === "__proto__" || (p as string) === "constructor" || (p as string) === "prototype") return;
     if (item.platforms[p]) {
       item.platforms[p]!.episode = targetEpisode;
       item.platforms[p]!.status = targetStatus;
@@ -1328,6 +1500,12 @@ app.post("/api/webhooks/plex", (req, res) => {
 
 app.post("/api/webhooks/karakeep", (req, res) => {
   console.log("[KaraKeep Webhook] Received payload:", req.body);
+  
+  // Validate Authentication Key if configured
+  if (appSettings.karakeep?.apiKey && req.query.authKey !== appSettings.karakeep.apiKey) {
+    console.warn("[KaraKeep Webhook] Unauthorized attempt. Invalid or missing authKey.");
+    return res.status(401).json({ success: false, error: "Unauthorized. Invalid authKey parameter." });
+  }
   const event = req.body.event || 'watched';
   const showName = req.body.anime_title || req.body.title || "Unknown Anime";
   const season = req.body.season || 1;
@@ -1874,7 +2052,7 @@ async function runAutomatedBackup() {
   
   try {
     if (provider === 'github_gist') {
-      const res = await fetch(`https://api.github.com/gists${targetId ? '/' + targetId : ''}`, {
+      const res = await fetch(createSafeUrl(`https://api.github.com/gists${targetId ? '/' + sanitizeIdParam(targetId) : ''}`, ['api.github.com']), {
         method: targetId ? 'PATCH' : 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1906,7 +2084,7 @@ async function runAutomatedBackup() {
       if (!owner || !repo) throw new Error("Invalid GitHub Repo format. Use owner/repo/path");
 
       let sha = undefined;
-      const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+      const getRes = await fetch(createSafeUrl(`https://api.github.com/repos/${sanitizeIdParam(owner)}/${sanitizeIdParam(repo)}/contents/${sanitizeIdParam(path)}`, ['api.github.com']), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/vnd.github.v3+json'
@@ -1917,7 +2095,7 @@ async function runAutomatedBackup() {
         sha = getData.sha;
       }
       
-      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+      const res = await fetch(createSafeUrl(`https://api.github.com/repos/${sanitizeIdParam(owner)}/${sanitizeIdParam(repo)}/contents/${sanitizeIdParam(path)}`, ['api.github.com']), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1946,7 +2124,7 @@ async function runAutomatedBackup() {
       let method = 'POST';
       
       if (targetId) {
-          url = `https://www.googleapis.com/upload/drive/v3/files/${targetId}?uploadType=multipart`;
+          url = `https://www.googleapis.com/upload/drive/v3/files/${sanitizeIdParam(targetId)}?uploadType=multipart`;
           method = 'PATCH';
       }
       
@@ -1963,7 +2141,7 @@ async function runAutomatedBackup() {
         payload +
         close_delim;
       
-      const res = await fetch(url, {
+      const res = await fetch(createSafeUrl(url, ['www.googleapis.com']), {
         method,
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1981,9 +2159,9 @@ async function runAutomatedBackup() {
          throw new Error(await res.text());
       }
     } else if (provider === 'onedrive') {
-        const putUrl = targetId ? `https://graph.microsoft.com/v1.0/me/drive/items/${targetId}/content` : `https://graph.microsoft.com/v1.0/me/drive/root:/${filename}:/content`;
+        const putUrl = targetId ? `https://graph.microsoft.com/v1.0/me/drive/items/${sanitizeIdParam(targetId)}/content` : `https://graph.microsoft.com/v1.0/me/drive/root:/${filename}:/content`;
         
-        const res = await fetch(putUrl, {
+        const res = await fetch(createSafeUrl(putUrl, ['graph.microsoft.com']), {
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -2026,7 +2204,7 @@ app.post("/api/backups/restore", async (req, res) => {
     let payloadStr = "";
     if (provider === 'github_gist') {
       if (!targetId) throw new Error("Gist ID required for restore");
-      const r = await fetch(`https://api.github.com/gists/${targetId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const r = await fetch(createSafeUrl(`https://api.github.com/gists/${sanitizeIdParam(targetId)}`, ['api.github.com']), { headers: { 'Authorization': `Bearer ${token}` } });
       if (!r.ok) throw new Error("Failed to fetch from github_gist");
       const data = await r.json();
       payloadStr = data.files[filename] ? data.files[filename].content : data.files['asynx_backup.json']?.content;
@@ -2036,17 +2214,17 @@ app.post("/api/backups/restore", async (req, res) => {
       const repo = parts[1];
       const path = parts.slice(2).length ? parts.slice(2).join('/') : filename;
       if (!owner || !repo) throw new Error("Invalid GitHub Repo format.");
-      const r = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3.raw' } });
+      const r = await fetch(createSafeUrl(`https://api.github.com/repos/${sanitizeIdParam(owner)}/${sanitizeIdParam(repo)}/contents/${sanitizeIdParam(path)}`, ['api.github.com']), { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3.raw' } });
       if (!r.ok) throw new Error("Failed to fetch from github_repo");
       payloadStr = await r.text();
     } else if (provider === 'gdrive') {
        if (!targetId) throw new Error("File ID required for restore");
-       const r = await fetch(`https://www.googleapis.com/drive/v3/files/${targetId}?alt=media`, { headers: { 'Authorization': `Bearer ${token}` } });
+       const r = await fetch(createSafeUrl(`https://www.googleapis.com/drive/v3/files/${sanitizeIdParam(targetId)}?alt=media`, ['www.googleapis.com']), { headers: { 'Authorization': `Bearer ${token}` } });
        if (!r.ok) throw new Error("Failed to fetch from gdrive");
        payloadStr = await r.text();
     } else if (provider === 'onedrive') {
-       const fetchUrl = targetId ? `https://graph.microsoft.com/v1.0/me/drive/items/${targetId}/content` : `https://graph.microsoft.com/v1.0/me/drive/root:/${filename}:/content`;
-       const r = await fetch(fetchUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+       const fetchUrl = targetId ? `https://graph.microsoft.com/v1.0/me/drive/items/${sanitizeIdParam(targetId)}/content` : `https://graph.microsoft.com/v1.0/me/drive/root:/${filename}:/content`;
+       const r = await fetch(createSafeUrl(fetchUrl, ['graph.microsoft.com']), { headers: { 'Authorization': `Bearer ${token}` } });
        if (!r.ok) throw new Error("Failed to fetch from onedrive");
        payloadStr = await r.text();
     }
@@ -2185,7 +2363,6 @@ setInterval(() => {
   
   const sslKeyPath = process.env.SSL_KEY_PATH;
   const sslCertPath = process.env.SSL_CERT_PATH;
-
   let httpServerInstance;
 
   if (sslKeyPath && sslCertPath) {
@@ -2194,22 +2371,44 @@ setInterval(() => {
       const certificate = fs.readFileSync(sslCertPath, 'utf8');
       const credentials = { key: privateKey, cert: certificate };
       httpServerInstance = https.createServer(credentials, app);
-      httpServerInstance.listen(PORT, HOST, () => {
-        console.log(`[SECURE] ASynX Server running with TLS/HTTPS on https://${HOST}:${PORT}`);
-      });
     } catch (err) {
       console.error("[ERROR] Failed to load SSL certificates. Falling back to HTTP.", err);
       httpServerInstance = http.createServer(app);
-      httpServerInstance.listen(PORT, HOST, () => {
-        console.log(`[WARNING] ASynX Server running on http://${HOST}:${PORT} (TLS FAILED)`);
-      });
     }
   } else {
     httpServerInstance = http.createServer(app);
-    httpServerInstance.listen(PORT, HOST, () => {
-      console.log(`[INSECURE] ASynX Server running on http://${HOST}:${PORT} (No TLS configured)`);
-    });
   }
+
+  const initialPort = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
+  
+  const startListening = (port) => {
+    httpServerInstance.once('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.warn(`[WARNING] Port ${port} is in use. Falling back to OS-assigned port (0)...`);
+        // Fallback to random port
+        startListening(0);
+      } else {
+        console.error("[ERROR] Server failed to start:", err);
+      }
+    });
+
+    httpServerInstance.once('listening', () => {
+      const addr = httpServerInstance.address();
+      const actualPort = typeof addr === 'string' ? addr : addr.port;
+      activeServerPort = actualPort;
+      console.log(`[ELECTRON_PORT_BIND] Successfully bound to port: ${actualPort}`);
+      console.log(`[ASynX] Server running on http://${HOST}:${actualPort}`);
+      
+      // Communicate to Electron main process if it exists
+      if (process.send) {
+        process.send({ type: 'server-started', port: actualPort });
+      }
+    });
+
+    httpServerInstance.listen(port, HOST);
+  };
+
+  startListening(initialPort);
 
   app.locals.io = new SocketIOServer(httpServerInstance, {
     cors: {
@@ -2278,7 +2477,7 @@ app.post("/api/library/import", (req, res) => {
 });
 
 // Remote Sync Endpoints
-app.post("/api/remote-sync/push", async (req, res) => {
+app.post("/api/remote-sync/push", proxyLimiter, async (req, res) => {
   // Push local DB to remote
   if (!appSettings.remoteSync?.enabled || !appSettings.remoteSync.serverUrl) {
     return res.status(400).json({ error: "Remote sync is not configured or enabled." });
@@ -2296,7 +2495,7 @@ app.post("/api/remote-sync/push", async (req, res) => {
       }
     };
 
-    const response = await fetch(`${appSettings.remoteSync.serverUrl}/api/remote-sync/receive`, {
+    const response = await fetch(createSafeUrl(`${appSettings.remoteSync.serverUrl}/api/remote-sync/receive`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -2311,17 +2510,17 @@ app.post("/api/remote-sync/push", async (req, res) => {
       return res.status(response.status).json({ error: "Failed to push to remote server." });
     }
   } catch (error: any) {
-    return res.status(500).json({ error: error.message });
+    if (error.message && (error.message.includes("Invalid URL") || error.message.includes("Unsupported protocol") || error.message.includes("Hostname"))) return res.status(400).json({ error: error.message }); return res.status(500).json({ error: error.message });
   }
 });
 
-app.post("/api/remote-sync/pull", async (req, res) => {
+app.post("/api/remote-sync/pull", proxyLimiter, async (req, res) => {
   if (!appSettings.remoteSync?.enabled || !appSettings.remoteSync.serverUrl) {
     return res.status(400).json({ error: "Remote sync is not configured or enabled." });
   }
 
   try {
-    const response = await fetch(`${appSettings.remoteSync.serverUrl}/api/remote-sync/export`, {
+    const response = await fetch(createSafeUrl(`${appSettings.remoteSync.serverUrl}/api/remote-sync/export`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ apiKey: appSettings.remoteSync.apiKey })
@@ -2344,12 +2543,12 @@ app.post("/api/remote-sync/pull", async (req, res) => {
     }
     return res.status(response.status).json({ error: "Failed to pull from remote server." });
   } catch (error: any) {
-    return res.status(500).json({ error: error.message });
+    if (error.message && (error.message.includes("Invalid URL") || error.message.includes("Unsupported protocol") || error.message.includes("Hostname"))) return res.status(400).json({ error: error.message }); return res.status(500).json({ error: error.message });
   }
 });
 
 // Remote Server Receiver Endpoints (When running in Docker as the remote backend)
-app.post("/api/remote-sync/receive", (req, res) => {
+app.post("/api/remote-sync/receive", proxyLimiter, (req, res) => {
   const { apiKey, data } = req.body;
   if (!appSettings.remoteSync || apiKey !== appSettings.remoteSync.apiKey) {
     return res.status(401).json({ error: "Unauthorized. Invalid remote API Key." });
@@ -2367,7 +2566,7 @@ app.post("/api/remote-sync/receive", (req, res) => {
   return res.status(400).json({ error: "Invalid payload." });
 });
 
-app.post("/api/remote-sync/export", (req, res) => {
+app.post("/api/remote-sync/export", proxyLimiter, (req, res) => {
   const { apiKey } = req.body;
   if (!appSettings.remoteSync || apiKey !== appSettings.remoteSync.apiKey) {
     return res.status(401).json({ error: "Unauthorized. Invalid remote API Key." });
@@ -2381,7 +2580,7 @@ app.post("/api/remote-sync/export", (req, res) => {
     extensionState
   });
 });
-app.post("/api/remote-sync/info", (req, res) => {
+app.post("/api/remote-sync/info", proxyLimiter, (req, res) => {
   const { apiKey } = req.body;
   if (!appSettings.remoteSync || apiKey !== appSettings.remoteSync.apiKey) {
     return res.status(401).json({ error: "Unauthorized. Invalid remote API Key." });

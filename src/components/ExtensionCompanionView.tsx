@@ -15,6 +15,7 @@ import {
   Globe,
   Monitor
 } from 'lucide-react';
+import { ASynXLogo } from './ASynXLogo';
 
 interface ExtensionCompanionViewProps {
   state: BrowserExtensionState;
@@ -82,8 +83,8 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
       <div className="bg-gradient-to-r from-cyan-950/60 via-slate-900 to-indigo-950/60 border border-cyan-500/30 rounded-3xl p-6 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
-            <span className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-              <Compass className="w-5 h-5" />
+            <span className="p-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              <ASynXLogo size={24} className="text-cyan-300" />
             </span>
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">AniSync Matrix Browser Plugin Companion</h2>
           </div>

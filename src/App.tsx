@@ -12,6 +12,7 @@ import {
 } from './types';
 import { Win11TitleBar } from './components/Win11TitleBar';
 import { Win11StatusBar } from './components/Win11StatusBar';
+import { SystemLogOverlay, SystemLog } from './components/SystemLogOverlay';
 import { Navbar } from './components/Navbar';
 import { ASynXLoader } from './components/ASynXLoader';
 import { QuickCustomizePanel } from './components/QuickCustomizePanel';
@@ -86,6 +87,8 @@ export default function App() {
   });
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSystemLogOpen, setIsSystemLogOpen] = useState(false);
+  const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
 
   // IPC Bridge for Windows App Wrapper
   useEffect(() => {
@@ -187,11 +190,12 @@ export default function App() {
   // Fetch state from express server
   const fetchData = async () => {
     try {
-      const [itemsData, logsData, webhooksData, settingsData] = await Promise.all([
+      const [itemsData, logsData, webhooksData, settingsData, systemLogsData] = await Promise.all([
         safeFetchJson('/api/library'),
         safeFetchJson('/api/sync/logs'),
         safeFetchJson('/api/webhooks/logs'),
-        safeFetchJson('/api/settings')
+        safeFetchJson('/api/settings'),
+        safeFetchJson('/api/system-logs')
       ]);
 
       // --- Validation Layer ---
@@ -206,6 +210,7 @@ export default function App() {
 
       if (isValidArray(itemsData)) setItems(itemsData);
       if (isValidArray(logsData)) setSyncLogs(logsData);
+      if (systemLogsData && systemLogsData.logs) setSystemLogs(systemLogsData.logs);
       
       const parsedWebhooks = Array.isArray(webhooksData) ? webhooksData : (webhooksData?.webhookLogs || []);
       if (isValidArray(parsedWebhooks)) {
@@ -258,6 +263,14 @@ export default function App() {
 
     socket.on('connect', () => {
       console.log('Connected to real-time WebSocket');
+    });
+    
+    socket.on('system_log', (log: SystemLog) => {
+      setSystemLogs(prev => {
+        const newLogs = [...prev, log];
+        if (newLogs.length > 200) return newLogs.slice(newLogs.length - 200);
+        return newLogs;
+      });
     });
 
     socket.on('state_change', (data) => {
@@ -377,7 +390,8 @@ export default function App() {
         body: JSON.stringify(newSettings)
       });
       if (res.ok) {
-        const settingsData = await res.json();
+        const result = await res.json();
+        const settingsData = result.settings || result; // Because res.json() returns { success: true, settings: ... } in POST /api/settings
         setSettings(prev => ({
           ...prev,
           ...settingsData,
@@ -396,11 +410,17 @@ export default function App() {
           keyboardShortcuts: { ...prev.keyboardShortcuts, ...settingsData.keyboardShortcuts },
           syncRules: { ...prev.syncRules, ...settingsData.syncRules }
         }));
+      } else {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.error || "Failed to save settings to backend");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed saving settings:', err);
+      throw err;
     }
   };
+
+  const handleClearLogs = () => setSystemLogs([]);
 
   const handleTriggerExtensionAction = (action: string) => {
     if (action === 'toggle_overlay') {
@@ -684,6 +704,7 @@ export default function App() {
             <SettingsView
               settings={settings}
               onSaveSettings={handleSaveSettings}
+              addToast={addToast}
             />
           )}
           {activeTab === 'bookmarks' && (
@@ -697,11 +718,18 @@ export default function App() {
       </div>
 
       {/* Windows 11 Desktop Status Bar */}
+      <SystemLogOverlay 
+        isOpen={isSystemLogOpen}
+        onClose={() => setIsSystemLogOpen(false)}
+        logs={systemLogs}
+        onClearLogs={handleClearLogs}
+      />
       <Win11StatusBar
         itemCount={items.length}
         conflictCount={conflictItems.length}
         isSyncing={isSyncing}
         isOffline={isOffline}
+        onToggleTerminal={() => setIsSystemLogOpen(!isSystemLogOpen)}
         maintenanceMode={settings.maintenanceMode}
         onRefresh={fetchData}
       />

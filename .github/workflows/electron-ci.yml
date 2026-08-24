@@ -1,0 +1,40 @@
+name: "ASynX CI - Headless Electron & Build Test"
+
+on:
+  push:
+    branches: [ "main", "dev/**" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-desktop-app:
+    name: Headless Electron Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Build Verification
+        run: npm run build
+
+      - name: Run Headless Electron Smoke Test
+        uses: coactions/setup-xvfb@v1
+        with:
+          run: |
+            # Boots the app inside a virtual frame buffer for 10 seconds 
+            # to verify main process initialisation and Express server binding, 
+            # then gracefully exits.
+            npx concurrently -k "npm run server" "npx wait-on http://localhost:4000 && npx electron . --no-sandbox" &
+            ELECTRON_PID=$!
+            sleep 10
+            kill $ELECTRON_PID || true

@@ -34,15 +34,19 @@ export interface ImportQueueItem {
 
 interface SettingsViewProps {
   settings: AppSettings;
-  onSaveSettings: (newSettings: AppSettings) => void;
+  onSaveSettings: (newSettings: AppSettings) => Promise<void>;
+  addToast?: (type: 'success' | 'error' | 'warning' | 'info', title: string, message: string) => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
-  onSaveSettings
+  onSaveSettings,
+  addToast
 }) => {
   const [formState, setFormState] = useState<AppSettings>(settings);
   const [isSaved, setIsSaved] = useState(false);
+  const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [importState, setImportState] = useState<{ id: string; file: File; parsedData: any[]; headers: string[] } | null>(null);
   const [importQueue, setImportQueue] = useState<ImportQueueItem[]>([]);
 
@@ -53,25 +57,40 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   // OAuth Popup Handler
   const handleConnect = async (provider: string) => {
+    setConnectingProvider(provider);
     await OAuthService.initiateLogin(provider);
   };
 
   React.useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      setFormState(prev => {
-        const updatedSettings = OAuthService.processAuthMessage(event, prev);
-        if (updatedSettings) {
-          // Immediately persist the captured tokens to the backend DB
-          onSaveSettings(updatedSettings);
-          return updatedSettings;
+    const handleMessage = async (event: MessageEvent) => {
+      const updatedSettings = OAuthService.processAuthMessage(event, formState);
+      if (updatedSettings) {
+        setFormState(updatedSettings);
+        try {
+          await onSaveSettings(updatedSettings);
+          setIsSaved(true);
+          setTimeout(() => setIsSaved(false), 2500);
+          setError(null);
+          if (addToast) {
+            addToast('success', 'Connected', `Successfully connected via OAuth.`);
+          }
+        } catch (err: any) {
+          console.error("OAuth API Validation Failed:", err);
+          const errorMsg = err.message || "Failed to connect. Invalid credentials.";
+          setError(errorMsg);
+          if (addToast) {
+            addToast('error', 'Connection Failed', errorMsg);
+          }
+          setFormState(settings); // revert to original props
+        } finally {
+          setConnectingProvider(null);
         }
-        return prev;
-      });
+      }
     };
     
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [onSaveSettings]);
+  }, [onSaveSettings, formState, settings, addToast]);
 
   // Background processor for the queue
   React.useEffect(() => {
@@ -141,11 +160,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     processNext();
   }, [importQueue]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveSettings(formState);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2500);
+    setError(null);
+    try {
+      await onSaveSettings(formState);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2500);
+    } catch (err) {
+      console.error("[Settings] Failed to save settings:", err);
+    }
   };
 
   return (
@@ -163,6 +187,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <p className="text-xs text-gray-600 dark:text-gray-400">
             Configure authentication tokens, Plex server credentials, auto-scrobble rules, and conflict resolution defaults.
           </p>
+          {error && <p className="text-xs text-red-500 font-bold mt-2 bg-red-100 dark:bg-red-500/10 px-2 py-1 rounded">{error}</p>}
         </div>
 
         <button
@@ -487,9 +512,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <SimklLogo className="w-4 h-4 text-emerald-400" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Simkl API Connection</h3>
             </div>
-            <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-              Connected
-            </span>
+            {formState.simkl?.connected ? (
+              <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                Connected
+              </span>
+            ) : (
+              <span className="text-xs text-gray-500 font-semibold bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700">
+                Disconnected
+              </span>
+            )}
           </div>
           <div className="space-y-3 text-xs">
             <div className="pt-2">
@@ -502,7 +533,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none mb-3"
               />
               <p className="text-gray-600 dark:text-gray-400 font-medium mb-3">1-Click OAuth 2.0 Authorization</p>
-              <OAuthConnectButton provider="simkl" connected={!!formState.simkl?.connected} onConnect={handleConnect} />
+              <OAuthConnectButton provider="simkl" connected={!!formState.simkl?.connected} isLoading={connectingProvider === 'simkl'} onConnect={handleConnect} />
             </div>
           </div>
         </div>
@@ -514,9 +545,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <MalLogo className="w-4 h-4 text-[#2E51A2] dark:text-blue-400" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">MyAnimeList (MAL) API Connection</h3>
             </div>
-            <span className="text-xs text-blue-400 font-semibold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-              Connected
-            </span>
+            {formState.mal?.connected ? (
+              <span className="text-xs text-blue-400 font-semibold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                Connected
+              </span>
+            ) : (
+              <span className="text-xs text-gray-500 font-semibold bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700">
+                Disconnected
+              </span>
+            )}
           </div>
           <div className="space-y-3 text-xs">
             <div className="pt-2">
@@ -529,7 +566,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none mb-3"
               />
               <p className="text-gray-600 dark:text-gray-400 font-medium mb-3">1-Click OAuth 2.0 Authorization</p>
-              <OAuthConnectButton provider="mal" connected={!!formState.mal?.connected} onConnect={handleConnect} />
+              <OAuthConnectButton provider="mal" connected={!!formState.mal?.connected} isLoading={connectingProvider === 'mal'} onConnect={handleConnect} />
             </div>
           </div>
         </div>
@@ -541,9 +578,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <AniListLogo className="w-4 h-4 text-[#02A9FF] dark:text-cyan-400" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">AniList API Connection</h3>
             </div>
-            <span className="text-xs text-cyan-400 font-semibold bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
-              Connected
-            </span>
+            {formState.anilist?.connected ? (
+              <span className="text-xs text-cyan-400 font-semibold bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                Connected
+              </span>
+            ) : (
+              <span className="text-xs text-gray-500 font-semibold bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700">
+                Disconnected
+              </span>
+            )}
           </div>
           <div className="space-y-3 text-xs">
             <div className="pt-2">
@@ -556,7 +599,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none mb-3"
               />
               <p className="text-gray-600 dark:text-gray-400 font-medium mb-3">1-Click OAuth 2.0 Authorization</p>
-              <OAuthConnectButton provider="anilist" connected={!!formState.anilist?.connected} onConnect={handleConnect} />
+              <OAuthConnectButton provider="anilist" connected={!!formState.anilist?.connected} isLoading={connectingProvider === 'anilist'} onConnect={handleConnect} />
             </div>
           </div>
         </div>
@@ -612,7 +655,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <input
                   type="text"
                   readOnly
-                  value={formState.karakeep.webhookUrl || `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/api/webhooks/karakeep`}
+                  value={formState.karakeep.webhookUrl || `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/api/webhooks/karakeep?authKey=${formState.karakeep.apiKey || ''}`}
                   className="w-full mt-1 bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-500 dark:text-gray-400 cursor-not-allowed font-mono text-[10px]"
                 />
                 <p className="text-[10px] text-gray-400 mt-1">Provide this URL in your KaraKeep settings so ASynX can receive watch updates.</p>
@@ -640,6 +683,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="space-y-3">
               <h4 className="font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-100 dark:border-neutral-800 pb-1">Plex</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-gray-600 dark:text-gray-400 font-medium">Server URL</label>
+                  <input
+                    type="text"
+                    value={formState.plex.serverUrl || ''}
+                    onChange={(e) => setFormState({
+                      ...formState,
+                      plex: { ...formState.plex, serverUrl: e.target.value }
+                    })}
+                    className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                    placeholder="http://192.168.1.100:32400"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-600 dark:text-gray-400 font-medium">Plex Token</label>
+                  <input
+                    type="password"
+                    value={formState.plex.token || ''}
+                    onChange={(e) => setFormState({
+                      ...formState,
+                      plex: { ...formState.plex, token: e.target.value }
+                    })}
+                    className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                    placeholder="Plex API Token"
+                  />
+                </div>
                 <div>
                   <label className="text-gray-600 dark:text-gray-400 font-medium">Plex Server Name</label>
                   <input

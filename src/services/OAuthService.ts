@@ -39,11 +39,11 @@ export class OAuthService {
       const updated = { ...currentSettings };
       
       if (provider === 'simkl') {
-        updated.simkl = { ...updated.simkl, accessToken: token, connected: true };
+        updated.simkl = { ...updated.simkl, accessToken: token, connected: false };
       } else if (provider === 'mal') {
-        updated.mal = { ...updated.mal, accessToken: token, connected: true };
+        updated.mal = { ...updated.mal, accessToken: token, connected: false };
       } else if (provider === 'anilist') {
-        updated.anilist = { ...updated.anilist, accessToken: token, connected: true };
+        updated.anilist = { ...updated.anilist, accessToken: token, connected: false };
       }
       return updated;
     }

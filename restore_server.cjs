@@ -23,7 +23,7 @@ const endStr = `
     status: 'ok',`;
 
 const searchPattern = new RegExp(
-  startStr.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&') + '[\\s\\S]*?' + endStr.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&')
+  startStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[\\s\\S]*?' + endStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 );
 
 // We'll replace it with the exact correct contents

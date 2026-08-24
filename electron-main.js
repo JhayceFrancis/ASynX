@@ -1,4 +1,5 @@
-import { app, BrowserWindow, net, nativeImage, Tray, Menu, ipcMain } from 'electron';
+import { app, BrowserWindow, net, nativeImage, Tray, Menu, ipcMain, dialog } from 'electron';
+import log from 'electron-log';
 import path, { dirname } from 'path';
 import http from 'http';
 import { fileURLToPath } from 'url';
@@ -8,6 +9,22 @@ import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
+
+
+// --- Global Crash Logging via electron-log (UK English Standardisation) ---
+log.transports.file.resolvePathFn = () => path.join(app.getPath('userData'), 'asynx-crash.log');
+log.errorHandler.startCatching();
+
+process.on('uncaughtException', (error) => {
+  log.error('UncaughtException:', error);
+  app.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  log.error('UnhandledRejection:', reason);
+  app.exit(1);
+});
+// ---------------------------------------------------------
+
 
 // Suppress DEP0180 (fs.Stats constructor deprecation) caused by Electron's internal asar handling in Node 22+
 const originalEmitWarning = process.emitWarning;
@@ -154,20 +171,38 @@ async function createWindow(port) {
 
 app.whenReady().then(async () => {
   try {
+    // Ensure the database is saved to the userData directory in production to avoid read-only .asar restrictions
+    const dataDir = app.isPackaged ? app.getPath('userData') : process.cwd();
+    process.env.DATA_DIR = dataDir;
+
+    // Rigorous synchronous pre-boot write-accessibility check for database mounting
+    try {
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      fs.accessSync(dataDir, fs.constants.W_OK);
+      log.info(`Database directory is write-accessible: ${dataDir}`);
+    } catch (dirErr) {
+      log.error('Database directory write permission denied:', dirErr);
+      dialog.showErrorBox(
+        'Critical Permission Error',
+        `ASynX cannot write to the required data directory to mount the database.\nPath: ${dataDir}\n\nPlease check your folder permissions to prevent silent failures.`
+      );
+      app.exit(1);
+      return;
+    }
+
     const freePort = await getFreePort();
     process.env.PORT = freePort.toString();
-    console.log(`Starting Express server on dynamically allocated port: ${freePort}`);
-    
-    // Set a custom data directory for Electron so it doesn't pollute the program files
-    process.env.DATA_DIR = app.getPath('userData');
+    log.info(`Starting Express server on dynamically allocated port: ${freePort}`);
 
     // Start the Express server directly within the Electron main process
     require(path.join(__dirname, 'dist', 'server.cjs'));
-    console.log("Express server started successfully.");
+    log.info("Express server started successfully.");
     
     createWindow(freePort);
   } catch (error) {
-    console.error("Failed to start Express server:", error);
+    log.error("Failed to start Express server:", error);
   }
 
   app.on('activate', () => {

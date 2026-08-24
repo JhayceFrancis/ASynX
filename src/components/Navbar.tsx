@@ -38,21 +38,35 @@ const Navbar: React.FC<NavbarProps> = ({ isEditMode, onToggleEditMode, isCustomi
       {/* Fluent Command Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3">
         {/* Brand & App Info */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-4">
           <ASynXLogo 
-            className="w-10 h-10 drop-shadow-[0_0_12px_rgba(99,102,241,0.4)]" 
-            isSyncing={isSyncing} size={40} 
+            className="w-14 h-14 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]" 
+            isSyncing={isSyncing} size={56} 
             onClick={onTriggerSync}
             title="Click logo to trigger manual ASynX sync"
           />
           <div>
             <div className="flex items-center space-x-2">
               <div className="flex flex-col">
-                <h1 className="text-lg font-bold tracking-tight text-white flex items-center space-x-1.5">
-                  <span className="text-gray-900 dark:text-white">ASynX</span>
+                                <h1 className="text-3xl font-extrabold tracking-tight flex items-center">
+                  <span style={
+                    settings?.theme?.isGradient && settings.theme.gradientColors?.length >= 2 
+                      ? { backgroundImage: `linear-gradient(to right, ${settings.theme.gradientColors[0]}, ${settings.theme.gradientColors[1]})`, WebkitBackgroundClip: 'text', color: 'transparent' }
+                      : { color: settings?.theme?.accentColor || '#4f46e5' }
+                  }>ASyn</span>
+                  <span 
+                    className="text-5xl font-black italic -ml-0.5 font-serif drop-shadow-sm translate-y-1" 
+                    style={{ 
+                      backgroundImage: settings?.theme?.isGradient && settings.theme.gradientColors?.length >= 2 
+                        ? `linear-gradient(to bottom right, ${settings.theme.gradientColors[1]}, ${settings.theme.gradientColors[0]})`
+                        : 'linear-gradient(to bottom right, #f43f5e, #f97316)',
+                      WebkitBackgroundClip: 'text',
+                      color: 'transparent'
+                    }}
+                  >X</span>
                 </h1>
                 {settings.theme?.subheadingText && (
-                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium tracking-wide">
+                  <span className="text-sm text-gray-500 dark:text-gray-400 font-medium tracking-wide -mt-1">
                     {settings.theme.subheadingText}
                   </span>
                 )}

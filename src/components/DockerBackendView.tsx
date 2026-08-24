@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Server, Activity, Database, Cpu, MemoryStick, Clock, Settings, ArrowRight, ShieldCheck, Terminal, Play, Square, RefreshCcw } from 'lucide-react';
 import { Tooltip } from './Tooltip';
+import { ASynXLogo } from './ASynXLogo';
 
 export function DockerBackendView() {
   const [info, setInfo] = useState<any>(null);
@@ -54,11 +55,11 @@ export function DockerBackendView() {
     <div className="w-full max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300 pb-16">
       <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between relative overflow-hidden">
         <div className="absolute -right-10 -top-10 opacity-5 dark:opacity-10 pointer-events-none">
-          <Server className="w-64 h-64 text-indigo-500" />
+          <ASynXLogo size={256} className="text-indigo-500" />
         </div>
         <div className="relative z-10 space-y-2">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center space-x-3">
-            <Server className="w-7 h-7 text-indigo-500" />
+            <ASynXLogo size={28} className="text-indigo-500" />
             <span>Docker Backend Dashboard</span>
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400">

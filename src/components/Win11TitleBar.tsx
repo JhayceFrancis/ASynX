@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Minus, Square, X, RefreshCw, Layers, Shield, Wifi } from 'lucide-react';
-import { AnimatedLogo } from './AnimatedLogo';
+import { ASynXLogo } from './ASynXLogo';
 
 interface Win11TitleBarProps {
   appName?: string;
@@ -18,11 +18,19 @@ export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
 }) => {
   const [isMaximized, setIsMaximized] = useState(true);
   const [windowVisible, setWindowVisible] = useState(true);
+  const [serverPort, setServerPort] = useState<string | number>('...');
+
+  useEffect(() => {
+    fetch('/api/status')
+      .then(res => res.json())
+      .then(data => setServerPort(data.port))
+      .catch(() => setServerPort('ERROR'));
+  }, []);
 
   if (!windowVisible) {
     return (
       <div className="fixed bottom-4 right-4 z-50 bg-white dark:bg-[#0a0a0a] border border-indigo-500/40 text-gray-900 dark:text-gray-100 p-3 rounded-2xl shadow-2xl flex items-center space-x-3 backdrop-blur-lg">
-        <AnimatedLogo size={32} className={`drop-shadow-[0_0_8px_rgba(99,102,241,0.6)] ${isSyncing ? 'animate-spin' : ''}`} onClick={onTriggerSync} />
+        <ASynXLogo size={32} isSyncing={isSyncing} className={`drop-shadow-[0_0_8px_rgba(99,102,241,0.6)] ${isSyncing ? 'animate-spin' : ''}`} onClick={onTriggerSync} />
         <div>
           <p className="text-xs font-bold">{appName}</p>
           <p className="text-[10px] text-gray-600 dark:text-gray-400">Minimized to Windows System Tray</p>
@@ -66,7 +74,7 @@ export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
 
       {/* Left: Window Icon & Title */}
       <div className="flex items-center space-x-2.5">
-        <AnimatedLogo size={20} className={`drop-shadow-[0_0_4px_rgba(99,102,241,0.5)] ${isSyncing ? 'animate-spin' : ''}`} onClick={onTriggerSync} />
+        <ASynXLogo size={20} isSyncing={isSyncing} className={`drop-shadow-[0_0_4px_rgba(99,102,241,0.5)] ${isSyncing ? 'animate-spin' : ''}`} onClick={onTriggerSync} />
         <span className="font-semibold text-gray-800 dark:text-gray-200 tracking-tight text-[11px] sm:text-xs">
           {appName}
         </span>
@@ -79,7 +87,7 @@ export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
       {/* Middle: Subtle Search/Drag Handle */}
       <div className="hidden lg:flex items-center space-x-2 text-[11px] text-gray-500 dark:text-gray-500 font-mono bg-white dark:bg-[#0a0a0a]/60 px-3 py-0.5 rounded-md border border-gray-200 dark:border-neutral-900/60">
         <Wifi className="w-3 h-3 text-emerald-400" />
-        <span>Sync Service: Running (127.0.0.1:3000)</span>
+        <span>Sync Service: {serverPort === 'ERROR' ? 'Disconnected' : `Running (localhost:${serverPort})`}</span>
       </div>
 
       {/* Right: Windows Controls */}

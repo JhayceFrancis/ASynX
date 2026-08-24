@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, HardDrive, Activity, ShieldCheck, Clock, RefreshCw, Loader2 } from 'lucide-react';
+import { Cpu, HardDrive, Activity, ShieldCheck, Clock, RefreshCw, Loader2, Terminal } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
 interface Win11StatusBarProps {
@@ -9,6 +9,7 @@ interface Win11StatusBarProps {
   maintenanceMode?: boolean;
   onRefresh?: () => void;
   isOffline?: boolean;
+  onToggleTerminal?: () => void;
 }
 
 export const Win11StatusBar: React.FC<Win11StatusBarProps> = ({
@@ -17,7 +18,8 @@ export const Win11StatusBar: React.FC<Win11StatusBarProps> = ({
   isSyncing,
   maintenanceMode,
   onRefresh,
-  isOffline
+  isOffline,
+  onToggleTerminal
 }) => {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
@@ -103,11 +105,22 @@ export const Win11StatusBar: React.FC<Win11StatusBarProps> = ({
           </button>
         </Tooltip>
 
-        <Tooltip title="ASynX Release Build" description="Windows 11 desktop companion build and Docker container version." position="top">
+                <Tooltip title="ASynX Release Build" description="Windows 11 desktop companion build and Docker container version." position="top">
           <div className="flex items-center space-x-1.5 cursor-help opacity-70 hover:opacity-100 transition-opacity ml-2 border-l border-gray-300 dark:border-neutral-800 pl-3">
             <span className="text-[10px] text-gray-500 dark:text-gray-500 font-medium">v2.4.0-beta.1</span>
           </div>
         </Tooltip>
+        
+        {onToggleTerminal && (
+          <Tooltip title="System Logs" description="View real-time backend server events and API handshake logs." position="top">
+            <button 
+              onClick={onToggleTerminal}
+              className="flex items-center space-x-1.5 cursor-pointer opacity-70 hover:opacity-100 transition-opacity ml-2 border-l border-gray-300 dark:border-neutral-800 pl-3 text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400"
+            >
+              <Terminal className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
+        )}
       </div>
     </footer>
   );
