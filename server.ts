@@ -2007,7 +2007,7 @@ async function startServer() {
     // @ts-ignore - Handle __dirname existence in compiled CJS vs Dev ESM
     const distPath = typeof __dirname !== 'undefined' ? __dirname : path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get(/(.*)/, (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
