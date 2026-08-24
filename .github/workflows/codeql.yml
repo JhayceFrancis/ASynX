@@ -2,9 +2,11 @@ name: "CodeQL Advanced Security Analysis"
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
   schedule:
     - cron: '25 7 * * 6'
 
@@ -19,17 +21,18 @@ jobs:
       contents: read
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Initialise CodeQL
-      uses: github/codeql-action/init@v4
-      with:
-        languages: javascript-typescript
-        build-mode: none
-        queries: security-extended,security-and-quality
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-extended,security-and-quality
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v4
-      with:
-        category: "/language:javascript-typescript"
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:javascript-typescript"
+
