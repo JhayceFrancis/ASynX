@@ -2,9 +2,12 @@ name: "ASynX CI - Headless Electron & Build Test"
 
 on:
   push:
-    branches: [ "main", "dev/**" ]
+    branches:
+      - main
+      - 'dev/**'
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
   test-desktop-app:
@@ -31,7 +34,8 @@ jobs:
         uses: coactions/setup-xvfb@v1
         with:
           run: |
-            npx concurrently -k "npm run server" "npx wait-on http://localhost:4000 && npx electron . --no-sandbox" &
-            ELECTRON_PID=$!
-            sleep 10
-            kill $ELECTRON_PID || true
+            npm run start &
+            SERVER_PID=$!
+            npx wait-on -t 20000 tcp:3000
+            timeout 10 npx electron . --no-sandbox || [ $? -eq 124 ]
+            kill $SERVER_PID || true
