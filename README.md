@@ -1,9 +1,9 @@
 # ASynX — Cross-Platform Anime & Drama Sync Studio
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-00cec9.svg?style=for-the-badge&labelColor=09090b)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/JhayceFrancis/ASynX?style=for-the-badge&color=00cec9&labelColor=09090b)](https://github.com/JhayceFrancis/ASynX/releases/latest)
-[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Docker-indigo.svg)]()
+[![Build Status](https://img.shields.io/badge/Build-Passing-00cec9.svg?style=for-the-badge&labelColor=09090b)](https://github.com/JhayceFrancis/ASynX/actions)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Docker%20%7C%20Browser%20Plugin-00cec9.svg?style=for-the-badge&labelColor=09090b)]()
 
 **ASynX** is an open-source, offline-first, AES-256-GCM encrypted media tracking suite designed to bridge your local media servers (Plex, Tautulli) with cloud tracking platforms (Simkl, MyAnimeList, AniList). 
 
