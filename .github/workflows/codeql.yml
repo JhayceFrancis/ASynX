@@ -20,16 +20,13 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7
+      uses: actions/checkout@v4
 
     - name: Initialise CodeQL
       uses: github/codeql-action/init@v4
       with:
-        # Strictly targets the Electron, React, and Node.js stack
         languages: javascript-typescript
         build-mode: none
-        # Enables rigorous enterprise-grade security suites 
-        # to catch SSRF, XSS, and Prototype Pollution
         queries: security-extended,security-and-quality
 
     - name: Perform CodeQL Analysis
