@@ -1,30 +1,37 @@
-version: '3.8'
-
 services:
   asynx:
     image: ghcr.io/jhaycefrancis/asynx:latest
     container_name: asynx-backend
     ports:
       - "3000:3000"
+    # Uncomment and adjust the user ID below if you face file permission issues on Linux/Unraid
+    # user: "1000:1000" 
     volumes:
       - ./data:/app/data
-      # Mount your SSL certificates here (Uncomment and map to enable strict TLS)
-      # - ./certs:/app/certs:ro
+    # Overrides default container DNS to Cloudflare (1.1.1.1) to prevent OAuth handshake failures
+    # caused by strict local DNS filtering or ad-blockers (e.g., NextDNS, Pi-hole).
+    dns:
+      - 1.1.1.1
     environment:
       - NODE_ENV=production
       - DATA_DIR=/app/data
-      
+      # Prevents OAuth timestamp drift. Change to your local timezone (e.g., Europe/Dublin)
+      - TZ=UTC 
+    
       # Bind to 0.0.0.0 to allow external connections, or 127.0.0.1 for local only
       - HOST=0.0.0.0
       - PORT=3000
-      
-      # Define your custom API Key here so only your clients can sync
-      - REMOTE_SYNC_API_KEY=
-      
-      # --- SECURE NATIVE TLS / HTTPS CONFIGURATION ---
+      # --- OPTIONAL SECURE NATIVE TLS / HTTPS CONFIGURATION OR ADD ON YOU .env FILE ---
       # To secure internet traffic, provide the paths to your mapped certificates
       # - SSL_KEY_PATH=/app/certs/privkey.pem
       # - SSL_CERT_PATH=/app/certs/fullchain.pem
-      
+      # Define your custom API Key here so only your clients can sync if you are have not configured your .env
+      # - REMOTE_SYNC_API_KEY=
       # - GEMINI_API_KEY=
+      # --- REFER TO .ENV.EXAMPLE for more integration you can add your configurations here ---
+      # --- OR simply use webUI or app UI in setting up ---
+          
+    # Uncomment if you have defined your environment on your docker_compose.yml
+    env_file:
+      - .env
     restart: unless-stopped
