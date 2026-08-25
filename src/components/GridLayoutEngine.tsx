@@ -46,7 +46,7 @@ export const GridLayoutEngine: React.FC<GridLayoutEngineProps> = ({
     }
   };
 
-  const handleLayoutChange = (currentLayout: any[], allLayouts: any) => {
+  const handleLayoutChange = (currentLayout: readonly any[], allLayouts: any) => {
     const updatedPanels = panels.map(panel => {
       const updated = currentLayout.find(l => l.i === panel.i);
       if (updated) {
