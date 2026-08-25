@@ -30,7 +30,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Configure Git Bot
         run: |
@@ -59,10 +59,10 @@ jobs:
           fetch-depth: 0
           ref: main # Explicitly pulls the newly bumped version
 
-      - name: Setup Node.js (v20 LTS)
+      - name: Setup Node.js (v24 LTS)
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Cache Electron & Builder Binaries

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Responsive, WidthProvider } from 'react-grid-layout';
+import { Responsive, WidthProvider } from "react-grid-layout/legacy";
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { PanelConfig } from '../types';
