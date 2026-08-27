@@ -16,9 +16,7 @@ import { SystemLogOverlay, SystemLog } from './components/SystemLogOverlay';
 import { Navbar } from './components/Navbar';
 import { ASynXLoader } from './components/ASynXLoader';
 import { QuickCustomizePanel } from './components/QuickCustomizePanel';
-import { Server, Activity, Database, Terminal, Compass, Tv, AlertTriangle } from 'lucide-react';
 const SyncMatrixView = React.lazy(() => import('./components/SyncMatrixView').then(module => ({ default: module.SyncMatrixView })));
-import { SyncScheduleView } from './components/SyncScheduleView';
 const ConflictResolutionView = React.lazy(() => import('./components/ConflictResolutionView').then(module => ({ default: module.ConflictResolutionView })));
 const PlexWebhookView = React.lazy(() => import('./components/PlexWebhookView').then(module => ({ default: module.PlexWebhookView })));
 const ExtensionCompanionView = React.lazy(() => import('./components/ExtensionCompanionView').then(module => ({ default: module.ExtensionCompanionView })));
@@ -30,7 +28,6 @@ const SystemHealthView = React.lazy(() => import('./components/SystemHealthView'
 const SyncPerformanceView = React.lazy(() => import('./components/SyncPerformanceView').then(module => ({ default: module.SyncPerformanceView })));
 const BookmarkTab = React.lazy(() => import('./components/bookmarks/BookmarkTab').then(module => ({ default: module.BookmarkTab })));
 import { OverrideModal } from './components/OverrideModal';
-import { ScrobblePrompt } from './components/ScrobblePrompt';
 import { ToastContainer, ToastMessage, ToastType } from './components/ToastContainer';
 import { useRef } from 'react';
 import { useKeyboardShortcut } from './hooks/useKeyboardShortcut';
@@ -193,7 +190,7 @@ export default function App() {
   // Fetch state from express server
   const fetchData = async () => {
     try {
-      const [itemsData, logsData, webhooksData, settingsData, systemLogsData, extStateData] = await Promise.all([
+      const [itemsData, logsData, webhooksData, settingsData, systemLogsData] = await Promise.all([
         safeFetchJson('/api/library'),
         safeFetchJson('/api/sync/logs'),
         safeFetchJson('/api/webhooks/logs'),
@@ -378,7 +375,7 @@ export default function App() {
       const res = await fetch('/api/conflicts/resolve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId, sourceOfTruthPlatform, customEpisode, customStatus })
+        body: JSON.stringify({ sourceOfTruthPlatform, customEpisode, customStatus })
       });
       if (res.ok) {
         await fetchData();
@@ -408,7 +405,7 @@ export default function App() {
       const res = await fetch('/api/sync/override', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId, targetEpisode, targetStatus, targetScore, applyToPlatforms })
+        body: JSON.stringify({ targetEpisode, targetStatus, targetScore, applyToPlatforms })
       });
       if (res.ok) {
         await fetchData();

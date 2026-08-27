@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Responsive, WidthProvider } from "react-grid-layout/legacy";
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { PanelConfig } from '../types';
-import { Settings, X, Plus, Type, Layout, Palette } from 'lucide-react';
+import { Settings, X, Plus, Palette } from 'lucide-react';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 

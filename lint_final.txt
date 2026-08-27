@@ -1,0 +1,4 @@
+
+> asynx@2.5.0 lint
+> tsc --noEmit
+

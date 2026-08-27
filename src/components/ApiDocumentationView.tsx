@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Terminal, Copy, Check, Activity, FileText, Server, BookOpen, Settings, Zap, Database } from 'lucide-react';
+import { useState } from "react";
+import { Terminal, Copy, Check, Activity, FileText, BookOpen, Settings, Zap, Database } from 'lucide-react';
 
 export function ApiDocumentationView() {
   const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);

@@ -1,0 +1,43 @@
+
+> asynx@2.5.0 lint
+> tsc --noEmit
+
+server.ts(158,25): error TS6133: 'req' is declared but its value is never read.
+server.ts(163,30): error TS6133: 'req' is declared but its value is never read.
+server.ts(169,10): error TS6133: 'req' is declared but its value is never read.
+server.ts(180,15): error TS6133: 'res' is declared but its value is never read.
+server.ts(595,28): error TS6133: 'req' is declared but its value is never read.
+server.ts(618,31): error TS6133: 'req' is declared but its value is never read.
+server.ts(632,38): error TS6133: 'req' is declared but its value is never read.
+server.ts(703,30): error TS6133: 'req' is declared but its value is never read.
+server.ts(724,26): error TS6133: 'req' is declared but its value is never read.
+server.ts(729,28): error TS6133: 'req' is declared but its value is never read.
+server.ts(734,27): error TS6133: 'req' is declared but its value is never read.
+server.ts(1026,30): error TS6133: 'req' is declared but its value is never read.
+server.ts(1213,28): error TS6133: 'req' is declared but its value is never read.
+server.ts(1335,33): error TS6133: 'req' is declared but its value is never read.
+server.ts(1411,34): error TS6133: 'req' is declared but its value is never read.
+server.ts(2054,32): error TS6133: 'req' is declared but its value is never read.
+server.ts(2062,34): error TS6133: 'req' is declared but its value is never read.
+server.ts(2179,5): error TS6133: 'lastSpecificTimeTrigger' is declared but its value is never read.
+server.ts(2239,32): error TS6133: 'req' is declared but its value is never read.
+server.ts(2251,35): error TS6133: 'req' is declared but its value is never read.
+server.ts(2279,22): error TS6133: 'req' is declared but its value is never read.
+server.ts(2455,37): error TS6133: 'req' is declared but its value is never read.
+server.ts(2463,41): error TS6133: 'req' is declared but its value is never read.
+server.ts(2646,56): error TS6133: 'req' is declared but its value is never read.
+server.ts(2685,56): error TS6133: 'req' is declared but its value is never read.
+src/App.tsx(369,5): error TS6133: 'itemId' is declared but its value is never read.
+src/App.tsx(403,39): error TS6133: 'itemId' is declared but its value is never read.
+src/App.tsx(645,33): error TS6133: 'itemId' is declared but its value is never read.
+src/components/GridLayoutEngine.tsx(50,62): error TS6133: 'allLayouts' is declared but its value is never read.
+src/components/Navbar.tsx(111,9): error TS6133: 'themeToggleNode' is declared but its value is never read.
+src/components/SettingsView.tsx(178,9): error TS6133: '_handleTestRule' is declared but its value is never read.
+src/components/SyncMatrixView.tsx(2,10): error TS2305: Module '"../types"' has no exported member 'Settings2'.
+src/components/SyncMatrixView.tsx(2,21): error TS2305: Module '"../types"' has no exported member 'ChevronDown'.
+src/components/SyncMatrixView.tsx(75,3): error TS6133: 'onImportCSV' is declared but its value is never read.
+src/components/SyncScheduleView.tsx(59,67): error TS6198: All destructured elements are unused.
+src/components/ToastContainer.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/Win11TitleBar.tsx(22,3): error TS6133: 'settings' is declared but its value is never read.
+tests/backend/server.test.ts(37,13): error TS6133: 'res' is declared but its value is never read.
+tests/frontend/SettingsView.test.tsx(12,21): error TS6133: 'setFormState' is declared but its value is never read.

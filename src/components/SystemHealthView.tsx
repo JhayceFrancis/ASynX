@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Server, Clock, Cpu, Database, RefreshCw, CheckCircle2, WifiOff, Box } from 'lucide-react';
-import { motion } from 'motion/react';
+import {  Server, Clock, Cpu, Database, RefreshCw, CheckCircle2, WifiOff, Box } from 'lucide-react';
+
 import { GridLayoutEngine } from './GridLayoutEngine';
 import { ASynXLogo } from './ASynXLogo';
 import { SimklLogo, MalLogo, AniListLogo, PlexLogo, KarakeepLogo } from './PlatformLogos';
@@ -185,7 +185,7 @@ export const SystemHealthView: React.FC<{ isEditMode?: boolean }> = ({ isEditMod
           <div className="p-5 h-full overflow-y-auto">
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-4 border-b border-gray-200 dark:border-neutral-900 pb-2">External Integrations Health</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {integrationsList.map(([key, data]: [string, any], index: number) => (
+              {integrationsList.map(([key, data]: [string, any]) => (
                 <div key={key} className="p-3 rounded-xl border bg-gray-50 dark:bg-neutral-900/40 border-gray-200 dark:border-neutral-800 shadow-sm">
                   <div className="flex justify-between items-center mb-2">
                     <div className="flex items-center space-x-2">

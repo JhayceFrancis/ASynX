@@ -42,11 +42,20 @@ if (!fs.existsSync(dataDir)) {
 }
 
 export function getOrCreateEncryptionKey(): Buffer {
-  if (fs.existsSync(KEY_FILE)) {
+  try {
     return fs.readFileSync(KEY_FILE);
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') throw err;
   }
   const key = crypto.randomBytes(32);
-  fs.writeFileSync(KEY_FILE, key, { mode: 0o600 });
+  try {
+    fs.writeFileSync(KEY_FILE, key, { mode: 0o600, flag: 'wx' });
+  } catch (err: any) {
+    if (err.code === 'EEXIST') {
+      return fs.readFileSync(KEY_FILE);
+    }
+    throw err;
+  }
   return key;
 }
 

@@ -2,23 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { WebhookLog, AppSettings, LibraryItem, HealthCheckStatus } from '../types';
 import { PlexLogo } from './PlatformLogos';
 import { 
-  Tv, 
   Terminal, 
   Copy, 
   Check, 
   Play, 
   Zap, 
-  FileText, 
-  Search, 
   Sparkles, 
   Radio,
-  ArrowRight,
-  Code,
   Activity,
   AlertOctagon,
   RefreshCw,
-  CheckCircle2,
-  XCircle,
   Wifi,
   WifiOff,
   Server
@@ -41,7 +34,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
   const [copiedTautulli, setCopiedTautulli] = useState(false);
   const [copiedJellyfin, setCopiedJellyfin] = useState(false);
   const [copiedEmby, setCopiedEmby] = useState(false);
-  const [copiedKarakeep, setCopiedKarakeep] = useState(false);
+  
 
   // Automated Health Checker state
   const [healthData, setHealthData] = useState<HealthCheckStatus | null>(null);
@@ -52,7 +45,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
   const [testSeason, setTestSeason] = useState<number>(2);
   const [testEpisode, setTestEpisode] = useState<number>(10);
   const [testUser, setTestUser] = useState<string>('OtakuWatcher99');
-  const [testDevice, setTestDevice] = useState<string>('NVIDIA SHIELD TV');
+  const [testDevice] = useState<string>('NVIDIA SHIELD TV');
   const [testSource, setTestSource] = useState<'plex' | 'tautulli' | 'jellyfin' | 'emby'>('plex');
 
   // AI Filename Matcher state
@@ -578,8 +571,8 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
                 onClick={() => handleCopy(karakeepUrl, 'karakeep')}
                 className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition cursor-pointer flex items-center space-x-1 flex-shrink-0"
               >
-                {copiedKarakeep ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedKarakeep ? 'Copied' : 'Copy'}</span>
+                {false ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{false ? 'Copied' : 'Copy'}</span>
               </button>
             </div>
           </div>

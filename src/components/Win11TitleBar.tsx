@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Minus, Square, X, RefreshCw, Layers, Shield, Wifi } from 'lucide-react';
+import { Minus, Square, X, Wifi } from 'lucide-react';
 import { ASynXLogo } from './ASynXLogo';
 import { Tooltip } from './Tooltip';
 import { AppSettings } from '../types';
@@ -19,8 +19,7 @@ export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
   isSyncing = false,
   onTriggerSync,
   progress,
-  settings,
-  setActiveTab
+  settings
 }) => {
   const [isMaximized, setIsMaximized] = useState(true);
   const [windowVisible, setWindowVisible] = useState(true);

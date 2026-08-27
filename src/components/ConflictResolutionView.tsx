@@ -1,18 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { LibraryItem, PlatformType, WatchStatus, AIConflictAnalysis, AppSettings } from '../types';
-import { Tooltip } from './Tooltip';
 import { MalLogo, AniListLogo, SimklLogo } from './PlatformLogos';
 import { 
   AlertTriangle, 
   Sparkles, 
   CheckCircle2, 
-  ArrowRight, 
   ShieldCheck, 
-  Clock, 
   Sliders, 
   Bot, 
-  RotateCcw,
-  Layers,
   ChevronRight,
   CheckSquare,
   Square,

@@ -1,0 +1,11 @@
+
+> asynx@2.5.0-beta.0 lint
+> tsc --noEmit
+
+src/components/SyncMatrixView.tsx(301,3): error TS1128: Declaration or statement expected.
+src/components/SyncMatrixView.tsx(301,4): error TS1128: Declaration or statement expected.
+src/components/SyncMatrixView.tsx(307,3): error TS1128: Declaration or statement expected.
+src/components/SyncMatrixView.tsx(1567,1): error TS1128: Declaration or statement expected.
+src/components/SystemHealthView.tsx(188,49): error TS1005: ')' expected.
+src/components/SystemHealthView.tsx(188,75): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+src/components/SystemHealthView.tsx(221,17): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?

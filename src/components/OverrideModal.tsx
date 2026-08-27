@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LibraryItem, PlatformType, WatchStatus } from '../types';
-import { X, Sliders, CheckCircle2, ShieldAlert, Sparkles } from 'lucide-react';
+import { X, Sliders, CheckCircle2 } from 'lucide-react';
 
 interface OverrideModalProps {
   item: LibraryItem | null;

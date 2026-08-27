@@ -1,16 +1,11 @@
 import React, { useState } from 'react';
 import { BrowserExtensionState, LibraryItem } from '../types';
 import { 
-  Compass, 
   Play, 
-  Pause, 
   CheckCircle2, 
   Sliders, 
-  ExternalLink, 
   Eye, 
   EyeOff, 
-  Radio, 
-  RefreshCw, 
   Zap,
   Globe,
   Monitor

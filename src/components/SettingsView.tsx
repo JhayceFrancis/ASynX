@@ -2,22 +2,16 @@ import React, { useState } from 'react';
 import { PreImportModal } from './PreImportModal';
 import { BackupSettingsView } from './BackupSettingsView';
 import { OAuthConnectButton } from './OAuthConnectButton';
-import { AppSettings, PlatformType } from '../types';
+import { AppSettings } from '../types';
 import { OAuthService } from '../services/OAuthService';
 import { SimklLogo, MalLogo, AniListLogo, PlexLogo, KarakeepLogo } from './PlatformLogos';
-import { ASynXLogo } from './ASynXLogo';
+
 import {  
-  Database, FileSpreadsheet, Settings, Radio, Cloud, 
-  Palette,
-  CheckCircle2, 
-  Key, 
+  Database, FileSpreadsheet, Settings, Radio, CheckCircle2, 
   Tv, 
   Sliders, 
   Save, 
   ShieldCheck, 
-  RotateCcw,
-  Sparkles,
-  Link2,
   Keyboard,
   Trash2,
   Activity
@@ -51,8 +45,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [importState, setImportState] = useState<{ id: string; file: File; parsedData: any[]; headers: string[] } | null>(null);
   const [importQueue, setImportQueue] = useState<ImportQueueItem[]>([]);
-  const [testingRuleId, setTestingRuleId] = useState<string | null>(null);
-  const [testResults, setTestResults] = useState<Record<string, any>>({});
+  
+  const [, setTestResults] = useState<Record<string, any>>({});
   const [testingWebhookId, setTestingWebhookId] = useState<string | null>(null);
   const [webhookTestResults, setWebhookTestResults] = useState<Record<string, any>>({});
 
@@ -69,6 +63,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   React.useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return; // CodeQL fix
       const updatedSettings = OAuthService.processAuthMessage(event, formState);
       if (updatedSettings) {
         setFormState(updatedSettings);
@@ -180,8 +175,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setFormState(prev => ({ ...prev, syncRules: rules as any }));
   };
 
-  const handleTestRule = async (ruleId: string, source: string, target: string) => {
-    setTestingRuleId(ruleId);
+  const _handleTestRule = async (ruleId: string, source: string, target: string) => {
+    
     try {
       await new Promise(r => setTimeout(r, 1200));
       
@@ -214,7 +209,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         [ruleId]: { error: err.message, success: false }
       }));
     } finally {
-      setTestingRuleId(null);
+      
     }
   };
 
@@ -1455,7 +1450,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <span className="block text-gray-800 dark:text-gray-200 font-semibold">Auto-Purge Sync Logs</span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">Automatically delete sync logs older than the specified number of days to optimize application performance.</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">Automatically delete sync logs older than the specified number of days to optimise application performance.</span>
             </div>
             <button 
               type="button"
@@ -1464,7 +1459,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   ...prev, 
                   databaseManagement: {
                     ...prev.databaseManagement,
-                    autoPurgeSyncLogs: !(prev.databaseManagement?.autoPurgeSyncLogs ?? false)
+                    autoPurgeSyncLogs: !(prev.databaseManagement?.autoPurgeSyncLogs ?? false),
+                    // Ensure autoPurgeDays always falls back to a valid number
+                    autoPurgeDays: prev.databaseManagement?.autoPurgeDays ?? 30
                   }
                 }));
               }}

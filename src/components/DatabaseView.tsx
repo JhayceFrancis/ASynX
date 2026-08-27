@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Table, RefreshCw, FileJson } from 'lucide-react';
+import { Database, Table, RefreshCw } from 'lucide-react';
 
 export const DatabaseView: React.FC = () => {
   const [dbData, setDbData] = useState<any>(null);

@@ -107,7 +107,7 @@ export const Win11StatusBar: React.FC<Win11StatusBarProps> = ({
 
                 <Tooltip title="ASynX Release Build" description="Windows 11 desktop companion build and Docker container version." position="top">
           <div className="flex items-center space-x-1.5 cursor-help opacity-70 hover:opacity-100 transition-opacity ml-2 border-l border-gray-300 dark:border-neutral-800 pl-3">
-            <span className="text-[10px] text-gray-500 dark:text-gray-500 font-medium">v2.4.0-beta.1</span>
+            <span className="text-[10px] text-gray-500 dark:text-gray-500 font-medium">v2.5</span>
           </div>
         </Tooltip>
         

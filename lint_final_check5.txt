@@ -1,0 +1,71 @@
+
+> asynx@2.5.0 lint
+> tsc --noEmit
+
+server.ts(180,16): error TS6133: 'res' is declared but its value is never read.
+server.ts(181,8): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(181,18): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(404,20): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(405,52): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(435,20): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(436,34): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(437,52): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(533,49): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(597,92): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(603,51): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(605,50): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(613,46): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(719,36): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(719,67): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(741,29): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1050,18): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1051,19): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1078,22): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1127,22): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1157,82): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1220,33): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1290,74): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1416,23): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1505,22): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1583,24): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1654,17): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1748,55): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1751,39): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1755,17): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1756,20): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1756,44): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1757,18): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1758,19): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1805,17): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1809,11): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1813,17): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1842,16): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1908,16): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(1980,17): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(2068,66): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(2179,5): error TS6133: 'lastSpecificTimeTrigger' is declared but its value is never read.
+server.ts(2599,34): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(2626,21): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(2722,28): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(2740,22): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(2754,22): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(2784,3): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(2798,60): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(2834,40): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+server.ts(2929,36): error TS2552: Cannot find name 'req'. Did you mean '_req'?
+src/App.tsx(369,5): error TS6133: 'itemId' is declared but its value is never read.
+src/App.tsx(403,39): error TS6133: 'itemId' is declared but its value is never read.
+src/App.tsx(645,33): error TS6133: 'itemId' is declared but its value is never read.
+src/components/GridLayoutEngine.tsx(50,62): error TS6133: 'allLayouts' is declared but its value is never read.
+src/components/Navbar.tsx(111,9): error TS6133: 'themeToggleNode' is declared but its value is never read.
+src/components/SettingsView.tsx(178,9): error TS6133: '_handleTestRule' is declared but its value is never read.
+src/components/SyncMatrixView.tsx(75,3): error TS6133: 'onImportCSV' is declared but its value is never read.
+src/components/SyncMatrixView.tsx(150,86): error TS2304: Cannot find name 'Palette'.
+src/components/SyncMatrixView.tsx(151,127): error TS2304: Cannot find name 'ChevronDown'.
+src/components/SyncMatrixView.tsx(204,12): error TS2304: Cannot find name 'Palette'.
+src/components/SyncMatrixView.tsx(539,14): error TS2304: Cannot find name 'Palette'.
+src/components/SyncScheduleView.tsx(59,67): error TS6198: All destructured elements are unused.
+src/components/ToastContainer.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/Win11TitleBar.tsx(22,3): error TS6133: 'settings' is declared but its value is never read.
+tests/backend/server.test.ts(37,13): error TS6133: 'res' is declared but its value is never read.
+tests/frontend/SettingsView.test.tsx(12,21): error TS6133: 'setFormState' is declared but its value is never read.

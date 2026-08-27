@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Activity, BarChart2, TrendingUp, AlertTriangle, Zap, Server } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, BarChart, Bar, Legend, ComposedChart } from 'recharts';
+import {  Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Bar, Legend, ComposedChart } from 'recharts';
 import { SyncAnalyticsPoint } from '../types';
 import { GridLayoutEngine } from './GridLayoutEngine';
 

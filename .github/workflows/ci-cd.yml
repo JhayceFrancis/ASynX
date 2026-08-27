@@ -3,7 +3,9 @@ name: ASynX Master CI/CD Pipeline
 on:
   push:
     branches:
-      - main # Triggers workflow automatically on merge or push to main
+      - main
+    tags:
+      - 'v*'
   workflow_dispatch: # Allows manual trigger
 
 permissions:

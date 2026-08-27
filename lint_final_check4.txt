@@ -1,0 +1,5 @@
+
+> asynx@2.5.0 lint
+> tsc --noEmit
+
+src/App.tsx(359,49): error TS1109: Expression expected.

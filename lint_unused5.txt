@@ -1,0 +1,7 @@
+
+> asynx@2.5.0-beta.0 lint
+> tsc --noEmit
+
+src/components/SyncMatrixView.tsx(1390,7): error TS1005: ')' expected.
+src/components/SyncMatrixView.tsx(1391,12): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+src/components/SyncMatrixView.tsx(1394,9): error TS1005: '}' expected.

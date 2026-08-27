@@ -9,6 +9,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   test-desktop-app:
     name: Headless Electron Smoke Test

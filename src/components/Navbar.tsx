@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, Radio, Zap, Compass, ShieldAlert, Cpu, Settings, Calendar, Layers, AlertTriangle, Tv, CheckCircle2, Monitor, Sun, Moon, Terminal, Server, Activity, Database, ExternalLink, Bookmark, LayoutDashboard, Palette } from 'lucide-react';
+import { RefreshCw, Zap, Compass, Settings, Calendar, Layers, AlertTriangle, Tv, Sun, Moon, Terminal, Server, Activity, Database, Bookmark, LayoutDashboard, Palette } from 'lucide-react';
 import { AppSettings, BrowserExtensionState, NotificationItem } from '../types';
 import NotificationTicker from './NotificationTicker';
 import { Tooltip } from './Tooltip';
@@ -39,7 +39,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   isSyncing,
   onTriggerSync,
   settings,
-  extensionState,
   isDarkMode,
   toggleDarkMode,
   notifications = [],
