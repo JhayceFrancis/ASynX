@@ -6,8 +6,8 @@ The following table lists the versions of ASynX that currently receive security 
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 2.4.x   | :white_check_mark: |
-| < 2.4   | :x:                |
+| 2.5.x   | :white_check_mark: |
+| < 2.5   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -21,7 +21,7 @@ We take the security of ASynX seriously. If you discover a security vulnerabilit
 ### Response SLA & Disclosure Process
 - **Initial Response**: We aim to acknowledge receipt of security reports within **48 hours**.
 - **Assessment**: We will evaluate the severity and work on a targeted patch.
-- **Patch & Release**: Confirmed security vulnerabilities will be fixed in a patch release (e.g., `v2.4.1-beta`).
+- **Patch & Release**: Confirmed security vulnerabilities will be fixed in a patch release (e.g., `v2.5.1-beta`).
 
 ## Security Architecture in ASynX
 

@@ -2591,7 +2591,6 @@ app.post("/api/backups/restore", async (req, res) => {
   });
 }
 
-startServer();
 
 
 // File Upload Import Mechanism
@@ -2929,3 +2928,5 @@ app.post("/api/playback/heartbeat", (req, res) => {
    playbackManager.handleHeartbeat(req.body);
    res.json({ success: true, message: "Heartbeat accepted" });
 });
+
+startServer();

@@ -1,6 +1,7 @@
 {
   "name": "asynx",
   "version": "2.5.1",
+  "author": "ASynX",
   "description": "ASynX - Cross-Platform Anime & Drama Sync Studio",
   "license": "MIT",
   "type": "module",
@@ -28,8 +29,7 @@
     "asarUnpack": [],
     "win": {
       "target": [
-        "nsis",
-        "appx"
+        "nsis"
       ]
     },
     "appx": {

@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Database
+asynx_data.enc
+.db_key
+.bak/

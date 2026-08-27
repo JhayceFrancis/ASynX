@@ -106,7 +106,7 @@ export const LogoBanner: React.FC<LogoBannerProps> = ({
                   }
                   
                   .shuriken-idle-lb {
-                    animation: xPatternSpinLb 5s infinite;
+                    animation: xPatternSpinLb 10s infinite;
                     transform-origin: 200px 200px;
                   }
                   .shuriken-syncing-lb {
@@ -123,10 +123,10 @@ export const LogoBanner: React.FC<LogoBannerProps> = ({
                   }
                   @keyframes xPatternSpinLb {
                     0% { transform: rotate(45deg); animation-timing-function: ease-in; }
-                    25% { transform: rotate(765deg); animation-timing-function: linear; }
-                    40% { transform: rotate(1035deg); animation-timing-function: ease-out; }
-                    60% { transform: rotate(1125deg); }
-                    100% { transform: rotate(1125deg); }
+                    25% { transform: rotate(2565deg); animation-timing-function: linear; }
+                    40% { transform: rotate(3555deg); animation-timing-function: ease-out; }
+                    60% { transform: rotate(3645deg); }
+                    100% { transform: rotate(3645deg); }
                   }
                   @keyframes infiniteSpinLb {
                     0% { transform: rotate(0deg); }
