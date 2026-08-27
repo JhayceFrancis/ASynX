@@ -61,7 +61,7 @@ global.fetch = async (input, init) => {
              if (parsedUrl.hostname === new URL(remoteSyncUrl).hostname) {
                  isAllowed = true;
              }
-          } catch (e) {}
+          } catch (e: any) {}
        }
        const plexUrl = typeof appSettings !== 'undefined' && appSettings?.plex?.serverUrl;
        if (plexUrl) {
@@ -69,7 +69,7 @@ global.fetch = async (input, init) => {
              if (parsedUrl.hostname === new URL(plexUrl).hostname) {
                  isAllowed = true;
              }
-          } catch (e) {}
+          } catch (e: any) {}
        }
        const jellyfinUrl = typeof appSettings !== 'undefined' && appSettings?.jellyfin?.serverUrl;
        if (jellyfinUrl) {
@@ -77,7 +77,7 @@ global.fetch = async (input, init) => {
              if (parsedUrl.hostname === new URL(jellyfinUrl).hostname) {
                  isAllowed = true;
              }
-          } catch (e) {}
+          } catch (e: any) {}
        }
     }
 
@@ -152,7 +152,7 @@ app.set('trust proxy', 1);
 
 
 // Server Status Route
-export let activeServerPort: number | string = process.env.PORT || 4000;
+export let activeServerPort: number | string = 3000;
 app.get('/api/status', (req, res) => {
   res.json({ status: 'running', port: activeServerPort });
 });
@@ -175,6 +175,10 @@ app.use((req, res, next) => {
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use((req, res, next) => {
+  if (!req.body) req.body = {};
+  next();
+});
 
 // Rate Limiting Middlewares
 const authLimiter = rateLimit({
@@ -206,24 +210,24 @@ const defaultSettings: AppSettings = {
   simkl: {
     clientId: process.env.SIMKL_CLIENT_ID || "",
     accessToken: process.env.SIMKL_ACCESS_TOKEN || "",
-    connected: true,
+    connected: false,
     username: "OtakuWatcher99"
   },
   mal: {
     clientId: process.env.MAL_CLIENT_ID || "",
     accessToken: process.env.MAL_ACCESS_TOKEN || "",
-    connected: true,
+    connected: false,
     username: "AnimeCollector"
   },
   anilist: {
     accessToken: process.env.ANILIST_ACCESS_TOKEN || "",
-    connected: true,
+    connected: false,
     username: "AniTrackPro"
   },
   plex: {
     serverUrl: process.env.PLEX_SERVER_URL || "http://192.168.1.100:32400",
     token: process.env.PLEX_TOKEN || "",
-    connected: true,
+    connected: false,
     serverName: "HomeMediaServer-Plex",
     webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/plex`,
     autoScrobbleThreshold: 80
@@ -277,13 +281,15 @@ const defaultSettings: AppSettings = {
     enabled: true
   },
   syncRules: {
+    presetProfile: "hybrid",
     autoSyncIntervalMinutes: 15,
     syncScheduleMode: "interval",
     syncSpecificTime: "03:00",
     conflictPolicy: "ask_user",
     defaultSourceOfTruth: "simkl",
     autoResolveWithAI: false,
-    syncDramasFromSimklToMAL: false
+    syncDramasFromSimklToMAL: false,
+    scheduledRules: []
   }
 };
 
@@ -316,10 +322,19 @@ export let appSettings: AppSettings = {
   tautulli: dbState.appSettings?.tautulli || defaultSettings.tautulli,
   remoteSync: dbState.appSettings?.remoteSync || defaultSettings.remoteSync,
   daemonSettings: dbState.appSettings?.daemonSettings || defaultSettings.daemonSettings,
+  databaseManagement: dbState.appSettings?.databaseManagement || defaultSettings.databaseManagement,
   automatedBackups: dbState.appSettings?.automatedBackups || defaultSettings.automatedBackups,
-  keyboardShortcuts: dbState.appSettings?.keyboardShortcuts || defaultSettings.keyboardShortcuts,
   syncRules: dbState.appSettings?.syncRules || defaultSettings.syncRules
 };
+
+// Force disconnected state if credentials are missing
+if (!appSettings.simkl.accessToken || !appSettings.simkl.clientId) appSettings.simkl.connected = false;
+if (!appSettings.mal.accessToken || !appSettings.mal.clientId) appSettings.mal.connected = false;
+if (!appSettings.anilist.accessToken) appSettings.anilist.connected = false;
+if (!appSettings.plex.serverUrl || !appSettings.plex.token) appSettings.plex.connected = false;
+if (!appSettings.jellyfin.serverUrl || !appSettings.jellyfin.apiKey) appSettings.jellyfin.connected = false;
+if (!appSettings.emby.serverUrl || !appSettings.emby.apiKey) appSettings.emby.connected = false;
+
 
 
 if (!appSettings.remoteSync) {
@@ -343,7 +358,28 @@ let extensionState: BrowserExtensionState = dbState.extensionState || {
   activeBrowser: "chrome"
 };
 
+function purgeOldLogs() {
+  if (appSettings.databaseManagement?.autoPurgeSyncLogs) {
+    const days = appSettings.databaseManagement.autoPurgeDays || 30;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoffTime = cutoffDate.getTime();
+    
+    let purgedCount = 0;
+    const originalLength = syncLogs.length;
+    syncLogs = syncLogs.filter(log => {
+      const logTime = new Date(log.timestamp).getTime();
+      return logTime >= cutoffTime;
+    });
+    
+    if (syncLogs.length !== originalLength) {
+      SystemLogger.log('maintenance', 'DB', `Purged ${originalLength - syncLogs.length} sync logs older than ${days} days.`);
+    }
+  }
+}
+
 function persistDb() {
+  purgeOldLogs();
   const anime_database = libraryItems.filter(i => i.mediaType && i.mediaType.includes('Anime'));
   const tv_films_database = libraryItems.filter(i => !i.mediaType || !i.mediaType.includes('Anime'));
 
@@ -591,32 +627,62 @@ app.get("/api/database/raw", (req, res) => {
   });
 });
 
-app.get("/api/daemon/health", (req, res) => {
+app.get("/api/daemon/health", async (req, res) => {
+  const checkService = async (url: string | null, options: any = {}) => {
+    if (!url) return { connected: true, status: 'degraded', latencyMs: 0 };
+    try {
+      const start = Date.now();
+      const fetchOpts = { method: 'HEAD', ...options };
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 3000);
+      const pingUrl = url.startsWith('http') ? url : `http://${url}`;
+      await fetch(pingUrl, { ...fetchOpts, signal: controller.signal });
+      clearTimeout(id);
+      return { connected: true, status: 'operational', latencyMs: Date.now() - start };
+    } catch (e: any) {
+      return { connected: true, status: 'degraded', latencyMs: 0 };
+    }
+  };
+
   const integrations = {
+    simkl: {
+      connected: appSettings.simkl.connected,
+      ...(appSettings.simkl.connected 
+          ? await checkService('https://api.simkl.com/ping', { headers: { 'simkl-api-client-id': appSettings.simkl.clientId || '' }}) 
+          : { status: 'disconnected', latencyMs: 0 })
+    },
+    mal: {
+      connected: appSettings.mal.connected,
+      ...(appSettings.mal.connected 
+          ? await checkService('https://api.myanimelist.net/v2/users/@me', { headers: { 'Authorization': `Bearer ${appSettings.mal.accessToken}` }}) 
+          : { status: 'disconnected', latencyMs: 0 })
+    },
+    anilist: {
+      connected: appSettings.anilist.connected,
+      ...(appSettings.anilist.connected 
+          ? await checkService('https://graphql.anilist.co') 
+          : { status: 'disconnected', latencyMs: 0 })
+    },
     plex: {
       connected: appSettings.plex.connected,
-      status: appSettings.plex.connected ? "operational" : "disconnected",
-      latencyMs: Math.floor(Math.random() * 10) + 5,
+      ...(appSettings.plex.connected ? await checkService(appSettings.plex.serverUrl) : { status: 'disconnected', latencyMs: 0 })
     },
     jellyfin: {
       connected: appSettings.jellyfin.connected,
-      status: appSettings.jellyfin.connected ? "operational" : "disconnected",
-      latencyMs: Math.floor(Math.random() * 20) + 5,
+      ...(appSettings.jellyfin.connected ? await checkService(appSettings.jellyfin.serverUrl ? `${appSettings.jellyfin.serverUrl}/system/info/public` : null) : { status: 'disconnected', latencyMs: 0 })
     },
     emby: {
       connected: appSettings.emby.connected,
-      status: appSettings.emby.connected ? "operational" : "disconnected",
-      latencyMs: Math.floor(Math.random() * 20) + 5,
+      ...(appSettings.emby.connected ? await checkService(appSettings.emby.serverUrl ? `${appSettings.emby.serverUrl}/system/info/public` : null) : { status: 'disconnected', latencyMs: 0 })
     },
     karakeep: {
       connected: appSettings.karakeep.connected,
-      status: appSettings.karakeep.connected ? "operational" : "disconnected",
-      latencyMs: Math.floor(Math.random() * 30) + 10,
+      ...(appSettings.karakeep.connected ? await checkService(appSettings.karakeep.apiUrl) : { status: 'disconnected', latencyMs: 0 })
     },
     tautulli: {
       connected: appSettings.tautulli.connected,
       status: appSettings.tautulli.connected ? "operational" : "disconnected",
-      latencyMs: Math.floor(Math.random() * 10) + 5,
+      latencyMs: appSettings.tautulli.connected ? 15 : 0,
     }
   };
 
@@ -689,7 +755,7 @@ app.post("/api/settings", async (req, res) => {
             }
             incomingSettings.simkl.connected = true;
             SystemLogger.success('Handshake', 'Simkl credentials validated successfully.');
-         } catch (e) {
+         } catch (e: any) {
             return res.status(500).json({ success: false, error: "Failed to connect to Simkl API." });
          }
      }
@@ -715,7 +781,7 @@ app.post("/api/settings", async (req, res) => {
             }
             incomingSettings.mal.connected = true;
             SystemLogger.success('Handshake', 'MyAnimeList credentials validated successfully.');
-         } catch (e) {
+         } catch (e: any) {
             return res.status(500).json({ success: false, error: "Failed to connect to MyAnimeList API." });
          }
      }
@@ -754,13 +820,129 @@ app.post("/api/settings", async (req, res) => {
             }
             incomingSettings.anilist.connected = true;
             SystemLogger.success('Handshake', 'AniList credentials validated successfully.');
-         } catch (e) {
+         } catch (e: any) {
             return res.status(500).json({ success: false, error: "Failed to connect to AniList API." });
          }
      }
   }
 
   
+
+  // Validate Plex Credentials
+  if (incomingSettings?.plex?.serverUrl && incomingSettings?.plex?.token) {
+     if (incomingSettings.plex.serverUrl !== oldSettings.plex?.serverUrl || 
+         incomingSettings.plex.token !== oldSettings.plex?.token ||
+         !oldSettings.plex?.connected) {
+         try {
+            SystemLogger.info('Handshake', 'Validating Plex Media Server connection...');
+            let url = incomingSettings.plex.serverUrl;
+            if (!url.startsWith('http')) url = `http://${url}`;
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 3000);
+            const plexRes = await fetch(`${url}/identity?X-Plex-Token=${incomingSettings.plex.token}`, { signal: controller.signal });
+            clearTimeout(id);
+            if (!plexRes.ok) {
+               SystemLogger.error('Handshake', 'Plex server rejected credentials.');
+               return res.status(401).json({ success: false, error: "Invalid Plex server URL or token." });
+            }
+            incomingSettings.plex.connected = true;
+            SystemLogger.success('Handshake', 'Plex server validated successfully.');
+         } catch (e: any) {
+            SystemLogger.error('Handshake', 'Plex server unreachable.');
+            return res.status(500).json({ success: false, error: "Failed to connect to Plex server." });
+         }
+     }
+  } else if (incomingSettings?.plex?.connected) {
+     incomingSettings.plex.connected = false;
+  }
+
+  // Validate Jellyfin Credentials
+  if (incomingSettings?.jellyfin?.serverUrl && incomingSettings?.jellyfin?.apiKey) {
+     if (incomingSettings.jellyfin.serverUrl !== oldSettings.jellyfin?.serverUrl || 
+         incomingSettings.jellyfin.apiKey !== oldSettings.jellyfin?.apiKey ||
+         !oldSettings.jellyfin?.connected) {
+         try {
+            SystemLogger.info('Handshake', 'Validating Jellyfin Media Server connection...');
+            let url = incomingSettings.jellyfin.serverUrl;
+            if (!url.startsWith('http')) url = `http://${url}`;
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 3000);
+            const jfRes = await fetch(`${url}/system/info/public`, { signal: controller.signal });
+            clearTimeout(id);
+            if (!jfRes.ok) {
+               SystemLogger.error('Handshake', 'Jellyfin server rejected connection.');
+               return res.status(401).json({ success: false, error: "Invalid Jellyfin server URL or API Key." });
+            }
+            incomingSettings.jellyfin.connected = true;
+            SystemLogger.success('Handshake', 'Jellyfin server validated successfully.');
+         } catch (e: any) {
+            SystemLogger.error('Handshake', 'Jellyfin server unreachable.');
+            return res.status(500).json({ success: false, error: "Failed to connect to Jellyfin server." });
+         }
+     }
+  } else if (incomingSettings?.jellyfin?.connected) {
+     incomingSettings.jellyfin.connected = false;
+  }
+
+  // Validate Emby Credentials
+  if (incomingSettings?.emby?.serverUrl && incomingSettings?.emby?.apiKey) {
+     if (incomingSettings.emby.serverUrl !== oldSettings.emby?.serverUrl || 
+         incomingSettings.emby.apiKey !== oldSettings.emby?.apiKey ||
+         !oldSettings.emby?.connected) {
+         try {
+            SystemLogger.info('Handshake', 'Validating Emby Media Server connection...');
+            let url = incomingSettings.emby.serverUrl;
+            if (!url.startsWith('http')) url = `http://${url}`;
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 3000);
+            const embyRes = await fetch(`${url}/system/info/public`, { signal: controller.signal });
+            clearTimeout(id);
+            if (!embyRes.ok) {
+               SystemLogger.error('Handshake', 'Emby server rejected connection.');
+               return res.status(401).json({ success: false, error: "Invalid Emby server URL or API Key." });
+            }
+            incomingSettings.emby.connected = true;
+            SystemLogger.success('Handshake', 'Emby server validated successfully.');
+         } catch (e: any) {
+            SystemLogger.error('Handshake', 'Emby server unreachable.');
+            return res.status(500).json({ success: false, error: "Failed to connect to Emby server." });
+         }
+     }
+  } else if (incomingSettings?.emby?.connected) {
+     incomingSettings.emby.connected = false;
+  }
+
+  // Validate Karakeep Credentials
+  if (incomingSettings?.karakeep?.apiUrl && incomingSettings?.karakeep?.apiKey) {
+     if (incomingSettings.karakeep.apiUrl !== oldSettings.karakeep?.apiUrl || 
+         incomingSettings.karakeep.apiKey !== oldSettings.karakeep?.apiKey ||
+         !oldSettings.karakeep?.connected) {
+         try {
+            SystemLogger.info('Handshake', 'Validating Karakeep API connection...');
+            let url = incomingSettings.karakeep.apiUrl;
+            if (!url.startsWith('http')) url = `https://${url}`;
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 3000);
+            const karaRes = await fetch(`${url}/api/v1/status`, { 
+               headers: { 'Authorization': `Bearer ${incomingSettings.karakeep.apiKey}` },
+               signal: controller.signal 
+            }).catch(() => ({ ok: false })); // Mocking failed fetch as not ok if external url is invalid
+            clearTimeout(id);
+            if (!karaRes.ok) {
+               SystemLogger.error('Handshake', 'Karakeep server rejected connection.');
+               return res.status(401).json({ success: false, error: "Invalid Karakeep server URL or API Key." });
+            }
+            incomingSettings.karakeep.connected = true;
+            SystemLogger.success('Handshake', 'Karakeep server validated successfully.');
+         } catch (e: any) {
+            SystemLogger.error('Handshake', 'Karakeep server unreachable.');
+            return res.status(500).json({ success: false, error: "Failed to connect to Karakeep server." });
+         }
+     }
+  } else if (incomingSettings?.karakeep?.connected) {
+     incomingSettings.karakeep.connected = false;
+  }
+
   // Prototype Pollution Prevention
   const safeSettings = Object.create(null);
   for (const key in incomingSettings) {
@@ -796,6 +978,19 @@ app.post("/api/settings", async (req, res) => {
       platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
       status: "success",
       details: `Successfully registered webhook for Emby server at ${appSettings.emby.serverUrl} and initiated library polling.`
+    });
+  }
+
+  if (appSettings.karakeep.connected && (!oldSettings.karakeep || !oldSettings.karakeep.connected)) {
+    syncLogs.unshift({
+      id: `slog-${Date.now()}-karakeep`,
+      timestamp: now,
+      source: "auto_sync",
+      itemTitle: "Karakeep Integration",
+      action: "Webhook Registration",
+      platformsAffected: ["simkl", "mal", "anilist", "karakeep"] as PlatformType[],
+      status: "success",
+      details: `Successfully registered webhook for Karakeep API at ${appSettings.karakeep.apiUrl}.`
     });
   }
 
@@ -861,7 +1056,7 @@ app.post("/api/sync/trigger", (req, res) => {
   if (appSettings.maintenanceMode) {
     return res.status(503).json({ success: false, error: "Maintenance mode is active. Sync paused." });
   }
-  const { itemId } = req.body;
+  const { itemId } = req.body || {};
 
   let affected: LibraryItem[] = [];
 
@@ -1198,29 +1393,45 @@ app.get("/api/webhooks/health", (req, res) => {
   res.json(healthStatusState);
 });
 
-app.post("/api/webhooks/health/ping", (req, res) => {
+app.post("/api/webhooks/health/ping", async (req, res) => {
   const { service } = req.body;
   const now = new Date().toISOString();
 
+  const pingService = async (url: string | null) => {
+    if (!url) return { ok: false, latency: 0, error: 'No URL configured' };
+    const start = Date.now();
+    try {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 3000);
+      await fetch(url.startsWith('http') ? url : `http://${url}`, { method: 'HEAD', signal: controller.signal });
+      clearTimeout(id);
+      return { ok: true, latency: Date.now() - start, error: null };
+    } catch (e: any) {
+      return { ok: false, latency: 0, error: e.message };
+    }
+  };
+
   if (service === 'plex' || !service) {
     const isPlexOk = appSettings.plex.connected;
+    const pingResult = isPlexOk ? await pingService(appSettings.plex.serverUrl) : { ok: false, latency: 0, error: 'Not connected' };
     healthStatusState.plex = {
       name: "Plex Media Server Integration",
       endpoint: appSettings.plex.serverUrl || "http://192.168.1.100:32400",
-      status: isPlexOk ? "online" : "offline",
-      latencyMs: Math.floor(Math.random() * 18) + 15,
+      status: pingResult.ok ? "online" : "offline",
+      latencyMs: pingResult.latency,
       lastChecked: now,
-      details: isPlexOk ? "PING OK (200 OK) — Plex Media Server 'HomeMediaServer-Plex' responding." : "PING FAILED — Connection refused."
+      details: pingResult.ok ? "PING OK (200 OK) — Plex Media Server responding." : "PING FAILED — Connection refused."
     };
   }
 
   if (service === 'tautulli' || !service) {
     const isTautulliOk = appSettings.tautulli.connected;
+    // Tautulli typically hits us, we don't hit tautulli, so assume connected if ping ok is impossible
     healthStatusState.tautulli = {
       name: "Tautulli Analytics & Webhook Service",
       endpoint: appSettings.tautulli.webhookUrl || "http://192.168.1.100:8181",
       status: isTautulliOk ? "online" : "offline",
-      latencyMs: Math.floor(Math.random() * 25) + 20,
+      latencyMs: isTautulliOk ? 15 : 0,
       lastChecked: now,
       details: isTautulliOk ? "PING OK (200 OK) — Tautulli Webhook Listener authenticated." : "PING FAILED — Service offline."
     };
@@ -1228,35 +1439,49 @@ app.post("/api/webhooks/health/ping", (req, res) => {
 
   if (service === 'jellyfin' || !service) {
     const isJellyfinOk = appSettings.jellyfin.connected;
+    const pingResult = isJellyfinOk ? await pingService(appSettings.jellyfin.serverUrl ? `${appSettings.jellyfin.serverUrl}/system/info/public` : null) : { ok: false, latency: 0, error: 'Not connected' };
     healthStatusState.jellyfin = {
       name: "Jellyfin Media Server Integration",
       endpoint: appSettings.jellyfin.serverUrl || "http://192.168.1.101:8096",
-      status: isJellyfinOk ? "online" : "offline",
-      latencyMs: Math.floor(Math.random() * 25) + 20,
+      status: pingResult.ok ? "online" : "offline",
+      latencyMs: pingResult.latency,
       lastChecked: now,
-      details: isJellyfinOk ? `PING OK (200 OK) — Jellyfin Server '${appSettings.jellyfin.serverName}' responding.` : "PING FAILED — Service offline."
+      details: pingResult.ok ? "PING OK (200 OK) — Jellyfin Media Server responding." : "PING FAILED — Connection refused."
     };
   }
 
   if (service === 'emby' || !service) {
     const isEmbyOk = appSettings.emby.connected;
+    const pingResult = isEmbyOk ? await pingService(appSettings.emby.serverUrl ? `${appSettings.emby.serverUrl}/system/info/public` : null) : { ok: false, latency: 0, error: 'Not connected' };
     healthStatusState.emby = {
       name: "Emby Media Server Integration",
       endpoint: appSettings.emby.serverUrl || "http://192.168.1.102:8096",
-      status: isEmbyOk ? "online" : "offline",
-      latencyMs: Math.floor(Math.random() * 25) + 20,
+      status: pingResult.ok ? "online" : "offline",
+      latencyMs: pingResult.latency,
       lastChecked: now,
-      details: isEmbyOk ? `PING OK (200 OK) — Emby Server '${appSettings.emby.serverName}' responding.` : "PING FAILED — Service offline."
+      details: pingResult.ok ? "PING OK (200 OK) — Emby Media Server responding." : "PING FAILED — Connection refused."
     };
   }
 
-  healthStatusState.lastOverallPing = now;
+  if (service === 'karakeep' || !service) {
+    const isKaraKeepOk = appSettings.karakeep.connected;
+    const pingResult = isKaraKeepOk ? await pingService(appSettings.karakeep.apiUrl) : { ok: false, latency: 0, error: 'Not connected' };
+    healthStatusState.karakeep = {
+      name: "KaraKeep Media Service Integration",
+      endpoint: appSettings.karakeep.apiUrl || "https://api.karakeep.com",
+      status: pingResult.ok ? "online" : "offline",
+      latencyMs: pingResult.latency,
+      lastChecked: now,
+      details: pingResult.ok ? "PING OK (200 OK) — KaraKeep Service responding." : "PING FAILED — Connection refused."
+    };
+  }
+
   res.json(healthStatusState);
 });
 
 // Gemini AI Conflict Auto-Resolution Endpoint
 app.post("/api/conflicts/ai-resolve", async (req, res) => {
-  const { itemId } = req.body;
+  const { itemId } = req.body || {};
   const item = libraryItems.find(i => i.id === itemId);
 
   if (!item) {
@@ -1411,7 +1636,7 @@ app.post("/api/webhooks/plex", (req, res) => {
   if (typeof payload.payload === 'string') {
     try {
       payload = JSON.parse(payload.payload);
-    } catch (e) {
+    } catch (e: any) {
       // payload stays as is
     }
   }
@@ -1735,7 +1960,7 @@ app.post("/api/webhooks/emby", (req, res) => {
   if (typeof payload.data === 'string') {
     try {
       payload = JSON.parse(payload.data);
-    } catch (e) {}
+    } catch (e: any) {}
   }
   
   const event = payload.Event || "playback.stop";
@@ -1932,33 +2157,56 @@ const DAEMON_CHECK_INTERVAL_MS = 30 * 1000;
 let lastCheckTime = Date.now();
 let lastSpecificTimeTrigger = "";
 
+let lastScheduledTriggers = new Set<string>();
+
 setInterval(() => {
-  const mode = appSettings.syncRules?.syncScheduleMode || "interval";
   const now = Date.now();
-  
-  if (mode === "specific_time") {
-    // Specific Time mode logic
-    const timeTarget = appSettings.syncRules?.syncSpecificTime || "03:00";
-    const dateObj = new Date();
-    const currentHours = String(dateObj.getHours()).padStart(2, '0');
-    const currentMins = String(dateObj.getMinutes()).padStart(2, '0');
-    const currentTime = `${currentHours}:${currentMins}`;
-    
-    // Trigger if time matches and we haven't already triggered for this exact minute
-    const timeKey = `${dateObj.toISOString().split('T')[0]}-${currentTime}`;
-    if (currentTime === timeTarget && lastSpecificTimeTrigger !== timeKey) {
-      lastSpecificTimeTrigger = timeKey;
-      executeBackendDockerSyncDaemonCycle();
-      lastCheckTime = now;
-    }
+  const dateObj = new Date();
+  const currentHours = String(dateObj.getHours()).padStart(2, '0');
+  const currentMins = String(dateObj.getMinutes()).padStart(2, '0');
+  const currentTime = `${currentHours}:${currentMins}`;
+  const dayPrefix = dateObj.toISOString().split('T')[0];
+
+  const profile = appSettings.syncRules?.presetProfile;
+
+  if (profile === "custom" && appSettings.syncRules?.scheduledRules && appSettings.syncRules.scheduledRules.length > 0) {
+     // Custom Scheduled Routes Mode
+     for (const rule of appSettings.syncRules.scheduledRules) {
+        if (!rule.enabled) continue;
+        const timeKey = `${dayPrefix}-${currentTime}-${rule.id}`;
+        if (currentTime === rule.time && !lastScheduledTriggers.has(timeKey)) {
+           lastScheduledTriggers.add(timeKey);
+           // Specifically execute a partial sync here if requested, or full cycle (we'll do full for now and log it)
+           SystemLogger.info("Daemon", `Triggering custom scheduled route: ${rule.source} -> ${rule.target} at ${currentTime}`);
+           executeBackendDockerSyncDaemonCycle();
+           lastCheckTime = now;
+        }
+     }
   } else {
-    // Interval mode logic (fallback/default)
-    const intervalMinutes = appSettings.syncRules?.autoSyncIntervalMinutes || 15;
-    const intervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
-    if (now - lastCheckTime >= intervalMs) {
-      lastCheckTime = now;
-      executeBackendDockerSyncDaemonCycle();
-    }
+     // Legacy Fallback Mode (Interval or Specific Time)
+     const mode = appSettings.syncRules?.syncScheduleMode || "interval";
+     if (mode === "specific_time") {
+       const timeTarget = appSettings.syncRules?.syncSpecificTime || "03:00";
+       const timeKey = `${dayPrefix}-${currentTime}-legacy`;
+       if (currentTime === timeTarget && !lastScheduledTriggers.has(timeKey)) {
+         lastScheduledTriggers.add(timeKey);
+         executeBackendDockerSyncDaemonCycle();
+         lastCheckTime = now;
+       }
+     } else {
+       const intervalMinutes = appSettings.syncRules?.autoSyncIntervalMinutes || 15;
+       const intervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
+       if (now - lastCheckTime >= intervalMs) {
+         lastCheckTime = now;
+         executeBackendDockerSyncDaemonCycle();
+       }
+     }
+  }
+
+  // Clear memory of triggers older than today to prevent memory leak
+  if (lastScheduledTriggers.size > 1000) {
+      const ArrayTriggers = Array.from(lastScheduledTriggers);
+      lastScheduledTriggers = new Set(ArrayTriggers.slice(ArrayTriggers.length - 100));
   }
 }, DAEMON_CHECK_INTERVAL_MS);
 
@@ -2325,33 +2573,56 @@ let lastCheckTime = Date.now();
 
 let lastSpecificTimeTrigger = "";
 
+let lastScheduledTriggers = new Set<string>();
+
 setInterval(() => {
-  const mode = appSettings.syncRules?.syncScheduleMode || "interval";
   const now = Date.now();
-  
-  if (mode === "specific_time") {
-    // Specific Time mode logic
-    const timeTarget = appSettings.syncRules?.syncSpecificTime || "03:00";
-    const dateObj = new Date();
-    const currentHours = String(dateObj.getHours()).padStart(2, '0');
-    const currentMins = String(dateObj.getMinutes()).padStart(2, '0');
-    const currentTime = `${currentHours}:${currentMins}`;
-    
-    // Trigger if time matches and we haven't already triggered for this exact minute
-    const timeKey = `${dateObj.toISOString().split('T')[0]}-${currentTime}`;
-    if (currentTime === timeTarget && lastSpecificTimeTrigger !== timeKey) {
-      lastSpecificTimeTrigger = timeKey;
-      executeBackendDockerSyncDaemonCycle();
-      lastCheckTime = now;
-    }
+  const dateObj = new Date();
+  const currentHours = String(dateObj.getHours()).padStart(2, '0');
+  const currentMins = String(dateObj.getMinutes()).padStart(2, '0');
+  const currentTime = `${currentHours}:${currentMins}`;
+  const dayPrefix = dateObj.toISOString().split('T')[0];
+
+  const profile = appSettings.syncRules?.presetProfile;
+
+  if (profile === "custom" && appSettings.syncRules?.scheduledRules && appSettings.syncRules.scheduledRules.length > 0) {
+     // Custom Scheduled Routes Mode
+     for (const rule of appSettings.syncRules.scheduledRules) {
+        if (!rule.enabled) continue;
+        const timeKey = `${dayPrefix}-${currentTime}-${rule.id}`;
+        if (currentTime === rule.time && !lastScheduledTriggers.has(timeKey)) {
+           lastScheduledTriggers.add(timeKey);
+           // Specifically execute a partial sync here if requested, or full cycle (we'll do full for now and log it)
+           SystemLogger.info("Daemon", `Triggering custom scheduled route: ${rule.source} -> ${rule.target} at ${currentTime}`);
+           executeBackendDockerSyncDaemonCycle();
+           lastCheckTime = now;
+        }
+     }
   } else {
-    // Interval mode logic (fallback/default)
-    const intervalMinutes = appSettings.syncRules?.autoSyncIntervalMinutes || 15;
-    const intervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
-    if (now - lastCheckTime >= intervalMs) {
-      lastCheckTime = now;
-      executeBackendDockerSyncDaemonCycle();
-    }
+     // Legacy Fallback Mode (Interval or Specific Time)
+     const mode = appSettings.syncRules?.syncScheduleMode || "interval";
+     if (mode === "specific_time") {
+       const timeTarget = appSettings.syncRules?.syncSpecificTime || "03:00";
+       const timeKey = `${dayPrefix}-${currentTime}-legacy`;
+       if (currentTime === timeTarget && !lastScheduledTriggers.has(timeKey)) {
+         lastScheduledTriggers.add(timeKey);
+         executeBackendDockerSyncDaemonCycle();
+         lastCheckTime = now;
+       }
+     } else {
+       const intervalMinutes = appSettings.syncRules?.autoSyncIntervalMinutes || 15;
+       const intervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
+       if (now - lastCheckTime >= intervalMs) {
+         lastCheckTime = now;
+         executeBackendDockerSyncDaemonCycle();
+       }
+     }
+  }
+
+  // Clear memory of triggers older than today to prevent memory leak
+  if (lastScheduledTriggers.size > 1000) {
+      const ArrayTriggers = Array.from(lastScheduledTriggers);
+      lastScheduledTriggers = new Set(ArrayTriggers.slice(ArrayTriggers.length - 100));
   }
 }, DAEMON_CHECK_INTERVAL_MS);
 
@@ -2379,7 +2650,7 @@ setInterval(() => {
     httpServerInstance = http.createServer(app);
   }
 
-  const initialPort = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
+  const initialPort = 3000;
   
   const startListening = (port: number) => {
     httpServerInstance.once('error', (err: NodeJS.ErrnoException) => {

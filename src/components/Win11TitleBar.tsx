@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Minus, Square, X, RefreshCw, Layers, Shield, Wifi } from 'lucide-react';
 import { ASynXLogo } from './ASynXLogo';
+import { Tooltip } from './Tooltip';
+import { AppSettings } from '../types';
 
 interface Win11TitleBarProps {
   appName?: string;
@@ -8,13 +10,17 @@ interface Win11TitleBarProps {
   isOffline?: boolean;
   onTriggerSync?: () => void;
   progress?: number;
+  settings?: AppSettings;
+  setActiveTab?: (tab: string) => void;
 }
 
 export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
   appName = "ASynX Studio",
   isSyncing = false,
   onTriggerSync,
-  progress
+  progress,
+  settings,
+  setActiveTab
 }) => {
   const [isMaximized, setIsMaximized] = useState(true);
   const [windowVisible, setWindowVisible] = useState(true);
@@ -74,14 +80,16 @@ export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
 
       {/* Left: Window Icon & Title */}
       <div className="flex items-center space-x-2.5">
-        <ASynXLogo size={20} isSyncing={isSyncing} className={`drop-shadow-[0_0_4px_rgba(99,102,241,0.5)] ${isSyncing ? 'animate-spin' : ''}`} onClick={onTriggerSync} />
-        <span className="font-semibold text-gray-800 dark:text-gray-200 tracking-tight text-[11px] sm:text-xs">
-          {appName}
-        </span>
-        <span className="hidden md:inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 text-[10px] text-gray-600 dark:text-gray-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span>Windows 11 App • x64</span>
-        </span>
+        <Tooltip title="ASynX Logo" description="Click to trigger manual sync." position="bottom">
+          <div>
+            <ASynXLogo size={20} isSyncing={isSyncing} className={`drop-shadow-[0_0_4px_rgba(99,102,241,0.5)] ${isSyncing ? 'animate-spin' : ''}`} onClick={onTriggerSync} />
+          </div>
+        </Tooltip>
+        <Tooltip title="Application Title" description={appName} position="bottom">
+          <span className="font-semibold text-gray-800 dark:text-gray-200 tracking-tight text-[11px] sm:text-xs">
+            {appName}
+          </span>
+        </Tooltip>
       </div>
 
       {/* Middle: Subtle Search/Drag Handle */}
@@ -90,29 +98,43 @@ export const Win11TitleBar: React.FC<Win11TitleBarProps> = ({
         <span>Sync Service: {serverPort === 'ERROR' ? 'Disconnected' : `Running (localhost:${serverPort})`}</span>
       </div>
 
-      {/* Right: Windows Controls */}
-      <div className="flex items-center space-x-1">
-        <button
-          onClick={() => setWindowVisible(false)}
-          title="Minimize to System Tray"
-          className="w-8 h-6 flex items-center justify-center rounded hover:bg-gray-100 dark:bg-[#111]/80 text-gray-600 dark:text-gray-400 hover:text-white transition cursor-pointer"
-        >
-          <Minus className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => setIsMaximized(!isMaximized)}
-          title={isMaximized ? "Restore Window" : "Maximize Window"}
-          className="w-8 h-6 flex items-center justify-center rounded hover:bg-gray-100 dark:bg-[#111]/80 text-gray-600 dark:text-gray-400 hover:text-white transition cursor-pointer"
-        >
-          <Square className="w-3 h-3" />
-        </button>
-        <button
-          onClick={() => setWindowVisible(false)}
-          title="Close (Minimize to Tray)"
-          className="w-8 h-6 flex items-center justify-center rounded hover:bg-rose-600 text-gray-600 dark:text-gray-400 hover:text-white transition cursor-pointer"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+      {/* Right: Health Indicators, Platform Info & Windows Controls */}
+      <div className="flex items-center space-x-3">
+        {/* Windows 11 App Info */}
+        <Tooltip title="Architecture Info" description="Running as a native-like Windows 11 application." position="bottom">
+          <span className="hidden md:inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 text-[10px] text-gray-600 dark:text-gray-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Windows 11 App • x64</span>
+          </span>
+        </Tooltip>
+
+        {/* Windows Controls */}
+        <div className="flex items-center space-x-1 pl-2 border-l border-gray-300 dark:border-neutral-700">
+          <Tooltip title="Minimize" position="bottom-right">
+            <button
+              onClick={() => setWindowVisible(false)}
+              className="w-8 h-6 flex items-center justify-center rounded hover:bg-gray-200 dark:hover:bg-[#222] text-gray-600 dark:text-gray-400 transition cursor-pointer"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
+          <Tooltip title={isMaximized ? "Restore" : "Maximize"} position="bottom-right">
+            <button
+              onClick={() => setIsMaximized(!isMaximized)}
+              className="w-8 h-6 flex items-center justify-center rounded hover:bg-gray-200 dark:hover:bg-[#222] text-gray-600 dark:text-gray-400 transition cursor-pointer"
+            >
+              <Square className="w-3 h-3" />
+            </button>
+          </Tooltip>
+          <Tooltip title="Close" position="bottom-right">
+            <button
+              onClick={() => setWindowVisible(false)}
+              className="w-8 h-6 flex items-center justify-center rounded hover:bg-rose-600 hover:text-white text-gray-600 dark:text-gray-400 transition cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
+        </div>
       </div>
     </div>
   );

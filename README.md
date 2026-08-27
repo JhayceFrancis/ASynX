@@ -26,6 +26,13 @@ Packed into a modern Windows 11 Fluent dark-themed UI, ASynX acts as your unifie
 - **Bulk Action Modals**: Intuitive mass-synchronization controls (e.g. 'Sync All Selected' vs 'Only Resolve Conflicts').
 - **WebSocket Reactivity**: UI instantly reacts and updates progress charts when a remote Plex/Tautulli webhook scrobbles an episode, backed by a deduplication playback session manager.
 
+
+### ⚡ Intelligent Workflow & Notifications
+- **Smart Resolve (AI)**: Leverage Gemini/OpenAI models to automatically analyze metadata, watch history, and episode discrepancies, presenting a one-click optimal resolution.
+- **Floating Bulk Actions Toolbar**: Check multiple items in the Sync Matrix and quickly apply mass actions (Force Sync, Mark as Watched, Ignore Conflicts) from a non-intrusive floating command bar.
+- **Drag-and-Drop Sync Scheduler**: A dedicated calendar timeline view allowing users to visually adjust background automation tasks, frequencies, and execution times using a seamless drag-and-drop interface.
+- **Push Notifications & Webhooks**: Integrated real-time notifications for sync successes, errors, and conflicts. Supports Desktop/Browser Native notifications, Discord Webhooks, Apprise, and Pushbullet.
+
 ### 🔄 Multi-Platform Sync & Automation
 - **Unified Trackers**: Sync watch status, current episode, and ratings across **Simkl**, **MyAnimeList**, and **AniList**.
 - **Plex & Tautulli Webhook Listener**: Automatically scrobble episodes when your stream reaches configurable watch thresholds (e.g. 80%).

@@ -1,0 +1,308 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { RefreshCw, Radio, Compass, ShieldAlert, Cpu, Settings, Layers, AlertTriangle, Tv, CheckCircle2, Monitor, Sun, Moon, Terminal, Server, Activity, Database, ExternalLink, Bookmark, LayoutDashboard, Palette } from 'lucide-react';
+import { AppSettings, BrowserExtensionState } from '../types';
+import { Tooltip } from './Tooltip';
+import { ASynXLogo } from './ASynXLogo';
+import { LogoBanner } from './LogoBanner';
+
+
+interface NavbarProps {
+  isEditMode?: boolean;
+  onToggleEditMode?: () => void;
+  isCustomizePanelOpen?: boolean;
+  onToggleCustomizePanel?: () => void;
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  conflictCount: number;
+  isSyncing: boolean;
+  onTriggerSync: () => void;
+  settings: AppSettings;
+  extensionState: BrowserExtensionState;
+  isDarkMode: boolean;
+  toggleDarkMode: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({
+
+  isEditMode,
+  onToggleEditMode,
+  isCustomizePanelOpen,
+  onToggleCustomizePanel,
+  activeTab,
+  setActiveTab,
+  conflictCount,
+  isSyncing,
+  onTriggerSync,
+  settings,
+  extensionState,
+  isDarkMode,
+  toggleDarkMode
+}) => {
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [animPhase, setAnimPhase] = useState<'idle' | 'flying-right' | 'returning' | 'dropped'>('idle');
+  
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.scrollY > 10);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const activeTabNode = (
+    <>
+      {(() => {
+                switch(activeTab) {
+                  case 'matrix': return <><Layers className="w-5 h-5 text-indigo-500" /><span>Sync Matrix</span></>;
+                  case 'conflicts': return <><AlertTriangle className="w-5 h-5 text-amber-500" /><span>Conflict Resolution</span></>;
+                  case 'performance': return <><Activity className="w-5 h-5 text-purple-500" /><span>Sync Performance</span></>;
+                  case 'plex': return <><Tv className="w-5 h-5 text-purple-500" /><span>Plex & Tautulli Automation</span></>;
+                  case 'extension': return <><Compass className="w-5 h-5 text-cyan-500" /><span>Extension / Webhook State</span></>;
+                  case 'settings': return <><Settings className="w-5 h-5 text-gray-500" /><span>Settings</span></>;
+                  case 'database': return <><Database className="w-5 h-5 text-gray-900 dark:text-gray-100" /><span>Database Viewer</span></>;
+                  case 'docker-backend': return <><Server className="w-5 h-5 text-blue-500" /><span>Docker Backend</span></>;
+                  case 'health': return <><Activity className="w-5 h-5 text-emerald-500" /><span>System Health</span></>;
+                  case 'bookmarks': return <><Bookmark className="w-5 h-5 text-pink-500" /><span>{settings?.nexusTabName || 'Bookmarks'}</span></>;
+                  case 'api-docs': return <><Terminal className="w-5 h-5 text-emerald-500" /><span>API Documentation</span></>;
+                  default: return null;
+                }
+             })()}
+    </>
+  );
+
+  const themeToggleNode = (
+    <motion.div layoutId="themeToggleNode" className="flex items-center">
+
+    <Tooltip title="Appearance Theme" description="Toggle between Dark Mode and Light Mode Fluent UI theme appearance." position="bottom-right">
+      <button
+        onClick={toggleDarkMode}
+        className="p-1.5 rounded-xl bg-gray-100/50 dark:bg-[#111]/50 border border-gray-300/50 dark:border-neutral-800/50 text-gray-600 dark:text-gray-400 hover:text-indigo-500 transition cursor-pointer backdrop-blur-sm flex items-center justify-center"
+      >
+        {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      </button>
+               </Tooltip>
+    </motion.div>
+  );
+
+  const isIconMode = isScrolled || animPhase === 'returning' || animPhase === 'dropped';
+  const syncButtonNode = (
+    <motion.div layoutId="syncButtonNode" className="flex items-center">
+
+    <Tooltip title="Instant Full Sync" description="Trigger immediate cross-platform synchronization across all accounts and server database." position="bottom-right">
+      <button
+        onClick={onTriggerSync}
+        disabled={isSyncing}
+        className={`flex items-center justify-center space-x-2 rounded-xl bg-gradient-to-r from-indigo-600/90 to-purple-600/90 hover:from-indigo-500 hover:to-purple-500 active:from-indigo-700 active:to-purple-700 text-white font-bold shadow-md backdrop-blur-sm transition disabled:opacity-50 cursor-pointer ${isIconMode ? 'p-1.5' : 'px-4 py-1.5 text-xs'}`}
+      >
+        <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+        {!isIconMode && <span>{isSyncing ? 'Syncing...' : 'Sync All Now'}</span>}
+      </button>
+               </Tooltip>
+    </motion.div>
+  );
+
+  return (
+    <header className={`${settings?.theme?.navbarStyle === 'solid' ? 'bg-white dark:bg-[#0a0a0a]' : settings?.theme?.navbarStyle === 'transparent' ? 'bg-transparent' : 'bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-2xl'} text-gray-900 dark:text-gray-100 sticky top-0 z-40 shadow-lg select-none transition-all duration-300`}>
+      {/* Top Header / Merged Header */}
+      <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-3 transition-all duration-300 ${(isScrolled && animPhase === 'dropped') ? 'py-1.5' : 'py-2.5'}`}>
+        <div className="flex items-center space-x-4">
+          <Tooltip title="ASynX Sync" description="Click to immediately synchronize all platforms and refresh the library." position="bottom">
+            <div>
+              <ASynXLogo 
+                 className={`drop-shadow-[0_0_15px_rgba(99,102,241,0.5)] transition-all duration-300 ${isScrolled ? 'w-10 h-10' : 'w-14 h-14'}`}
+                 isSyncing={isSyncing} size={isScrolled ? 40 : 56} 
+                 onClick={onTriggerSync}
+              />
+            </div>
+          </Tooltip>
+          <div>
+            <div className="flex items-center space-x-2">
+              <Tooltip title="ASynX Dashboard" description="Cross-Platform Anime & Drama Sync Studio. Manage your connected integrations." position="bottom">
+                <div>
+                  <LogoBanner
+                    gradientColors={settings?.theme?.gradientColors}
+                    accentColor={settings?.theme?.accentColor}
+                    isScrolled={isScrolled}
+                    isSyncing={isSyncing}
+                    onAnimationPhaseChange={setAnimPhase}
+                  />
+            </div>
+          </Tooltip>
+        </div>
+      </div>
+    </div>
+        <div className="flex items-center space-x-4 ml-auto">
+          <AnimatePresence>
+            {(!isScrolled || animPhase === 'flying-right' || animPhase === 'returning') && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center space-x-2.5"
+              >
+                {themeToggleNode}
+                {syncButtonNode}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
+          
+          {(isScrolled && animPhase === 'dropped') && (
+            <div className="flex items-center space-x-4">
+                          <nav className="flex items-center space-x-1 flex-shrink-0">
+
+                
+               <Tooltip title="Sync Matrix" position="bottom">
+                  <motion.button layoutId="tab-matrix" onClick={() => setActiveTab('matrix')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'matrix' ? 'bg-indigo-600/10 text-indigo-600 dark:text-indigo-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Layers className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="Conflict Resolution" position="bottom">
+                  <motion.button layoutId="tab-conflicts" onClick={() => setActiveTab('conflicts')} className={`relative p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'conflicts' ? 'bg-amber-600/20 text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}>
+                    <AlertTriangle className="w-4 h-4" />
+                    {conflictCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />}
+                  </motion.button>
+               </Tooltip>
+               <Tooltip title="Sync Performance" position="bottom">
+                  <motion.button layoutId="tab-performance" onClick={() => setActiveTab('performance')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'performance' ? 'bg-purple-600/20 text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Activity className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="Plex & Tautulli Automation" position="bottom">
+                  <motion.button layoutId="tab-plex" onClick={() => setActiveTab('plex')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'plex' ? 'bg-purple-600/20 text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Tv className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="Extension / Webhook State" position="bottom">
+                  <motion.button layoutId="tab-extension" onClick={() => setActiveTab('extension')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'extension' ? 'bg-cyan-600/20 text-cyan-600 dark:text-cyan-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Compass className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="Settings" position="bottom">
+                  <motion.button layoutId="tab-settings" onClick={() => setActiveTab('settings')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'settings' ? 'bg-gray-200/80 dark:bg-[#111]/80 text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Settings className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="Database" position="bottom">
+                  <motion.button layoutId="tab-database" onClick={() => setActiveTab('database')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'database' ? 'bg-gray-200/80 dark:bg-[#111]/80 text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Database className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="Docker Backend" position="bottom">
+                  <motion.button layoutId="tab-docker-backend" onClick={() => setActiveTab('docker-backend')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'docker-backend' ? 'bg-blue-600/20 text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Server className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="System Health" position="bottom">
+                  <motion.button layoutId="tab-health" onClick={() => setActiveTab('health')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'health' ? 'bg-emerald-600/20 text-emerald-600 dark:text-emerald-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Activity className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title={settings?.nexusTabName || 'Bookmarks'} position="bottom">
+                  <motion.button layoutId="tab-bookmarks" onClick={() => setActiveTab('bookmarks')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'bookmarks' ? 'bg-pink-600/20 text-pink-600 dark:text-pink-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Bookmark className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="API Documentation" position="bottom">
+                  <motion.button layoutId="tab-api-docs" onClick={() => setActiveTab('api-docs')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'api-docs' ? 'bg-emerald-600/20 text-emerald-600 dark:text-emerald-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Terminal className="w-4 h-4" /></motion.button>
+               </Tooltip>
+            
+               {onToggleEditMode && (activeTab === 'matrix' || activeTab === 'health' || activeTab === 'performance') && (
+                 <Tooltip title={isEditMode ? "Exit Layout Edit Mode" : "Customize Tab Layout"} position="bottom">
+                    <button 
+                      onClick={onToggleEditMode} 
+                      className={`p-1.5 rounded-xl transition cursor-pointer ${isEditMode ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}
+                    >
+                      <LayoutDashboard className="w-4 h-4" />
+                    </button>
+               </Tooltip>
+               )}
+               {onToggleCustomizePanel && (
+                 <Tooltip title="Quick Appearance Customizer" position="bottom">
+                    <button 
+                      onClick={onToggleCustomizePanel} 
+                      className={`p-1.5 rounded-xl transition cursor-pointer ${isCustomizePanelOpen ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}
+                    >
+                      <Palette className="w-4 h-4" />
+                    </button>
+               </Tooltip>
+               )}
+            
+              
+            </nav>
+            <div className="flex items-center space-x-2 ml-4 pl-4 border-l border-gray-300 dark:border-neutral-700">
+              {themeToggleNode}
+              {syncButtonNode}
+            </div>
+              
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Windows 11 Fluent Tab Bar (Hidden on scroll) */}
+      <div 
+        className={`transition-all duration-300 overflow-hidden ${(isScrolled && animPhase === 'dropped') ? 'max-h-0 opacity-0' : 'max-h-16 opacity-100 bg-transparent'}`} 
+        style={settings?.theme?.subheaderColor && !isScrolled ? { backgroundColor: settings?.theme?.subheaderColor } : {}}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-0.5 flex items-center justify-between gap-4 overflow-x-auto scrollbar-none">
+          <div className="flex items-center space-x-2 flex-shrink-0 text-gray-900 dark:text-gray-100 font-bold text-sm select-none py-1">
+             {activeTabNode}
+          </div>
+          <div className="flex items-center space-x-4 ml-auto">
+                      {!(isScrolled && animPhase === 'dropped') && (<>
+                      <nav className="flex items-center space-x-1 flex-shrink-0">
+
+               
+               <Tooltip title="Sync Matrix" position="bottom">
+                  <motion.button layoutId="tab-matrix" onClick={() => setActiveTab('matrix')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'matrix' ? 'bg-indigo-600/10 text-indigo-600 dark:text-indigo-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Layers className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="Conflict Resolution" position="bottom">
+                  <motion.button layoutId="tab-conflicts" onClick={() => setActiveTab('conflicts')} className={`relative p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'conflicts' ? 'bg-amber-600/20 text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}>
+                    <AlertTriangle className="w-4 h-4" />
+                    {conflictCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />}
+                  </motion.button>
+               </Tooltip>
+               <Tooltip title="Sync Performance" position="bottom">
+                  <motion.button layoutId="tab-performance" onClick={() => setActiveTab('performance')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'performance' ? 'bg-purple-600/20 text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Activity className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="Plex & Tautulli Automation" position="bottom">
+                  <motion.button layoutId="tab-plex" onClick={() => setActiveTab('plex')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'plex' ? 'bg-purple-600/20 text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Tv className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="Extension / Webhook State" position="bottom">
+                  <motion.button layoutId="tab-extension" onClick={() => setActiveTab('extension')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'extension' ? 'bg-cyan-600/20 text-cyan-600 dark:text-cyan-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Compass className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="Settings" position="bottom">
+                  <motion.button layoutId="tab-settings" onClick={() => setActiveTab('settings')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'settings' ? 'bg-gray-200/80 dark:bg-[#111]/80 text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Settings className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="Database" position="bottom">
+                  <motion.button layoutId="tab-database" onClick={() => setActiveTab('database')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'database' ? 'bg-gray-200/80 dark:bg-[#111]/80 text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Database className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="Docker Backend" position="bottom">
+                  <motion.button layoutId="tab-docker-backend" onClick={() => setActiveTab('docker-backend')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'docker-backend' ? 'bg-blue-600/20 text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Server className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="System Health" position="bottom">
+                  <motion.button layoutId="tab-health" onClick={() => setActiveTab('health')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'health' ? 'bg-emerald-600/20 text-emerald-600 dark:text-emerald-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Activity className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title={settings?.nexusTabName || 'Bookmarks'} position="bottom">
+                  <motion.button layoutId="tab-bookmarks" onClick={() => setActiveTab('bookmarks')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'bookmarks' ? 'bg-pink-600/20 text-pink-600 dark:text-pink-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Bookmark className="w-4 h-4" /></motion.button>
+               </Tooltip>
+               <Tooltip title="API Documentation" position="bottom">
+                  <motion.button layoutId="tab-api-docs" onClick={() => setActiveTab('api-docs')} className={`p-1.5 rounded-xl transition cursor-pointer ${activeTab === 'api-docs' ? 'bg-emerald-600/20 text-emerald-600 dark:text-emerald-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}><Terminal className="w-4 h-4" /></motion.button>
+               </Tooltip>
+            
+               {onToggleEditMode && (activeTab === 'matrix' || activeTab === 'health' || activeTab === 'performance') && (
+                 <Tooltip title={isEditMode ? "Exit Layout Edit Mode" : "Customize Tab Layout"} position="bottom">
+                    <button 
+                      onClick={onToggleEditMode} 
+                      className={`p-1.5 rounded-xl transition cursor-pointer ${isEditMode ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}
+                    >
+                      <LayoutDashboard className="w-4 h-4" />
+                    </button>
+               </Tooltip>
+               )}
+               {onToggleCustomizePanel && (
+                 <Tooltip title="Quick Appearance Customizer" position="bottom">
+                    <button 
+                      onClick={onToggleCustomizePanel} 
+                      className={`p-1.5 rounded-xl transition cursor-pointer ${isCustomizePanelOpen ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}
+                    >
+                      <Palette className="w-4 h-4" />
+                    </button>
+               </Tooltip>
+               )}
+            
+            
+            </nav>
+            <div className="flex items-center space-x-2 ml-4 pl-4 border-l border-gray-300 dark:border-neutral-700">
+              {themeToggleNode}
+              {syncButtonNode}
+            </div>
+            
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};

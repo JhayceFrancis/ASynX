@@ -1,0 +1,339 @@
+   837	        <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
+   838	          <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
+   839	            
+   840	            <div className="flex items-center space-x-2">
+   841	              <PlexLogo className="w-4 h-4 text-[#E5A00D]" />
+   842	              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Media Servers & Scrobblers (Plex, Jellyfin, Emby)</h3>
+   843	            </div>
+   844	            {(formState.plex?.connected || formState.jellyfin?.connected || formState.emby?.connected) ? (
+   845	              <span className="text-xs text-purple-400 font-semibold bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+   846	                Webhooks Active
+   847	              </span>
+   848	            ) : (
+   849	              <span className="text-xs text-gray-500 font-semibold bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700">
+   850	                Disconnected
+   851	              </span>
+   852	            )}
+   853	
+   854	          </div>
+   855	
+   856	          <div className="space-y-6 text-xs">
+   857	            {/* Plex */}
+   858	            <div className="space-y-3">
+   859	                            <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
+   860	                <h4 className="font-semibold text-gray-800 dark:text-gray-200">Plex</h4>
+   861	                {formState.plex?.serverUrl && (
+   862	                  <button type="button" onClick={() => handleTestWebhook('plex', formState.plex.serverUrl)} className="text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition">
+   863	                    {testingWebhookId === 'plex' ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+   864	                    Test Handshake
+   865	                  </button>
+   866	                )}
+   867	              </div>
+   868	              {webhookTestResults['plex'] && (
+   869	                <div className="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-lg p-3 border border-indigo-100 dark:border-indigo-900/30 animate-in fade-in">
+   870	                  <div className="flex justify-between items-center mb-2">
+   871	                    <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Plex Connection Validator</span>
+   872	                    {webhookTestResults['plex'].success ? (
+   873	                       <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
+   874	                    ) : (
+   875	                       <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
+   876	                    )}
+   877	                  </div>
+   878	                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+   879	                    <div>
+   880	                      <span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Payload Request</span>
+   881	                      <pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['plex'].payload, null, 2)}</pre>
+   882	                    </div>
+   883	                    <div>
+   884	                      <span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response Output</span>
+   885	                      <pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['plex'].response || webhookTestResults['plex'].error, null, 2)}</pre>
+   886	                    </div>
+   887	                  </div>
+   888	                </div>
+   889	              )}
+   890	
+   891	            {/* Tautulli */}
+   892	            <div className="space-y-3">
+   893	              <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
+   894	                <div className="flex items-center space-x-2">
+   895	                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">Tautulli</h4>
+   896	                  {formState.tautulli?.webhookUrl && (
+   897	                    <button type="button" onClick={() => handleTestWebhook('tautulli', formState.tautulli.webhookUrl)} className="text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition">
+   898	                      {testingWebhookId === 'tautulli' ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+   899	                      Test Handshake
+   900	                    </button>
+   901	                  )}
+   902	                </div>
+   903	                <button type="button"
+   904	                  onClick={() => setFormState(prev => ({ ...prev, tautulli: { secretKey: prev.tautulli?.secretKey ?? '', webhookUrl: prev.tautulli?.webhookUrl ?? '', connected: !(prev.tautulli?.connected ?? false) } }))}
+   905	                  className={`w-8 h-4 rounded-full transition-colors relative ${formState.tautulli?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+   906	                >
+   907	                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.tautulli?.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
+   908	                </button>
+   909	              </div>
+   910	                
+   911	              {formState.tautulli?.connected && (
+   912	                <div className="space-y-3">
+   913	                  {webhookTestResults['tautulli'] && (
+   914	                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-lg p-3 border border-indigo-100 dark:border-indigo-900/30 animate-in fade-in">
+   915	                      <div className="flex justify-between items-center mb-2">
+   916	                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Tautulli Validator</span>
+   917	                        {webhookTestResults['tautulli'].success ? (
+   918	                           <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
+   919	                        ) : (
+   920	                           <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
+   921	                        )}
+   922	                      </div>
+   923	                      <div className="grid grid-cols-2 gap-2 text-[10px]">
+   924	                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Request</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['tautulli'].payload, null, 2)}</pre></div>
+   925	                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['tautulli'].response || webhookTestResults['tautulli'].error, null, 2)}</pre></div>
+   926	                      </div>
+   927	                    </div>
+   928	                  )}
+   929	                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   930	                    <div>
+   931	                      <label className="text-gray-600 dark:text-gray-400 font-medium">Tautulli Secret/API Key</label>
+   932	                      <input
+   933	                        type="password"
+   934	                        value={formState.tautulli?.secretKey || ''}
+   935	                        onChange={(e) => setFormState(prev => ({
+   936	                          ...prev,
+   937	                          tautulli: { ...prev.tautulli, webhookUrl: prev.tautulli?.webhookUrl ?? '', connected: true, secretKey: e.target.value }
+   938	                        }))}
+   939	                        className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+   940	                      />
+   941	                    </div>
+   942	                    <div>
+   943	                      <label className="text-gray-600 dark:text-gray-400 font-medium">Tautulli Webhook Inbound URL</label>
+   944	                      <input
+   945	                        type="text"
+   946	                        value={formState.tautulli?.webhookUrl || ''}
+   947	                        onChange={(e) => setFormState(prev => ({
+   948	                          ...prev,
+   949	                          tautulli: { ...prev.tautulli, secretKey: prev.tautulli?.secretKey ?? '', connected: true, webhookUrl: e.target.value }
+   950	                        }))}
+   951	                        className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+   952	                      />
+   953	                    </div>
+   954	                  </div>
+   955	                </div>
+   956	              )}
+   957	            </div>
+   958	
+   959	              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   960	                <div>
+   961	                  <label className="text-gray-600 dark:text-gray-400 font-medium">Server URL</label>
+   962	                  <input
+   963	                    type="text"
+   964	                    value={formState.plex.serverUrl || ''}
+   965	                    onChange={(e) => setFormState({
+   966	                      ...formState,
+   967	                      plex: { ...formState.plex, serverUrl: e.target.value }
+   968	                    })}
+   969	                    className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+   970	                    placeholder="http://192.168.1.100:32400"
+   971	                  />
+   972	                </div>
+   973	                <div>
+   974	                  <label className="text-gray-600 dark:text-gray-400 font-medium">Plex Token</label>
+   975	                  <input
+   976	                    type="password"
+   977	                    value={formState.plex.token || ''}
+   978	                    onChange={(e) => setFormState({
+   979	                      ...formState,
+   980	                      plex: { ...formState.plex, token: e.target.value }
+   981	                    })}
+   982	                    className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+   983	                    placeholder="Plex API Token"
+   984	                  />
+   985	                </div>
+   986	                <div>
+   987	                  <label className="text-gray-600 dark:text-gray-400 font-medium">Plex Server Name</label>
+   988	                  <input
+   989	                    type="text"
+   990	                    value={formState.plex.serverName}
+   991	                    onChange={(e) => setFormState({
+   992	                      ...formState,
+   993	                      plex: { ...formState.plex, serverName: e.target.value }
+   994	                    })}
+   995	                    className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+   996	                  />
+   997	                </div>
+   998	                <div>
+   999	                  <label className="text-gray-600 dark:text-gray-400 font-medium">Scrobble Threshold (%)</label>
+  1000	                  <input
+  1001	                    type="number"
+  1002	                    min="50"
+  1003	                    max="98"
+  1004	                    value={formState.plex.autoScrobbleThreshold}
+  1005	                    onChange={(e) => setFormState({
+  1006	                      ...formState,
+  1007	                      plex: { ...formState.plex, autoScrobbleThreshold: Number(e.target.value) }
+  1008	                    })}
+  1009	                    className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+  1010	                  />
+  1011	                </div>
+  1012	              </div>
+  1013	            </div>
+  1014	
+  1015	            {/* Jellyfin */}
+  1016	            <div className="space-y-3">
+  1017	              <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
+  1018	                <div className="flex items-center space-x-2">
+  1019	                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">Jellyfin</h4>
+  1020	                  {formState.jellyfin?.serverUrl && (
+  1021	                    <button type="button" onClick={() => handleTestWebhook('jellyfin', formState.jellyfin.serverUrl)} className="text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition">
+  1022	                      {testingWebhookId === 'jellyfin' ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+  1023	                      Test Handshake
+  1024	                    </button>
+  1025	                  )}
+  1026	                </div>
+  1027	                <button type="button"
+  1028	                  onClick={() => setFormState(prev => ({ ...prev, jellyfin: { serverUrl: prev.jellyfin?.serverUrl ?? '', apiKey: prev.jellyfin?.apiKey ?? '', serverName: prev.jellyfin?.serverName ?? '', webhookUrl: prev.jellyfin?.webhookUrl ?? '', autoScrobbleThreshold: prev.jellyfin?.autoScrobbleThreshold ?? 85, connected: !(prev.jellyfin?.connected ?? false) } }))}
+  1029	                  className={`w-8 h-4 rounded-full transition-colors relative ${formState.jellyfin?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+  1030	                >
+  1031	                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.jellyfin?.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
+  1032	                </button>
+  1033	              </div>
+  1034	              
+  1035	              {formState.jellyfin?.connected && (
+  1036	                <div className="space-y-3">
+  1037	                  {webhookTestResults['jellyfin'] && (
+  1038	                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-lg p-3 border border-indigo-100 dark:border-indigo-900/30 animate-in fade-in">
+  1039	                      <div className="flex justify-between items-center mb-2">
+  1040	                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Jellyfin Validator</span>
+  1041	                        {webhookTestResults['jellyfin'].success ? (
+  1042	                           <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
+  1043	                        ) : (
+  1044	                           <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
+  1045	                        )}
+  1046	                      </div>
+  1047	                      <div className="grid grid-cols-2 gap-2 text-[10px]">
+  1048	                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Request</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['jellyfin'].payload, null, 2)}</pre></div>
+  1049	                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['jellyfin'].response || webhookTestResults['jellyfin'].error, null, 2)}</pre></div>
+  1050	                      </div>
+  1051	                    </div>
+  1052	                  )}
+  1053	                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1054	                  <div>
+  1055	                    <label className="text-gray-600 dark:text-gray-400 font-medium">Jellyfin Server Name</label>
+  1056	                    <input
+  1057	                      type="text"
+  1058	                      value={formState.jellyfin.serverName}
+  1059	                      onChange={(e) => setFormState({
+  1060	                        ...formState,
+  1061	                        jellyfin: { ...formState.jellyfin, serverName: e.target.value }
+  1062	                      })}
+  1063	                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+  1064	                    />
+  1065	                  </div>
+  1066	                  <div>
+  1067	                    <label className="text-gray-600 dark:text-gray-400 font-medium">Server URL</label>
+  1068	                    <input
+  1069	                      type="text"
+  1070	                      value={formState.jellyfin.serverUrl}
+  1071	                      onChange={(e) => setFormState({
+  1072	                        ...formState,
+  1073	                        jellyfin: { ...formState.jellyfin, serverUrl: e.target.value }
+  1074	                      })}
+  1075	                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+  1076	                    />
+  1077	                  </div>
+  1078	                  <div className="sm:col-span-2">
+  1079	                    <label className="text-gray-600 dark:text-gray-400 font-medium">API Key</label>
+  1080	                    <input
+  1081	                      type="password"
+  1082	                      value={formState.jellyfin.apiKey}
+  1083	                      onChange={(e) => setFormState({
+  1084	                        ...formState,
+  1085	                        jellyfin: { ...formState.jellyfin, apiKey: e.target.value }
+  1086	                      })}
+  1087	                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+  1088	                      placeholder="Jellyfin API Token"
+  1089	                    />
+  1090	                  </div></div>
+  1091	                </div>
+  1092	              )}
+  1093	            </div>
+  1094	            {/* Emby */}
+  1095	            <div className="space-y-3">
+  1096	              <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
+  1097	                <div className="flex items-center space-x-2">
+  1098	                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">Emby</h4>
+  1099	                  {formState.emby?.serverUrl && (
+  1100	                    <button type="button" onClick={() => handleTestWebhook('emby', formState.emby.serverUrl)} className="text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition">
+  1101	                      {testingWebhookId === 'emby' ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+  1102	                      Test Handshake
+  1103	                    </button>
+  1104	                  )}
+  1105	                </div>
+  1106	                <button type="button"
+  1107	                  onClick={() => setFormState(prev => ({ ...prev, emby: { serverUrl: prev.emby?.serverUrl ?? '', apiKey: prev.emby?.apiKey ?? '', serverName: prev.emby?.serverName ?? '', webhookUrl: prev.emby?.webhookUrl ?? '', autoScrobbleThreshold: prev.emby?.autoScrobbleThreshold ?? 85, connected: !(prev.emby?.connected ?? false) } }))}
+  1108	                  className={`w-8 h-4 rounded-full transition-colors relative ${formState.emby?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+  1109	                >
+  1110	                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.emby?.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
+  1111	                </button>
+  1112	              </div>
+  1113	              
+  1114	              {formState.emby?.connected && (
+  1115	                <div className="space-y-3">
+  1116	                  {webhookTestResults['emby'] && (
+  1117	                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-lg p-3 border border-indigo-100 dark:border-indigo-900/30 animate-in fade-in">
+  1118	                      <div className="flex justify-between items-center mb-2">
+  1119	                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Emby Validator</span>
+  1120	                        {webhookTestResults['emby'].success ? (
+  1121	                           <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
+  1122	                        ) : (
+  1123	                           <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
+  1124	                        )}
+  1125	                      </div>
+  1126	                      <div className="grid grid-cols-2 gap-2 text-[10px]">
+  1127	                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Request</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['emby'].payload, null, 2)}</pre></div>
+  1128	                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['emby'].response || webhookTestResults['emby'].error, null, 2)}</pre></div>
+  1129	                      </div>
+  1130	                    </div>
+  1131	                  )}
+  1132	                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1133	                  <div>
+  1134	                    <label className="text-gray-600 dark:text-gray-400 font-medium">Emby Server Name</label>
+  1135	                    <input
+  1136	                      type="text"
+  1137	                      value={formState.emby.serverName}
+  1138	                      onChange={(e) => setFormState({
+  1139	                        ...formState,
+  1140	                        emby: { ...formState.emby, serverName: e.target.value }
+  1141	                      })}
+  1142	                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+  1143	                    />
+  1144	                  </div>
+  1145	                  <div>
+  1146	                    <label className="text-gray-600 dark:text-gray-400 font-medium">Server URL</label>
+  1147	                    <input
+  1148	                      type="text"
+  1149	                      value={formState.emby.serverUrl}
+  1150	                      onChange={(e) => setFormState({
+  1151	                        ...formState,
+  1152	                        emby: { ...formState.emby, serverUrl: e.target.value }
+  1153	                      })}
+  1154	                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+  1155	                    />
+  1156	                  </div>
+  1157	                  <div className="sm:col-span-2">
+  1158	                    <label className="text-gray-600 dark:text-gray-400 font-medium">API Key</label>
+  1159	                    <input
+  1160	                      type="password"
+  1161	                      value={formState.emby.apiKey}
+  1162	                      onChange={(e) => setFormState({
+  1163	                        ...formState,
+  1164	                        emby: { ...formState.emby, apiKey: e.target.value }
+  1165	                      })}
+  1166	                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+  1167	                      placeholder="Emby API Token"
+  1168	                    />
+  1169	                  </div>
+  1170	                </div>
+  1171	                </div>
+  1172	              )}
+  1173	            </div>
+  1174	            
+  1175	          </div>

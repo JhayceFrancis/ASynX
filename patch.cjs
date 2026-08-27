@@ -1,48 +1,53 @@
 const fs = require('fs');
-let content = fs.readFileSync('server.ts', 'utf8');
+let content = fs.readFileSync('src/components/LogoBanner.tsx', 'utf8');
 
-const target = `
-if (!appSettings.remoteSync.apiKey) {
-  appSettings.remoteSync.apiKey = crypto.randomBytes(32).toString('hex');
-  const hostUrl = process.env.APP_URL || "http://<YOUR_DOCKER_IP>:3000";
-  console.log('\\n===============================================================');
-  console.log(' 🚀 ASynX Remote Sync Backend Initialized');
-  console.log('===============================================================');
-  console.log(' [!] A new API Key has been auto-generated for Remote Sync.');
-  console.log('');
-  console.log(\` 🔗 Server URL: \${hostUrl}\`);
-  console.log(\` 🔑 API Key:    \${appSettings.remoteSync.apiKey}\`);
-  console.log('');
-  console.log(' Use this Server URL and API Key in your Windows or Browser');
-  console.log(' Client settings to pair them with this Docker backend.');
-  console.log('===============================================================\\n');
+const target = `                  .shuriken-idle-lb {
+                    animation: infiniteSpinLb 15s linear infinite;
+                    transform-origin: 200px 200px;
+                  }
+                  .shuriken-syncing-lb {
+                    animation: infiniteSpinLb 1.5s linear infinite;
+                    transform-origin: 200px 200px;
+                  }
+                  .shuriken-fast-lb {
+                    animation: infiniteSpinLb 0.5s linear infinite;
+                    transform-origin: 200px 200px;
+                  }
+                  @keyframes flyInLb {
+                    0% { transform: translateX(100vw) rotate(1080deg) scale(0.5); opacity: 0; }
+                    100% { transform: translateX(0px) rotate(0deg) scale(1); opacity: 1; }
+                  }
+                  @keyframes infiniteSpinLb {`;
+
+const replacement = `                  .shuriken-idle-lb {
+                    animation: xPatternSpinLb 5s infinite;
+                    transform-origin: 200px 200px;
+                  }
+                  .shuriken-syncing-lb {
+                    animation: infiniteSpinLb 1.5s linear infinite;
+                    transform-origin: 200px 200px;
+                  }
+                  .shuriken-fast-lb {
+                    animation: infiniteSpinLb 0.5s linear infinite;
+                    transform-origin: 200px 200px;
+                  }
+                  @keyframes flyInLb {
+                    0% { transform: translateX(100vw) rotate(1080deg) scale(0.5); opacity: 0; }
+                    100% { transform: translateX(0px) rotate(0deg) scale(1); opacity: 1; }
+                  }
+                  @keyframes xPatternSpinLb {
+                    0% { transform: rotate(0deg); animation-timing-function: ease-in; }
+                    25% { transform: rotate(720deg); animation-timing-function: linear; }
+                    35% { transform: rotate(990deg); animation-timing-function: ease-out; }
+                    75% { transform: rotate(1080deg); }
+                    100% { transform: rotate(1080deg); }
+                  }
+                  @keyframes infiniteSpinLb {`;
+
+if (content.includes('animation: infiniteSpinLb 15s linear infinite;')) {
+  content = content.replace(target, replacement);
+  fs.writeFileSync('src/components/LogoBanner.tsx', content);
+  console.log("Successfully patched src/components/LogoBanner.tsx");
+} else {
+  console.log("Could not find the target string.");
 }
-
-let libraryItems: LibraryItem[] = dbState.libraryItems || [];
-`;
-
-const insert = `
-if (!appSettings.remoteSync.apiKey) {
-  appSettings.remoteSync.apiKey = crypto.randomBytes(32).toString('hex');
-  const hostUrl = process.env.APP_URL || "http://<YOUR_DOCKER_IP>:3000";
-  console.log('\\n===============================================================');
-  console.log(' 🚀 ASynX Remote Sync Backend Initialized');
-  console.log('===============================================================');
-  console.log(' [!] A new API Key has been auto-generated for Remote Sync.');
-  console.log('');
-  console.log(\` 🔗 Server URL: \${hostUrl}\`);
-  console.log(\` 🔑 API Key:    \${appSettings.remoteSync.apiKey}\`);
-  console.log('');
-  console.log(' Use this Server URL and API Key in your Windows or Browser');
-  console.log(' Client settings to pair them with this Docker backend.');
-  console.log('===============================================================\\n');
-  
-  // Persist it so it doesn't rotate on every boot
-  // We'll call persistDb after it's defined, or we can just inline saveDb if needed, 
-  // actually wait, persistDb is defined further down. 
-}
-let libraryItems: LibraryItem[] = dbState.libraryItems || [];
-`;
-
-content = content.replace(target, insert);
-fs.writeFileSync('server.ts', content);

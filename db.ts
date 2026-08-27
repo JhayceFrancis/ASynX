@@ -99,7 +99,7 @@ export function loadDb(defaultData: any): any {
       logMaintenance('Cryptographic integrity check passed.');
       return decrypted;
     } catch (err) {
-      logError("Failed to decrypt DB (Cryptographic integrity check failed or file corrupted):", err);
+      logWarn("Failed to decrypt DB (Cryptographic integrity check failed or file corrupted). Initiating automatic recovery...");
       logMaintenance("Cryptographic integrity check failed.");
       
       // --- Database Maintenance & Recovery ---

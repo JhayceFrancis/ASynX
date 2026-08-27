@@ -1,6 +1,6 @@
 {
   "name": "asynx",
-  "version": "2.4.39",
+  "version": "2.5.0",
   "description": "ASynX - Cross-Platform Anime & Drama Sync Studio",
   "license": "MIT",
   "type": "module",
@@ -16,30 +16,35 @@
     "build:exe": "npm run build && electron-builder --win"
   },
   "build": {
-    "appId": "com.jhaycefrancis.asynx",
+    "appId": "net.itsjc.asynx",
     "productName": "ASynX",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
-      "electron-main.js",
-      "ASynX-split/**/*"
+      "electron-main.js"
     ],
-    "asarUnpack": [
-      "ASynX-split/**/*"
-    ],
+    "asarUnpack": [],
     "win": {
-      "target": "nsis"
+      "target": [
+        "nsis",
+        "appx"
+      ]
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+    "appx": {
+      "applicationId": "ASynX",
+      "identityName": "JhayceFrancis.ASynX",
+      "publisher": "CN=33482D18-0B96-40AB-8B34-80CCD0733481",
+      "publisherDisplayName": "JhayceFrancis",
+      "displayName": "ASynX",
+      "backgroundColor": "#1A1A24"
     }
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@google/genai": "^2.18.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^6.1.0",

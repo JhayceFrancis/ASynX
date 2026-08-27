@@ -94,10 +94,17 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
+          {state.installed ? (
           <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-semibold flex items-center space-x-1.5">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
             <span>Plugin Extension Engine Active</span>
           </span>
+          ) : (
+          <span className="px-3 py-1 rounded-full bg-gray-500/20 text-gray-400 border border-gray-500/30 text-xs font-semibold flex items-center space-x-1.5">
+            <span className="w-2 h-2 rounded-full bg-gray-400" />
+            <span>Plugin Extension Engine Inactive</span>
+          </span>
+          )}
         </div>
       </div>
 
@@ -118,9 +125,15 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
                 </div>
                 <span className="text-xs font-bold text-gray-900 dark:text-gray-100">AniSync Matrix Helper</span>
               </div>
-              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
-                Connected
-              </span>
+              {state.installed ? (
+                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                  Connected
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[10px] font-bold border border-rose-500/30">
+                  Disconnected
+                </span>
+              )}
             </div>
 
             {/* Current Active Stream Detector Box */}

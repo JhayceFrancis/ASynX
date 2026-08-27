@@ -5,7 +5,8 @@ import {
   PlatformType, 
   WatchStatus,
   SyncAnalyticsPoint,
-  AppSettings
+  AppSettings,
+  NotificationItem
 } from '../types';
 import { 
   Search, 
@@ -32,7 +33,7 @@ import {
   List,
   Upload,
   ArrowUpDown
-} from 'lucide-react';
+, Palette, X, Bell} from "lucide-react";
 import { 
   ResponsiveContainer, 
   ComposedChart, 
@@ -50,6 +51,23 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Responsive, WidthProvider } from "react-grid-layout/legacy";
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable';
+import { SortablePanel } from './SortablePanel';
+import { DashboardLayoutManager } from './DashboardLayoutManager';
 import { PanelConfig } from '../types';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -66,6 +84,7 @@ interface SyncMatrixViewProps {
   onImportCSV?: (items: LibraryItem[]) => void;
   onUndoAction?: (itemId: string) => void;
   isEditMode?: boolean;
+  notifications?: NotificationItem[];
   onSaveSettings?: (settings: AppSettings) => void;
 }
 
@@ -80,11 +99,179 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
   onImportCSV,
   onUndoAction,
   isEditMode = false,
+  notifications = [],
   onSaveSettings
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'conflicts' | 'Anime TV Series' | 'Anime Film' | 'Film' | 'TV Series' | 'Anime Special' | 'Drama' | 'history'>('all');
   const [analyticsData, setAnalyticsData] = useState<SyncAnalyticsPoint[]>([]);
+  const [activePanelId, setActivePanelId] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setLayout((items) => {
+        const oldIndex = items.findIndex((i) => i.i === active.id);
+        const newIndex = items.findIndex((i) => i.i === over.id);
+        const updated = arrayMove(items, oldIndex, newIndex);
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        if (onSaveSettings && settings) {
+          onSaveSettings({ ...settings, dashboardLayout: updated });
+        }
+        return updated;
+      });
+    }
+  };
+
+  
+  const togglePanelVisibility = (id: string) => {
+    const exists = layout.find(l => l.i === id);
+    let updated;
+    if (exists) {
+      updated = layout.filter(l => l.i !== id);
+    } else {
+      updated = [...layout, { type: 'panel', i: id, x: 0, y: Infinity, w: 12, h: 4 }];
+    }
+    setLayout(updated);
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+    if (onSaveSettings && settings) onSaveSettings({ ...settings, dashboardLayout: updated });
+  };
+
+  const updatePanelStyle = (id: string, updates: Partial<PanelConfig>) => {
+    const updated = layout.map(p => p.i === id ? { ...p, ...updates } : p);
+    setLayout(updated);
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+    if (onSaveSettings && settings) onSaveSettings({ ...settings, dashboardLayout: updated });
+  };
+  
+  const applySizePreset = (id: string, preset: 'portrait' | 'landscape' | 'square') => {
+    const updated = layout.map(p => {
+      if (p.i === id) {
+        if (preset === 'portrait') return { ...p, w: 4, h: 12 };
+        if (preset === 'landscape') return { ...p, w: 12, h: 6 };
+        if (preset === 'square') return { ...p, w: 6, h: 8 };
+      }
+      return p;
+    });
+    setLayout(updated);
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+    if (onSaveSettings && settings) onSaveSettings({ ...settings, dashboardLayout: updated });
+  };
+  
+  const getPanelStyle = (id: string) => {
+    const p = layout.find(l => l.i === id);
+    if (!p) return {};
+    return {
+      '--panel-font-family': p.fontFamily || 'inherit',
+      '--panel-font-size': p.fontSize === 'sm' ? '0.875rem' : p.fontSize === 'lg' ? '1.125rem' : '1rem',
+      '--panel-font-style': p.fontStyle === 'italic' ? 'italic' : 'normal',
+      '--panel-font-weight': p.fontStyle === 'bold' ? 'bold' : 'normal',
+      '--panel-text-color': p.textColor || 'inherit',
+      fontFamily: 'var(--panel-font-family)',
+      fontSize: 'var(--panel-font-size)',
+      fontStyle: 'var(--panel-font-style)',
+      fontWeight: 'var(--panel-font-weight)',
+      color: 'var(--panel-text-color)'
+    } as any;
+  };
+  
+  const getPanelClass = (id: string, baseClass: string) => {
+    const p = layout.find(l => l.i === id);
+    if (!p) return baseClass;
+    const customBg = p.bgGradient || p.bgColor || '';
+    if (customBg) {
+      // Remove any default bg- classes if customBg is present, simplified logic:
+      return `${baseClass} ${customBg}`;
+    }
+    return baseClass;
+  };
+  
+  const renderCustomizer = (id: string) => {
+    if (activePanelId !== id || !isEditMode) return null;
+    const p = layout.find(l => l.i === id);
+    if (!p) return null;
+    return (
+      <div className="absolute inset-0 z-50 bg-white/95 dark:bg-black/95 backdrop-blur-md p-4 overflow-y-auto rounded-2xl border border-indigo-500/50 shadow-xl">
+        <div className="flex justify-between items-center mb-4">
+          <h4 className="font-bold text-sm text-indigo-500 flex items-center gap-2"><Palette className="w-4 h-4"/> Customise Panel</h4>
+          <button onClick={() => setActivePanelId(null)} className="p-1 hover:bg-gray-200 dark:hover:bg-neutral-800 rounded"><X className="w-4 h-4"/></button>
+        </div>
+        <div className="space-y-4 text-xs">
+          <div>
+            <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1">Layout Size</label>
+            <div className="flex gap-2">
+              <button onClick={() => applySizePreset(id, 'portrait')} className="px-2 py-1 bg-gray-100 dark:bg-neutral-800 rounded hover:bg-indigo-500/20">Portrait</button>
+              <button onClick={() => applySizePreset(id, 'landscape')} className="px-2 py-1 bg-gray-100 dark:bg-neutral-800 rounded hover:bg-indigo-500/20">Landscape</button>
+              <button onClick={() => applySizePreset(id, 'square')} className="px-2 py-1 bg-gray-100 dark:bg-neutral-800 rounded hover:bg-indigo-500/20">Square</button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1">Typography</label>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <select onChange={(e) => updatePanelStyle(id, { fontFamily: e.target.value })} value={p.fontFamily || ''} className="bg-gray-100 dark:bg-neutral-800 border-none rounded p-1">
+                <option value="">Default Font</option>
+                <option value="sans-serif">Sans-Serif</option>
+                <option value="serif">Serif</option>
+                <option value="monospace">Monospace</option>
+              </select>
+              <select onChange={(e) => updatePanelStyle(id, { fontSize: e.target.value })} value={p.fontSize || ''} className="bg-gray-100 dark:bg-neutral-800 border-none rounded p-1">
+                <option value="">Default Size</option>
+                <option value="sm">Small</option>
+                <option value="base">Normal</option>
+                <option value="lg">Large</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => updatePanelStyle(id, { fontStyle: p.fontStyle === 'bold' ? '' : 'bold' })} className={`px-2 py-1 rounded ${p.fontStyle === 'bold' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-neutral-800'}`}>Bold</button>
+              <button onClick={() => updatePanelStyle(id, { fontStyle: p.fontStyle === 'italic' ? '' : 'italic' })} className={`px-2 py-1 rounded ${p.fontStyle === 'italic' ? 'bg-indigo-500 text-white' : 'bg-gray-100 dark:bg-neutral-800'}`}>Italic</button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1">Text Color</label>
+            <div className="grid grid-cols-5 gap-1">
+              <button onClick={() => updatePanelStyle(id, { textColor: '' })} className="h-6 rounded bg-gray-200 dark:bg-neutral-800 border border-gray-300 dark:border-neutral-700 flex items-center justify-center text-xs">A</button>
+              <button onClick={() => updatePanelStyle(id, { textColor: '#6366f1' })} className="h-6 rounded bg-[#6366f1]"></button>
+              <button onClick={() => updatePanelStyle(id, { textColor: '#10b981' })} className="h-6 rounded bg-[#10b981]"></button>
+              <button onClick={() => updatePanelStyle(id, { textColor: '#f43f5e' })} className="h-6 rounded bg-[#f43f5e]"></button>
+              <button onClick={() => updatePanelStyle(id, { textColor: '#f59e0b' })} className="h-6 rounded bg-[#f59e0b]"></button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1">Background Gradient</label>
+            <div className="grid grid-cols-3 gap-1">
+              <button onClick={() => updatePanelStyle(id, { bgGradient: '', bgColor: '' })} className="h-6 rounded bg-gray-200 dark:bg-neutral-800 border border-gray-300 dark:border-neutral-700"></button>
+              <button onClick={() => updatePanelStyle(id, { bgGradient: 'bg-gradient-to-br from-indigo-500/20 to-purple-500/20' })} className="h-6 rounded bg-gradient-to-br from-indigo-500/20 to-purple-500/20"></button>
+              <button onClick={() => updatePanelStyle(id, { bgGradient: 'bg-gradient-to-br from-emerald-500/20 to-cyan-500/20' })} className="h-6 rounded bg-gradient-to-br from-emerald-500/20 to-cyan-500/20"></button>
+              <button onClick={() => updatePanelStyle(id, { bgGradient: 'bg-gradient-to-br from-rose-500/20 to-orange-500/20' })} className="h-6 rounded bg-gradient-to-br from-rose-500/20 to-orange-500/20"></button>
+              <button onClick={() => updatePanelStyle(id, { bgGradient: 'bg-gradient-to-br from-slate-800 to-black' })} className="h-6 rounded bg-gradient-to-br from-slate-800 to-black"></button>
+              <button onClick={() => updatePanelStyle(id, { bgGradient: 'bg-gradient-to-br from-indigo-900 to-slate-900' })} className="h-6 rounded bg-gradient-to-br from-indigo-900 to-slate-900"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  const renderEditToolbar = (id: string) => {
+    if (!isEditMode) return null;
+    return (
+      <div className="absolute top-2 right-2 z-40 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/80 backdrop-blur-md rounded-lg p-1 border border-neutral-700">
+        <button onClick={(e) => { e.stopPropagation(); setActivePanelId(activePanelId === id ? null : id); }} className="p-1 hover:bg-indigo-500/20 text-indigo-400 rounded" title="Customize Style & Size">
+          <Palette className="w-3.5 h-3.5" />
+        </button>
+        <div className="drag-handle cursor-move p-1 hover:bg-neutral-800 rounded text-gray-300">
+          <Settings className="w-3.5 h-3.5" />
+        </div>
+      </div>
+    );
+  };
+
   const [chartMetric, setChartMetric] = useState<'frequency' | 'rates'>('frequency');
   const [viewMode, setViewMode] = useState<'grid' | 'table' | 'block'>(
     settings?.theme?.defaultViewMode === 'list' ? 'table' : (settings?.theme?.defaultViewMode || 'grid') as any
@@ -104,7 +291,8 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
     return [
       { i: 'metrics', x: 0, y: 0, w: 12, h: 4 },
       { i: 'recent', x: 0, y: 4, w: 12, h: 6 },
-      { i: 'historical', x: 0, y: 10, w: 12, h: 14 },
+      { i: 'notifications', x: 0, y: 10, w: 12, h: 6 },
+      { i: 'historical', x: 0, y: 16, w: 12, h: 14 },
       { i: 'library', x: 0, y: 24, w: 8, h: 28 },
       { i: 'sidelog', x: 8, y: 24, w: 4, h: 28 }
     ];
@@ -410,22 +598,57 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
             </h3>
             <p className="text-xs text-indigo-400">Drag to reposition dashboard panels.</p>
           </div>
+          <div className="flex items-center space-x-2">
+            <DashboardLayoutManager 
+              currentLayout={layout} 
+              onLoadLayout={(l) => { setLayout(l); localStorage.setItem(storageKey, JSON.stringify(l)); if (onSaveSettings && settings) onSaveSettings({ ...settings, dashboardLayout: l }); }}
+              tabId="sync_matrix" 
+            />
+            <button onClick={() => setPaletteOpen(!paletteOpen)} className="flex items-center space-x-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition shadow-md">
+            <Palette className="w-3.5 h-3.5" />
+            <span>Toggle Panels</span>
+          </button>
+          </div>
         </div>
       )}
-      <ResponsiveGridLayout
-        className="layout"
-        layouts={{ lg: layout }}
-        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-        cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-        rowHeight={30}
-        onLayoutChange={handleLayoutChange}
-        isDraggable={isEditMode}
-        isResizable={isEditMode}
-        margin={[24, 24]}
-        useCSSTransforms={true}
-      >
+      
+      {isEditMode && paletteOpen && (
+        <div className="mb-4 grid grid-cols-2 md:grid-cols-5 gap-2 p-4 bg-gray-50 dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-xl shadow-inner">
+          {['metrics', 'recent', 'historical', 'library', 'sidelog'].map(pid => {
+            const isActive = layout.some(l => l.i === pid);
+            return (
+              <button 
+                key={pid} 
+                onClick={() => togglePanelVisibility(pid)}
+                className={`flex flex-col items-center justify-center p-3 border rounded-xl transition text-xs font-semibold ${isActive ? 'border-indigo-500 bg-indigo-500/10 text-indigo-500' : 'border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#111] text-gray-500'}`}
+              >
+                {isActive ? 'Hide' : 'Show'} {pid.charAt(0).toUpperCase() + pid.slice(1)}
+              </button>
+            )
+          })}
+        </div>
+      )}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={layout.map(l => l.i)} strategy={rectSortingStrategy}>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 w-full">
+            {layout.map(p => {
+              let colSpan = 'col-span-12';
+              if (p.w === 6) colSpan = 'col-span-12 md:col-span-6';
+              if (p.w === 4) colSpan = 'col-span-12 md:col-span-4';
+              if (p.w === 8) colSpan = 'col-span-12 md:col-span-8';
+              if (p.customSize === 'portrait') colSpan = 'col-span-12 md:col-span-4';
+              if (p.customSize === 'landscape') colSpan = 'col-span-12';
+              if (p.customSize === 'square') colSpan = 'col-span-12 md:col-span-6';
+              if (p.customSize === 'wide') colSpan = 'col-span-12';
+              if (p.customSize === 'tall') colSpan = 'col-span-12 md:col-span-8';
+              
+              return (
+                <SortablePanel key={p.i} id={p.i} className={colSpan} isEditMode={isEditMode || paletteOpen}>
+
       {/* Metrics Row */}
-      <div key="metrics" className="w-full h-full">
+      {p.i === "metrics" && ( <div key="metrics" className={`w-full h-full group relative rounded-2xl ${getPanelClass('metrics', '')}`} style={getPanelStyle('metrics')}>
+  {renderEditToolbar('metrics')}
+  {renderCustomizer('metrics')}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 h-full">
         {/* Metric 1 */}
         <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-2xl p-4 shadow-sm relative overflow-hidden">
@@ -481,19 +704,26 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Plex Auto-Scrobbles</p>
-              <h3 className="text-2xl font-bold text-purple-400 mt-1">100%</h3>
-              <p className="text-xs text-purple-300 mt-0.5">Webhook Active & Ready</p>
+              <h3 className={`text-2xl font-bold mt-1 ${settings?.plex?.connected ? 'text-purple-400' : 'text-gray-400'}`}>
+                {settings?.plex?.connected ? '100%' : '0%'}
+              </h3>
+              <p className={`text-xs mt-0.5 ${settings?.plex?.connected ? 'text-purple-300' : 'text-gray-500'}`}>
+                {settings?.plex?.connected ? 'Webhook Active & Ready' : 'Webhook Inactive'}
+              </p>
             </div>
-            <div className="p-3 bg-purple-500/10 text-purple-400 rounded-xl border border-purple-500/20">
+            <div className={`p-3 rounded-xl border ${settings?.plex?.connected ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
               <Tv className="w-6 h-6" />
             </div>
           </div>
         </div>
       </div>
       </div>
+      )}
 
       {/* SUMMARY CARD: 5 Most Recent Sync Events */}
-      <div key="recent" className="w-full h-full">
+      {p.i === "recent" && ( <div key="recent" className={`w-full h-full group relative rounded-2xl ${getPanelClass('recent', '')}`} style={getPanelStyle('recent')}>
+  {renderEditToolbar('recent')}
+  {renderCustomizer('recent')}
       <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 shadow-md space-y-4">
         <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
           <div className="flex items-center space-x-2.5">
@@ -553,9 +783,12 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
         </div>
       </div>
       </div>
+      )}
 
       {/* DASHBOARD VISUALIZATION: Historical Sync Frequency & Success Rates (Recharts) */}
-      <div key="historical" className="w-full h-full">
+      {p.i === "historical" && ( <div key="historical" className={`w-full h-full group relative rounded-2xl ${getPanelClass('historical', '')}`} style={getPanelStyle('historical')}>
+  {renderEditToolbar('historical')}
+  {renderCustomizer('historical')}
       <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 shadow-md space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-neutral-900 pb-4">
           <div className="flex items-center space-x-2.5">
@@ -637,9 +870,12 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
         </div>
       </div>
       </div>
+      )}
 
       {/* Main Table / Grid */}
-      <div key="library" className="w-full h-full overflow-hidden flex flex-col space-y-4 min-w-0">
+      {p.i === "library" && ( <div key="library" className={`w-full h-full overflow-hidden flex flex-col space-y-4 min-w-0 group relative rounded-2xl ${getPanelClass('library', '')}`} style={getPanelStyle('library')}>
+  {renderEditToolbar('library')}
+  {renderCustomizer('library')}
           {/* Controls Bar */}
           <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-2xl p-4 flex flex-col gap-4 shadow-sm">
             
@@ -1223,9 +1459,12 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
             </div>
           )}
         </div>
+      )}
 
         {/* Side Log / Activity Feed (1 col) */}
-        <div key="sidelog" className="w-full h-full overflow-hidden space-y-4">
+        {p.i === "sidelog" && ( <div key="sidelog" className={`w-full h-full overflow-hidden space-y-4 group relative rounded-2xl ${getPanelClass('sidelog', '')}`} style={getPanelStyle('sidelog')}>
+  {renderEditToolbar('sidelog')}
+  {renderCustomizer('sidelog')}
           <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-2xl p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center space-x-2">
@@ -1264,7 +1503,13 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
             </div>
           </div>
         </div>
-      </ResponsiveGridLayout>
+      )}
+                      </SortablePanel>
+              );
+            })}
+          </div>
+        </SortableContext>
+      </DndContext>
 
       {/* Bulk Sync Modal */}
       <AnimatePresence>

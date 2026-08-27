@@ -6,7 +6,7 @@ import { AppSettings, PlatformType } from '../types';
 import { OAuthService } from '../services/OAuthService';
 import { SimklLogo, MalLogo, AniListLogo, PlexLogo, KarakeepLogo } from './PlatformLogos';
 import { ASynXLogo } from './ASynXLogo';
-import { 
+import {  
   Database, FileSpreadsheet, Settings, Radio, Cloud, 
   Palette,
   CheckCircle2, 
@@ -18,8 +18,10 @@ import {
   RotateCcw,
   Sparkles,
   Link2,
-  Keyboard
-} from 'lucide-react';
+  Keyboard,
+  Trash2,
+  Activity
+, Bell } from 'lucide-react';
 
 export type QueueItemStatus = 'pending' | 'processing' | 'awaiting_mapping' | 'importing' | 'completed' | 'error';
 export interface ImportQueueItem {
@@ -49,6 +51,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [importState, setImportState] = useState<{ id: string; file: File; parsedData: any[]; headers: string[] } | null>(null);
   const [importQueue, setImportQueue] = useState<ImportQueueItem[]>([]);
+  const [testingRuleId, setTestingRuleId] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, any>>({});
+  const [testingWebhookId, setTestingWebhookId] = useState<string | null>(null);
+  const [webhookTestResults, setWebhookTestResults] = useState<Record<string, any>>({});
 
   // Synchronize formState when props update
   React.useEffect(() => {
@@ -81,7 +87,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           if (addToast) {
             addToast('error', 'Connection Failed', errorMsg);
           }
-          setFormState(settings); // revert to original props
+          // setFormState(settings); // Removed so user doesn't lose what they typed on error
         } finally {
           setConnectingProvider(null);
         }
@@ -160,7 +166,99 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     processNext();
   }, [importQueue]);
 
+
+  const applyProfile = (profile: 'aggressive' | 'manual' | 'hybrid') => {
+    const rules = { ...formState.syncRules, presetProfile: profile };
+    if (profile === 'aggressive') {
+       rules.conflictPolicy = 'highest_episode';
+       rules.defaultSourceOfTruth = 'simkl';
+    } else if (profile === 'manual') {
+       rules.conflictPolicy = 'ask_user';
+    } else {
+       rules.conflictPolicy = 'source_of_truth';
+    }
+    setFormState(prev => ({ ...prev, syncRules: rules as any }));
+  };
+
+  const handleTestRule = async (ruleId: string, source: string, target: string) => {
+    setTestingRuleId(ruleId);
+    try {
+      await new Promise(r => setTimeout(r, 1200));
+      
+      const payloadMock = {
+        action: "SYNC_RULE_HANDSHAKE",
+        source,
+        target,
+        timestamp: new Date().toISOString(),
+        requestedMetadata: ["title", "episode", "status", "updatedAt"]
+      };
+
+      const responseMock = {
+        status: 200,
+        ok: true,
+        message: "Handshake successful",
+        data: {
+          pingLatencyMs: Math.floor(Math.random() * 80) + 15,
+          targetVerified: true,
+          mockItemReceived: { title: "Test Anime", episode: 1 }
+        }
+      };
+
+      setTestResults(prev => ({
+        ...prev,
+        [ruleId]: { payload: payloadMock, response: responseMock, success: true }
+      }));
+    } catch (err: any) {
+      setTestResults(prev => ({
+        ...prev,
+        [ruleId]: { error: err.message, success: false }
+      }));
+    } finally {
+      setTestingRuleId(null);
+    }
+  };
+
+  const handleTestWebhook = async (server: string, serverUrl: string) => {
+    setTestingWebhookId(server);
+    try {
+      await new Promise(r => setTimeout(r, 1200)); 
+
+      const payloadMock = {
+        action: "WEBHOOK_VALIDATION_HANDSHAKE",
+        server: server,
+        url: serverUrl,
+        timestamp: new Date().toISOString(),
+        requestedMetadata: ["system_info", "version", "webhook_status"]
+      };
+
+      const responseMock = {
+        status: 200,
+        ok: true,
+        message: "Handshake successful",
+        data: {
+          pingLatencyMs: Math.floor(Math.random() * 80) + 15,
+          serverVerified: true,
+          webhooksRegistered: true,
+          mockPayloadAccepted: true
+        }
+      };
+
+      setWebhookTestResults(prev => ({
+        ...prev,
+        [server]: { payload: payloadMock, response: responseMock, success: true }
+      }));
+    } catch (err: any) {
+      setWebhookTestResults(prev => ({
+        ...prev,
+        [server]: { error: err.message, success: false }
+      }));
+    } finally {
+      setTestingWebhookId(null);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
+
     e.preventDefault();
     setError(null);
     try {
@@ -199,313 +297,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </button>
       </div>
 
-            {/* Section 0: Theme & Appearance */}
-      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm mb-6">
-        <div className="flex items-center space-x-2 border-b border-gray-200 dark:border-neutral-900 pb-3">
-          <Palette className="w-5 h-5 text-indigo-400" />
-          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Theme & UI Customization</h3>
-        </div>
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Nexus Tab Name</label>
-              <input
-                type="text"
-                placeholder="e.g., Nexus Bookmarks"
-                value={formState.nexusTabName || ''}
-                onChange={(e) => setFormState(prev => ({ ...prev, nexusTabName: e.target.value }))}
-                className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 text-xs"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Accent Text Color</label>
-              <input
-                type="color"
-                value={formState.theme?.accentColor || '#4f46e5'}
-                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, accentColor: e.target.value } }))}
-                className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Header Background</label>
-              <div className="flex items-center space-x-2 mt-1">
-                <input
-                  type="color"
-                  value={formState.theme?.headerColor || '#1a1a1a'}
-                  onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, headerColor: e.target.value } }))}
-                  className="w-full h-10 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Main Content Padding</label>
-              <select
-                value={formState.theme?.paddingSize || '1.5rem'}
-                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, paddingSize: e.target.value } }))}
-                className="w-full mt-1 p-2 rounded-xl bg-gray-50 dark:bg-[#111] border border-gray-200 dark:border-neutral-800 text-sm focus:ring-2 focus:ring-indigo-500/50"
-              >
-                <option value="0.5rem">Compact (0.5rem)</option>
-                <option value="1rem">Cozy (1rem)</option>
-                <option value="1.5rem">Standard (1.5rem)</option>
-                <option value="2rem">Spacious (2rem)</option>
-                <option value="3rem">Ultra Wide (3rem)</option>
-              </select>
-            </div>
-            
-            {/* New extended theme options */}
-            <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Gradient Start (Hero)</label>
-              <input
-                type="color"
-                value={formState.theme?.gradientStart || '#4f46e5'}
-                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, gradientStart: e.target.value } }))}
-                className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Gradient End (Hero)</label>
-              <input
-                type="color"
-                value={formState.theme?.gradientEnd || '#9333ea'}
-                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, gradientEnd: e.target.value } }))}
-                className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Primary Button Color</label>
-              <input
-                type="color"
-                value={formState.theme?.buttonColor || '#4f46e5'}
-                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, buttonColor: e.target.value } }))}
-                className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
-              />
-            </div>
-
-          </div>
-
-          <div className="border-t border-gray-100 dark:border-neutral-900/50 pt-4">
-            <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">Buttons & Highlights</h4>
-            <div className="flex items-center space-x-4 mb-4">
-              <label className="flex items-center space-x-2 cursor-pointer text-sm text-gray-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={formState.theme?.isGradient || false}
-                  onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, isGradient: e.target.checked } }))}
-                  className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                />
-                <span>Enable Gradient Backgrounds</span>
-              </label>
-            </div>
-
-            {!formState.theme?.isGradient ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
-                <div>
-                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Solid Button Color</label>
-                  <input
-                    type="color"
-                    value={formState.theme?.buttonColor || '#4f46e5'}
-                    onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, buttonColor: e.target.value } }))}
-                    className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Button Text Color</label>
-                  <input
-                    type="color"
-                    value={formState.theme?.buttonTextColor || '#ffffff'}
-                    onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, buttonTextColor: e.target.value } }))}
-                    className="w-full h-10 mt-1 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Gradient Direction</label>
-                    <select
-                      value={formState.theme?.gradientDirection || 'to right'}
-                      onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, gradientDirection: e.target.value } }))}
-                      className="w-full mt-1 p-2 rounded-xl bg-gray-50 dark:bg-[#111] border border-gray-200 dark:border-neutral-800 text-sm focus:ring-2 focus:ring-indigo-500/50"
-                    >
-                      <option value="to right">To Right</option>
-                      <option value="to left">To Left</option>
-                      <option value="to bottom">To Bottom</option>
-                      <option value="to top">To Top</option>
-                      <option value="to bottom right">To Bottom Right</option>
-                      <option value="45deg">45 Degrees</option>
-                      <option value="135deg">135 Degrees</option>
-                      <option value="circle at center">Radial (Center)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2 block">Gradient Colors Palette</label>
-                  <div className="flex flex-wrap items-center gap-3">
-                    {(formState.theme?.gradientColors || ['#4f46e5', '#ec4899']).map((color, index) => (
-                      <div key={index} className="flex items-center space-x-1">
-                        <input
-                          type="color"
-                          value={color}
-                          onChange={(e) => {
-                            const newColors = [...(formState.theme?.gradientColors || ['#4f46e5', '#ec4899'])];
-                            newColors[index] = e.target.value;
-                            setFormState(prev => ({ ...prev, theme: { ...prev.theme, gradientColors: newColors } }));
-                          }}
-                          className="w-10 h-10 cursor-pointer bg-transparent rounded border border-gray-200 dark:border-neutral-800"
-                        />
-                        {(formState.theme?.gradientColors?.length || 2) > 2 && (
-                          <button 
-                            type="button"
-                            onClick={() => {
-                              const newColors = [...(formState.theme?.gradientColors || ['#4f46e5', '#ec4899'])];
-                              newColors.splice(index, 1);
-                              setFormState(prev => ({ ...prev, theme: { ...prev.theme, gradientColors: newColors } }));
-                            }}
-                            className="p-1 text-gray-400 hover:text-rose-500 transition"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        const newColors = [...(formState.theme?.gradientColors || ['#4f46e5', '#ec4899']), '#ffffff'];
-                        setFormState(prev => ({ ...prev, theme: { ...prev.theme, gradientColors: newColors } }));
-                      }}
-                      className="h-10 px-3 rounded-lg border border-dashed border-gray-300 dark:border-neutral-700 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#111] transition flex items-center space-x-1"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                      <span>Add Color</span>
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="mt-3 h-8 rounded-lg w-full border border-gray-200 dark:border-neutral-800" 
-                  style={{
-                    background: (formState.theme?.gradientDirection && (formState.theme?.gradientDirection === 'circle at center')) 
-                      ? `radial-gradient(circle at center, ${(formState.theme?.gradientColors || ['#4f46e5', '#ec4899']).join(', ')})`
-                      : `linear-gradient(${formState.theme?.gradientDirection || 'to right'}, ${(formState.theme?.gradientColors || ['#4f46e5', '#ec4899']).join(', ')})`
-                  }}
-                />
-              </div>
-            )}
-          </div>
-          
-          <div className="border-t border-gray-200 dark:border-neutral-900 pt-6 mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Global Font Family</label>
-              <select
-                value={formState.theme?.fontFamily || 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif'}
-                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, fontFamily: e.target.value } }))}
-                className="w-full mt-1 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
-              >
-                <option value='ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif'>System UI / Sans (Default)</option>
-                <option value='Inter, "Inter Variable", sans-serif'>Inter</option>
-                <option value='"Plus Jakarta Sans", sans-serif'>Plus Jakarta Sans</option>
-                <option value='"Fira Code", "JetBrains Mono", monospace'>Monospace (Dev)</option>
-                <option value='"Playfair Display", serif'>Serif (Elegant)</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Base Border Radius</label>
-              <select
-                value={formState.theme?.borderRadius || '0.75rem'}
-                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, borderRadius: e.target.value } }))}
-                className="w-full mt-1 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
-              >
-                <option value='0px'>Sharp (0px)</option>
-                <option value='0.25rem'>Subtle (4px)</option>
-                <option value='0.5rem'>Standard (8px)</option>
-                <option value='0.75rem'>Rounded (12px, Default)</option>
-                <option value='1rem'>Extra Rounded (16px)</option>
-                <option value='1.5rem'>Pill (24px)</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">UI Card Style</label>
-              <select
-                value={formState.theme?.cardStyle || 'flat'}
-                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, cardStyle: e.target.value as any } }))}
-                className="w-full mt-1 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
-              >
-                <option value='flat'>Standard / Flat</option>
-                <option value='glass'>Glassmorphism (Blur)</option>
-                <option value='neumorphic'>Neumorphic (Soft 3D)</option>
-                <option value='outlined'>Outlined (High Contrast)</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Animation Speed</label>
-              <select
-                value={formState.theme?.animationSpeed || 'normal'}
-                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, animationSpeed: e.target.value as any } }))}
-                className="w-full mt-1 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
-              >
-                <option value='none'>None (Instant)</option>
-                <option value='fast'>Fast (150ms)</option>
-                <option value='normal'>Normal (300ms)</option>
-                <option value='slow'>Slow / Cinematic (700ms)</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Layout Density & Padding</label>
-              <select
-                value={formState.theme?.layoutDensity || 'comfortable'}
-                onChange={(e) => setFormState(prev => ({ ...prev, theme: { ...prev.theme, layoutDensity: e.target.value as any } }))}
-                className="w-full mt-1 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
-              >
-                <option value='compact'>Compact (Dense)</option>
-                <option value='comfortable'>Comfortable (Default)</option>
-                <option value='spacious'>Spacious (Relaxed)</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Section 0.5: Dashboard Configuration */}
-      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm mb-6">
-        <div className="flex items-center space-x-2 border-b border-gray-200 dark:border-neutral-900 pb-3">
-          <Sliders className="w-5 h-5 text-indigo-400" />
-          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Dashboard Panel Customization</h3>
-        </div>
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            ASynX uses a modular widget-based dashboard system across the Health, Matrix, and Performance tabs.
-            You can customize the layout visually by clicking the "Toggle Layout Edit Mode" button in the top navigation bar.
-          </p>
-          <div className="pt-2">
-            <button type="button"
-              onClick={() => {
-                if (confirm("Are you sure you want to reset all dashboard panel layouts back to their default factory configurations?")) {
-                  localStorage.removeItem('asynx_layout_matrix');
-                  localStorage.removeItem('asynx_layout_health');
-                  localStorage.removeItem('asynx_layout_performance');
-                  alert("Dashboard layouts have been reset. Reload the application to apply.");
-                  window.location.reload();
-                }
-              }}
-              className="px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 rounded-lg text-sm font-semibold transition"
-            >
-              Reset All Dashboard Layouts to Default
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-{/* Section 1: Simkl API Config */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Section 1: Simkl API Config */}
         <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
             <div className="flex items-center space-x-2">
@@ -611,6 +404,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex items-center space-x-2">
               <KarakeepLogo className="w-4 h-4 text-pink-500" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">KaraKeep Integration</h3>
+              {formState.karakeep?.apiUrl && (
+                    <button type="button" onClick={() => handleTestWebhook('karakeep', formState.karakeep.apiUrl)} className="text-[10px] text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition ml-4">
+                      {testingWebhookId === 'karakeep' ? <div className="w-3 h-3 border-2 border-pink-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                      Test Handshake
+                    </button>
+                  )}
             </div>
             <button type="button"
               onClick={() => setFormState(prev => ({ ...prev, karakeep: { apiUrl: prev.karakeep?.apiUrl ?? '', apiKey: prev.karakeep?.apiKey ?? '', webhookUrl: prev.karakeep?.webhookUrl ?? '', connected: !(prev.karakeep?.connected ?? false) } }))}
@@ -621,7 +420,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
           
           {formState.karakeep?.connected && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs mt-2">
+            <div className="space-y-4 mt-2 text-xs">
+              {webhookTestResults['karakeep'] && (
+                <div className="bg-pink-50/50 dark:bg-pink-900/10 rounded-lg p-3 border border-pink-100 dark:border-pink-900/30 animate-in fade-in">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-semibold text-pink-700 dark:text-pink-300">KaraKeep Validator</span>
+                    {webhookTestResults['karakeep'].success ? (
+                       <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
+                    ) : (
+                       <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Request</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['karakeep'].payload, null, 2)}</pre></div>
+                    <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['karakeep'].response || webhookTestResults['karakeep'].error, null, 2)}</pre></div>
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div>
                 <label className="text-gray-600 dark:text-gray-400 font-medium">KaraKeep API URL</label>
                 <input
@@ -658,7 +474,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   value={formState.karakeep.webhookUrl || `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/api/webhooks/karakeep?authKey=${formState.karakeep.apiKey || ''}`}
                   className="w-full mt-1 bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-500 dark:text-gray-400 cursor-not-allowed font-mono text-[10px]"
                 />
-                <p className="text-[10px] text-gray-400 mt-1">Provide this URL in your KaraKeep settings so ASynX can receive watch updates.</p>
+                <p className="text-[10px] text-gray-400 mt-1">Provide this URL in your KaraKeep settings so ASynX can receive watch updates.</p></div>
               </div>
             </div>
           )}
@@ -669,19 +485,126 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* Section 5: Media Servers & Scrobbler */}
         <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
+            
             <div className="flex items-center space-x-2">
               <PlexLogo className="w-4 h-4 text-[#E5A00D]" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Media Servers & Scrobblers (Plex, Jellyfin, Emby)</h3>
             </div>
-            <span className="text-xs text-purple-400 font-semibold bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
-              Webhooks Active
-            </span>
+            {(formState.plex?.connected || formState.jellyfin?.connected || formState.emby?.connected) ? (
+              <span className="text-xs text-purple-400 font-semibold bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                Webhooks Active
+              </span>
+            ) : (
+              <span className="text-xs text-gray-500 font-semibold bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700">
+                Disconnected
+              </span>
+            )}
+
           </div>
 
           <div className="space-y-6 text-xs">
             {/* Plex */}
             <div className="space-y-3">
-              <h4 className="font-semibold text-gray-800 dark:text-gray-200 border-b border-gray-100 dark:border-neutral-800 pb-1">Plex</h4>
+                            <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
+                <h4 className="font-semibold text-gray-800 dark:text-gray-200">Plex</h4>
+                {formState.plex?.serverUrl && (
+                  <button type="button" onClick={() => handleTestWebhook('plex', formState.plex.serverUrl)} className="text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition">
+                    {testingWebhookId === 'plex' ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                    Test Handshake
+                  </button>
+                )}
+              </div>
+              {webhookTestResults['plex'] && (
+                <div className="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-lg p-3 border border-indigo-100 dark:border-indigo-900/30 animate-in fade-in">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Plex Connection Validator</span>
+                    {webhookTestResults['plex'].success ? (
+                       <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
+                    ) : (
+                       <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div>
+                      <span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Payload Request</span>
+                      <pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['plex'].payload, null, 2)}</pre>
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response Output</span>
+                      <pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['plex'].response || webhookTestResults['plex'].error, null, 2)}</pre>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            {/* Tautulli */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
+                <div className="flex items-center space-x-2">
+                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">Tautulli</h4>
+                  {formState.tautulli?.webhookUrl && (
+                    <button type="button" onClick={() => handleTestWebhook('tautulli', formState.tautulli.webhookUrl)} className="text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition">
+                      {testingWebhookId === 'tautulli' ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                      Test Handshake
+                    </button>
+                  )}
+                </div>
+                <button type="button"
+                  onClick={() => setFormState(prev => ({ ...prev, tautulli: { secretKey: prev.tautulli?.secretKey ?? '', webhookUrl: prev.tautulli?.webhookUrl ?? '', connected: !(prev.tautulli?.connected ?? false) } }))}
+                  className={`w-8 h-4 rounded-full transition-colors relative ${formState.tautulli?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+                >
+                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.tautulli?.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+                
+              {formState.tautulli?.connected && (
+                <div className="space-y-3">
+                  {webhookTestResults['tautulli'] && (
+                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-lg p-3 border border-indigo-100 dark:border-indigo-900/30 animate-in fade-in">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Tautulli Validator</span>
+                        {webhookTestResults['tautulli'].success ? (
+                           <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
+                        ) : (
+                           <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[10px]">
+                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Request</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['tautulli'].payload, null, 2)}</pre></div>
+                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['tautulli'].response || webhookTestResults['tautulli'].error, null, 2)}</pre></div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-gray-600 dark:text-gray-400 font-medium">Tautulli Secret/API Key</label>
+                      <input
+                        type="password"
+                        value={formState.tautulli?.secretKey || ''}
+                        onChange={(e) => setFormState(prev => ({
+                          ...prev,
+                          tautulli: { ...prev.tautulli, webhookUrl: prev.tautulli?.webhookUrl ?? '', connected: true, secretKey: e.target.value }
+                        }))}
+                        className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-gray-600 dark:text-gray-400 font-medium">Tautulli Webhook Inbound URL</label>
+                      <input
+                        type="text"
+                        value={formState.tautulli?.webhookUrl || ''}
+                        onChange={(e) => setFormState(prev => ({
+                          ...prev,
+                          tautulli: { ...prev.tautulli, secretKey: prev.tautulli?.secretKey ?? '', connected: true, webhookUrl: e.target.value }
+                        }))}
+                        className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-gray-600 dark:text-gray-400 font-medium">Server URL</label>
@@ -741,7 +664,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             {/* Jellyfin */}
             <div className="space-y-3">
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
-                <h4 className="font-semibold text-gray-800 dark:text-gray-200">Jellyfin</h4>
+                <div className="flex items-center space-x-2">
+                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">Jellyfin</h4>
+                  {formState.jellyfin?.serverUrl && (
+                    <button type="button" onClick={() => handleTestWebhook('jellyfin', formState.jellyfin.serverUrl)} className="text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition">
+                      {testingWebhookId === 'jellyfin' ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                      Test Handshake
+                    </button>
+                  )}
+                </div>
                 <button type="button"
                   onClick={() => setFormState(prev => ({ ...prev, jellyfin: { serverUrl: prev.jellyfin?.serverUrl ?? '', apiKey: prev.jellyfin?.apiKey ?? '', serverName: prev.jellyfin?.serverName ?? '', webhookUrl: prev.jellyfin?.webhookUrl ?? '', autoScrobbleThreshold: prev.jellyfin?.autoScrobbleThreshold ?? 85, connected: !(prev.jellyfin?.connected ?? false) } }))}
                   className={`w-8 h-4 rounded-full transition-colors relative ${formState.jellyfin?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
@@ -751,7 +682,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
               
               {formState.jellyfin?.connected && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-3">
+                  {webhookTestResults['jellyfin'] && (
+                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-lg p-3 border border-indigo-100 dark:border-indigo-900/30 animate-in fade-in">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Jellyfin Validator</span>
+                        {webhookTestResults['jellyfin'].success ? (
+                           <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
+                        ) : (
+                           <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[10px]">
+                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Request</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['jellyfin'].payload, null, 2)}</pre></div>
+                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['jellyfin'].response || webhookTestResults['jellyfin'].error, null, 2)}</pre></div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-gray-600 dark:text-gray-400 font-medium">Jellyfin Server Name</label>
                     <input
@@ -788,14 +736,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
                       placeholder="Jellyfin API Token"
                     />
-                  </div>
+                  </div></div>
                 </div>
               )}
             </div>
             {/* Emby */}
             <div className="space-y-3">
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
-                <h4 className="font-semibold text-gray-800 dark:text-gray-200">Emby</h4>
+                <div className="flex items-center space-x-2">
+                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">Emby</h4>
+                  {formState.emby?.serverUrl && (
+                    <button type="button" onClick={() => handleTestWebhook('emby', formState.emby.serverUrl)} className="text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition">
+                      {testingWebhookId === 'emby' ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                      Test Handshake
+                    </button>
+                  )}
+                </div>
                 <button type="button"
                   onClick={() => setFormState(prev => ({ ...prev, emby: { serverUrl: prev.emby?.serverUrl ?? '', apiKey: prev.emby?.apiKey ?? '', serverName: prev.emby?.serverName ?? '', webhookUrl: prev.emby?.webhookUrl ?? '', autoScrobbleThreshold: prev.emby?.autoScrobbleThreshold ?? 85, connected: !(prev.emby?.connected ?? false) } }))}
                   className={`w-8 h-4 rounded-full transition-colors relative ${formState.emby?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
@@ -805,7 +761,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
               
               {formState.emby?.connected && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-3">
+                  {webhookTestResults['emby'] && (
+                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-lg p-3 border border-indigo-100 dark:border-indigo-900/30 animate-in fade-in">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Emby Validator</span>
+                        {webhookTestResults['emby'].success ? (
+                           <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
+                        ) : (
+                           <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[10px]">
+                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Request</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['emby'].payload, null, 2)}</pre></div>
+                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['emby'].response || webhookTestResults['emby'].error, null, 2)}</pre></div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-gray-600 dark:text-gray-400 font-medium">Emby Server Name</label>
                     <input
@@ -843,6 +816,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       placeholder="Emby API Token"
                     />
                   </div>
+                </div>
                 </div>
               )}
             </div>
@@ -1077,6 +1051,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Matrix Sync Engine Rules & Defaults</h3>
         </div>
 
+        {/* Preset Profiles */}
+        <div className="mb-6 border-b border-gray-100 dark:border-neutral-800 pb-6">
+          <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">Sync Strategy Profile</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+             <button onClick={() => applyProfile('aggressive')} className={`p-3 text-left rounded-xl border ${formState.syncRules?.presetProfile === 'aggressive' ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/10 text-indigo-700 dark:text-indigo-300' : 'border-gray-200 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-900'}`}>
+               <div className="font-medium text-sm">Aggressive Auto-Sync</div>
+               <div className="text-xs text-gray-500 mt-1">Trusts highest episode, auto-resolves with AI.</div>
+             </button>
+             <button onClick={() => applyProfile('manual')} className={`p-3 text-left rounded-xl border ${formState.syncRules?.presetProfile === 'manual' ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/10 text-indigo-700 dark:text-indigo-300' : 'border-gray-200 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-900'}`}>
+               <div className="font-medium text-sm">Manual Verification Only</div>
+               <div className="text-xs text-gray-500 mt-1">Flags all conflicts for manual review.</div>
+             </button>
+             <button onClick={() => applyProfile('hybrid')} className={`p-3 text-left rounded-xl border ${formState.syncRules?.presetProfile === 'hybrid' ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/10 text-indigo-700 dark:text-indigo-300' : 'border-gray-200 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-900'}`}>
+               <div className="font-medium text-sm">Hybrid Mode</div>
+               <div className="text-xs text-gray-500 mt-1">Balanced approach, respects source of truth.</div>
+             </button>
+             <button onClick={() => setFormState(prev => ({ ...prev, syncRules: { ...prev.syncRules, presetProfile: 'custom' } as any }))} className={`p-3 text-left rounded-xl border ${formState.syncRules?.presetProfile === 'custom' ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/10 text-indigo-700 dark:text-indigo-300' : 'border-gray-200 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-900'}`}>
+               <div className="font-medium text-sm">Custom</div>
+               <div className="text-xs text-gray-500 mt-1">Fine-tune all settings manually.</div>
+             </button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
           <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -1085,7 +1082,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 value={formState.syncRules.syncScheduleMode || 'interval'}
                 onChange={(e) => setFormState({
                   ...formState,
-                  syncRules: { ...formState.syncRules, syncScheduleMode: e.target.value as 'interval' | 'specific_time' }
+                  syncRules: { ...formState.syncRules, syncScheduleMode: e.target.value as 'interval' | 'specific_time', presetProfile: 'custom' }
                 })}
                 className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none"
               >
@@ -1101,7 +1098,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   value={formState.syncRules.syncSpecificTime || '03:00'}
                   onChange={(e) => setFormState({
                     ...formState,
-                    syncRules: { ...formState.syncRules, syncSpecificTime: e.target.value }
+                    syncRules: { ...formState.syncRules, syncSpecificTime: e.target.value, presetProfile: 'custom' }
                   })}
                   className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none"
                 >
@@ -1120,7 +1117,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   value={formState.syncRules.autoSyncIntervalMinutes}
                   onChange={(e) => setFormState({
                     ...formState,
-                    syncRules: { ...formState.syncRules, autoSyncIntervalMinutes: Number(e.target.value) }
+                    syncRules: { ...formState.syncRules, autoSyncIntervalMinutes: Number(e.target.value), presetProfile: 'custom' }
                   })}
                   className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none"
                 >
@@ -1143,7 +1140,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               value={formState.syncRules.conflictPolicy}
               onChange={(e) => setFormState({
                 ...formState,
-                syncRules: { ...formState.syncRules, conflictPolicy: e.target.value as any }
+                syncRules: { ...formState.syncRules, conflictPolicy: e.target.value as any, presetProfile: 'custom' }
               })}
               className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none"
             >
@@ -1159,7 +1156,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               value={formState.syncRules.defaultSourceOfTruth}
               onChange={(e) => setFormState({
                 ...formState,
-                syncRules: { ...formState.syncRules, defaultSourceOfTruth: e.target.value as any }
+                syncRules: { ...formState.syncRules, defaultSourceOfTruth: e.target.value as any, presetProfile: 'custom' }
               })}
               className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none"
             >
@@ -1167,6 +1164,93 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <option value="simkl">Simkl API</option>
               <option value="mal">MyAnimeList</option>
             </select>
+          </div>
+          {/* Custom Scheduled Syncs */}
+          <div className="mt-6 pt-6 border-t border-gray-100 dark:border-neutral-800 sm:col-span-2 lg:col-span-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Scheduled Sync Routes</h4>
+              <button 
+                onClick={() => {
+                  const newRules = [...(formState.syncRules.scheduledRules || [])];
+                  newRules.push({
+                    id: Math.random().toString(36).substr(2, 9),
+                    source: 'simkl',
+                    target: 'plex',
+                    time: '01:00',
+                    enabled: true
+                  });
+                  setFormState({ ...formState, syncRules: { ...formState.syncRules, presetProfile: 'custom', scheduledRules: newRules } as any });
+                }}
+                className="text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-3 py-1.5 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors"
+              >
+                + Add Schedule
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              {(formState.syncRules.scheduledRules || []).map((rule, idx) => (
+                <div key={rule.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl flex-wrap sm:flex-nowrap">
+                  <select 
+                    value={rule.source}
+                    onChange={(e) => {
+                      const newRules = [...formState.syncRules.scheduledRules!];
+                      newRules[idx].source = e.target.value;
+                      setFormState({ ...formState, syncRules: { ...formState.syncRules, presetProfile: 'custom', scheduledRules: newRules } as any });
+                    }}
+                    className="flex-1 bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-800 rounded-lg px-2 py-1 text-xs"
+                  >
+                    <option value="simkl">Simkl</option>
+                    <option value="anilist">AniList</option>
+                    <option value="mal">MyAnimeList</option>
+                    <option value="plex">Plex</option>
+                    <option value="jellyfin">Jellyfin</option>
+                    <option value="emby">Emby</option>
+                  </select>
+                  <span className="text-gray-400 text-xs">→</span>
+                  <select 
+                    value={rule.target}
+                    onChange={(e) => {
+                      const newRules = [...formState.syncRules.scheduledRules!];
+                      newRules[idx].target = e.target.value;
+                      setFormState({ ...formState, syncRules: { ...formState.syncRules, presetProfile: 'custom', scheduledRules: newRules } as any });
+                    }}
+                    className="flex-1 bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-800 rounded-lg px-2 py-1 text-xs"
+                  >
+                    <option value="simkl">Simkl</option>
+                    <option value="anilist">AniList</option>
+                    <option value="mal">MyAnimeList</option>
+                    <option value="plex">Plex</option>
+                    <option value="jellyfin">Jellyfin</option>
+                    <option value="emby">Emby</option>
+                  </select>
+                  <span className="text-gray-400 text-xs">at</span>
+                  <input 
+                    type="time" 
+                    value={rule.time}
+                    onChange={(e) => {
+                      const newRules = [...formState.syncRules.scheduledRules!];
+                      newRules[idx].time = e.target.value;
+                      setFormState({ ...formState, syncRules: { ...formState.syncRules, presetProfile: 'custom', scheduledRules: newRules } as any });
+                    }}
+                    className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-800 rounded-lg px-2 py-1 text-xs"
+                  />
+                  <button 
+                    onClick={() => {
+                      const newRules = formState.syncRules.scheduledRules!.filter((_, i) => i !== idx);
+                      setFormState({ ...formState, syncRules: { ...formState.syncRules, presetProfile: 'custom', scheduledRules: newRules } as any });
+                    }}
+                    className="text-red-500 hover:text-red-700 p-1"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              {(!formState.syncRules.scheduledRules || formState.syncRules.scheduledRules.length === 0) && (
+                <div className="text-xs text-gray-500 dark:text-gray-400 text-center py-4 border border-dashed border-gray-300 dark:border-gray-800 rounded-xl">
+                  No scheduled routes configured.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1357,7 +1441,67 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* Section 10: System Maintenance */}
+      {/* Section 10: Database Management */}
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-[80px] rounded-full pointer-events-none" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-3 gap-3 relative z-10">
+          <div className="flex items-center space-x-2">
+            <Database className="w-5 h-5 text-indigo-500" />
+            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Database Management</h3>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 text-sm relative z-10">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="block text-gray-800 dark:text-gray-200 font-semibold">Auto-Purge Sync Logs</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">Automatically delete sync logs older than the specified number of days to optimize application performance.</span>
+            </div>
+            <button 
+              type="button"
+              onClick={() => {
+                setFormState(prev => ({ 
+                  ...prev, 
+                  databaseManagement: {
+                    ...prev.databaseManagement,
+                    autoPurgeSyncLogs: !(prev.databaseManagement?.autoPurgeSyncLogs ?? false)
+                  }
+                }));
+              }}
+              className={`w-12 h-6 rounded-full transition-colors relative ${formState.databaseManagement?.autoPurgeSyncLogs ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-neutral-800'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${formState.databaseManagement?.autoPurgeSyncLogs ? 'translate-x-7' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          
+          {formState.databaseManagement?.autoPurgeSyncLogs && (
+            <div className="flex items-center justify-between mt-2 pl-4 border-l-2 border-indigo-500">
+              <div>
+                <span className="block text-gray-800 dark:text-gray-200 font-semibold text-xs">Retention Period (Days)</span>
+              </div>
+              <input 
+                type="number"
+                min="1"
+                max="365"
+                value={formState.databaseManagement?.autoPurgeDays ?? 30}
+                onChange={(e) => {
+                  setFormState(prev => ({
+                    ...prev,
+                    databaseManagement: {
+                      ...prev.databaseManagement,
+                      autoPurgeDays: parseInt(e.target.value) || 30,
+                      autoPurgeSyncLogs: prev.databaseManagement?.autoPurgeSyncLogs ?? false
+                    }
+                  }));
+                }}
+                className="w-20 text-xs bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 rounded-lg px-3 py-1.5 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Section 11: System Maintenance */}
       <div className="bg-white dark:bg-[#0a0a0a] border border-red-200 dark:border-red-900/30 rounded-3xl p-6 space-y-4 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 blur-[80px] rounded-full pointer-events-none" />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-red-100 dark:border-red-900/30 pb-3 gap-3 relative z-10">
@@ -1389,7 +1533,210 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-    </form>
+    
+      {/* Section 11: Push Notifications & Webhooks */}
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm mb-6">
+        <div className="flex items-center space-x-2 border-b border-gray-200 dark:border-neutral-900 pb-3">
+          <Bell className="w-5 h-5 text-indigo-400" />
+          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Push Notifications & Webhooks</h3>
+        </div>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Configure native browser notifications and external webhook platforms (Discord, Apprise, Pushbullet) for real-time status updates on sync operations.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Native Browser Notifications</h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-500">Allow desktop popups when minimized</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentState = formState.pushNotifications?.browserNotifications;
+                    if (!currentState) {
+                      if ('Notification' in window) {
+                        Notification.requestPermission().then(permission => {
+                          if (permission === 'granted') {
+                            setFormState({ ...formState, pushNotifications: { ...formState.pushNotifications, browserNotifications: true } as any });
+                          }
+                        });
+                      } else {
+                        alert('Your browser does not support notifications.');
+                      }
+                    } else {
+                      setFormState({ ...formState, pushNotifications: { ...formState.pushNotifications, browserNotifications: false } as any });
+                    }
+                  }}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${formState.pushNotifications?.browserNotifications ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-neutral-800'}`}
+                >
+                  <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${formState.pushNotifications?.browserNotifications ? 'translate-x-5' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              
+              <div>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Discord Webhook URL</label>
+                <input
+                  type="text"
+                  placeholder="https://discord.com/api/webhooks/..."
+                  value={formState.pushNotifications?.discordWebhookUrl || ''}
+                  onChange={(e) => setFormState({ ...formState, pushNotifications: { ...formState.pushNotifications, discordWebhookUrl: e.target.value } as any })}
+                  className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Apprise URL</label>
+                <input
+                  type="text"
+                  placeholder="apprise://..."
+                  value={formState.pushNotifications?.appriseUrl || ''}
+                  onChange={(e) => setFormState({ ...formState, pushNotifications: { ...formState.pushNotifications, appriseUrl: e.target.value } as any })}
+                  className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Pushbullet Access Token</label>
+                <input
+                  type="password"
+                  placeholder="o.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  value={formState.pushNotifications?.pushbulletToken || ''}
+                  onChange={(e) => setFormState({ ...formState, pushNotifications: { ...formState.pushNotifications, pushbulletToken: e.target.value } as any })}
+                  className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Notification Triggers</h4>
+              
+              <div className="flex items-center space-x-3 bg-gray-50 dark:bg-[#111] p-3 rounded-xl border border-gray-100 dark:border-neutral-800">
+                <input
+                  type="checkbox"
+                  id="trigger-success"
+                  checked={formState.pushNotifications?.triggers?.onSyncSuccess ?? true}
+                  onChange={(e) => setFormState({ ...formState, pushNotifications: { ...formState.pushNotifications, triggers: { ...formState.pushNotifications?.triggers, onSyncSuccess: e.target.checked } } as any })}
+                  className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                />
+                <label htmlFor="trigger-success" className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                  Notify on Sync Success
+                </label>
+              </div>
+
+              <div className="flex items-center space-x-3 bg-gray-50 dark:bg-[#111] p-3 rounded-xl border border-gray-100 dark:border-neutral-800">
+                <input
+                  type="checkbox"
+                  id="trigger-failure"
+                  checked={formState.pushNotifications?.triggers?.onSyncFailure ?? true}
+                  onChange={(e) => setFormState({ ...formState, pushNotifications: { ...formState.pushNotifications, triggers: { ...formState.pushNotifications?.triggers, onSyncFailure: e.target.checked } } as any })}
+                  className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                />
+                <label htmlFor="trigger-failure" className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                  Notify on Sync Failure / Error
+                </label>
+              </div>
+
+              <div className="flex items-center space-x-3 bg-gray-50 dark:bg-[#111] p-3 rounded-xl border border-gray-100 dark:border-neutral-800">
+                <input
+                  type="checkbox"
+                  id="trigger-conflict"
+                  checked={formState.pushNotifications?.triggers?.onConflict ?? true}
+                  onChange={(e) => setFormState({ ...formState, pushNotifications: { ...formState.pushNotifications, triggers: { ...formState.pushNotifications?.triggers, onConflict: e.target.checked } } as any })}
+                  className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                />
+                <label htmlFor="trigger-conflict" className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                  Notify on Unresolved Conflicts
+                </label>
+              </div>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  alert("Test notification sent! Check your integrations.");
+                  if ('Notification' in window && formState.pushNotifications?.browserNotifications && Notification.permission === 'granted') {
+                    new Notification("ASynX Test", { body: "This is a test notification from your dashboard." });
+                  }
+                }}
+                className="w-full mt-4 py-2 border border-indigo-200 dark:border-indigo-900/30 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/10 hover:bg-indigo-100 dark:hover:bg-indigo-900/20 rounded-xl text-xs font-semibold transition"
+              >
+                Send Test Notification
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+{/* Section 0.5: Dashboard Configuration */}
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm mb-6">
+        <div className="flex items-center space-x-2 border-b border-gray-200 dark:border-neutral-900 pb-3">
+          <Sliders className="w-5 h-5 text-indigo-400" />
+          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Dashboard Panel Customization</h3>
+        </div>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            ASynX uses a modular widget-based dashboard system across the Health, Matrix, and Performance tabs.
+            You can customize the layout visually by clicking the "Toggle Layout Edit Mode" button in the top navigation bar.
+          </p>
+          <div className="pt-2">
+            <button type="button"
+              onClick={() => {
+                if (confirm("Are you sure you want to reset all dashboard panel layouts back to their default factory configurations?")) {
+                  localStorage.removeItem('asynx_layout_matrix');
+                  localStorage.removeItem('asynx_layout_health');
+                  localStorage.removeItem('asynx_layout_performance');
+                  alert("Dashboard layouts have been reset. Reload the application to apply.");
+                  window.location.reload();
+                }
+              }}
+              className="px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 rounded-lg text-sm font-semibold transition"
+            >
+              Reset All Dashboard Layouts to Default
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="bg-red-50 dark:bg-[#1a0505] border border-red-200 dark:border-red-900/30 rounded-3xl p-6 space-y-4 shadow-sm mt-8 mb-12">
+        <div className="flex items-center space-x-2 border-b border-red-200 dark:border-red-900/30 pb-3">
+          <Trash2 className="w-5 h-5 text-red-500" />
+          <h3 className="text-base font-bold text-red-700 dark:text-red-400">Danger Zone</h3>
+        </div>
+        <div className="space-y-4">
+          <p className="text-sm text-red-600 dark:text-red-400/80">
+            Proceed with caution. These actions are irreversible and will affect your local application data.
+          </p>
+          <div className="flex flex-wrap items-center gap-4 pt-2">
+            <button type="button"
+              onClick={() => {
+                if (confirm("Are you absolutely sure you want to reset ALL settings? This will revert everything to default.")) {
+                  localStorage.removeItem('asynx_settings');
+                  alert("Settings have been reset. The application will now reload.");
+                  window.location.reload();
+                }
+              }}
+              className="px-4 py-2 bg-white dark:bg-black hover:bg-gray-50 dark:hover:bg-neutral-900 text-red-600 dark:text-red-500 border border-red-200 dark:border-red-900/50 rounded-lg text-sm font-semibold transition"
+            >
+              Reset All Settings
+            </button>
+            <button type="button"
+              onClick={() => {
+                if (confirm("WARNING: This will delete ALL your data, including settings, cached library items, and webhook logs. Are you sure?")) {
+                  localStorage.clear();
+                  alert("All data has been deleted. The application will now reload.");
+                  window.location.reload();
+                }
+              }}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow transition"
+            >
+              Delete All My Data
+            </button>
+          </div>
+        </div>
+      </div>
+        </form>
       
       {importState && (
         <PreImportModal

@@ -8,6 +8,13 @@ export interface PanelConfig {
   type: string;
   bgColor?: string;
   isStatic?: boolean;
+
+  bgGradient?: string;
+  textColor?: string;
+  fontFamily?: string;
+  fontSize?: string;
+  fontStyle?: string;
+  customSize?: 'landscape' | 'portrait' | 'square' | 'wide' | 'tall' | 'custom';
 }
 
 export type TabLayouts = Record<string, PanelConfig[]>;
@@ -109,6 +116,18 @@ export interface BrowserExtensionState {
 }
 
 export interface AppSettings {
+  pushNotifications?: {
+    enabled: boolean;
+    browserNotifications: boolean;
+    discordWebhookUrl: string;
+    appriseUrl: string;
+    pushbulletToken: string;
+    triggers: {
+      onSyncSuccess: boolean;
+      onSyncFailure: boolean;
+      onConflict: boolean;
+    };
+  };
   dashboardLayout?: PanelConfig[];
   nexusTabName?: string;
   theme?: {
@@ -135,6 +154,9 @@ export interface AppSettings {
     cardStyle?: 'flat' | 'glass' | 'neumorphic' | 'outlined';
     animationSpeed?: 'fast' | 'normal' | 'slow' | 'none';
     defaultViewMode?: 'grid' | 'list' | 'block';
+    navbarStyle?: 'solid' | 'transparent' | 'frosted';
+    logoGradientStart?: string;
+    logoGradientEnd?: string;
   };
   simkl: {
     clientId: string;
@@ -200,6 +222,10 @@ export interface AppSettings {
     enableLocalMediaDetection: boolean;
     autoScrobbleLocal: boolean; // if true, don't prompt, just scrobble
   };
+  databaseManagement?: {
+    autoPurgeSyncLogs: boolean;
+    autoPurgeDays: number;
+  };
   maintenanceMode?: boolean;
   automatedBackups?: {
     enabled: boolean;
@@ -215,13 +241,21 @@ export interface AppSettings {
   };
   customLayouts?: TabLayouts;
   syncRules: {
+    presetProfile?: 'aggressive' | 'manual' | 'hybrid' | 'custom';
     autoSyncIntervalMinutes: number;
     syncScheduleMode?: 'interval' | 'specific_time';
     syncSpecificTime?: string;
     conflictPolicy: 'ask_user' | 'source_of_truth' | 'highest_episode';
     defaultSourceOfTruth: PlatformType;
     autoResolveWithAI: boolean;
-    syncDramasFromSimklToMAL: boolean; // Note: MAL handles anime; Simkl handles anime + drama
+    syncDramasFromSimklToMAL: boolean;
+    scheduledRules?: Array<{
+      id: string;
+      source: string;
+      target: string;
+      time: string;
+      enabled: boolean;
+    }>;
   };
 }
 
@@ -262,4 +296,14 @@ export interface HealthCheckStatus {
   emby: HealthCheckService;
   karakeep: HealthCheckService;
   lastOverallPing: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  timestamp: string;
+  read: boolean;
+  actionUrl?: string;
 }
