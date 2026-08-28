@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { PreImportModal } from './PreImportModal';
 import { BackupSettingsView } from './BackupSettingsView';
 import { OAuthConnectButton } from './OAuthConnectButton';
-import { AppSettings } from '../types';
+import { AppSettings, PlatformType } from '../types';
 import { OAuthService } from '../services/OAuthService';
 import { SimklLogo, MalLogo, AniListLogo, PlexLogo, KarakeepLogo } from './PlatformLogos';
 
