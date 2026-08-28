@@ -1,6 +1,17 @@
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const { fork } = require('child_process');
+
+// Hardware acceleration fix
+app.disableHardwareAcceleration();
+
+// The installer hook
+if (require('electron-squirrel-startup')) {
+  app.quit();
+}
 
 let mainWindow;
 let serverProcess;
