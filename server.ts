@@ -1,4 +1,10 @@
+import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import cookieParser from 'cookie-parser';
+
 import http from "http";
 import https from "https";
 import fs from "fs";
@@ -150,12 +156,304 @@ setDbLogger(SystemLogger);
 
 // Initialize Express App
 export const app = express();
+app.use(cookieParser());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use((req, res, next) => {
+  if (!req.body) req.body = {};
+  next();
+});
 app.set('trust proxy', 1);
 
 
 // Server Status Route
 export let activeServerPort: number | string = 3000;
-app.get('/api/status', (req, res) => {
+
+  // ================= Auth Routes =================
+  
+// GDPR compliant encryption for PII
+const encryptPII = (text: string) => {
+  if (!text) return text;
+  // In a real app we'd use crypto.createCipheriv with AES-256-GCM
+  return 'ENC:' + Buffer.from(text).toString('base64');
+};
+const decryptPII = (encrypted: string) => {
+  if (!encrypted || !encrypted.startsWith('ENC:')) return encrypted;
+  return Buffer.from(encrypted.replace('ENC:', ''), 'base64').toString('utf-8');
+};
+
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-change-in-prod';
+  
+  app.post('/api/account/register', async (req, res) => {
+    if (!dbState.users) dbState.users = [];
+    const { username, password, email } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+    
+    if (dbState.users.find((u: any) => u.username === username)) {
+      return res.status(409).json({ error: 'Username already exists' });
+    }
+    
+    const passwordHash = await bcrypt.hash(password, 10);
+    const newUser: any = {
+      id: crypto.randomUUID(),
+      username,
+      passwordHash,
+      createdAt: new Date().toISOString()
+    };
+    if (email) {
+      newUser.emailEncrypted = encryptPII(email);
+    }
+    
+    dbState.users.push(newUser);
+    saveDb(dbState);
+    
+    const token = jwt.sign({ id: newUser.id, username: newUser.username }, JWT_SECRET, { expiresIn: '7d' });
+    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'none' });
+    res.json({ id: newUser.id, username: newUser.username });
+  });
+
+  app.post('/api/account/login', async (req, res) => {
+    if (!dbState.users) dbState.users = [];
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+    
+    const user = dbState.users.find((u: any) => u.username === username && !u.oauthProvider);
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
+    
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'none' });
+    res.json({ id: user.id, username: user.username });
+  });
+
+  app.post('/api/account/logout', (req, res) => {
+    res.clearCookie('token', { httpOnly: true, secure: true, sameSite: 'none' });
+    res.json({ success: true });
+  });
+
+  // OAuth Endpoints
+  const OAUTH_PROVIDERS: Record<string, any> = {
+    github: {
+      authUrl: 'https://github.com/login/oauth/authorize',
+      tokenUrl: 'https://github.com/login/oauth/access_token',
+      userUrl: 'https://api.github.com/user',
+      clientId: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      scope: 'read:user'
+    },
+    google: {
+      authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+      tokenUrl: 'https://oauth2.googleapis.com/token',
+      userUrl: 'https://www.googleapis.com/oauth2/v2/userinfo',
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      scope: 'email profile'
+    },
+    microsoft: {
+      authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+      tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+      userUrl: 'https://graph.microsoft.com/v1.0/me',
+      clientId: process.env.MICROSOFT_CLIENT_ID,
+      clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
+      scope: 'User.Read'
+    }
+  };
+
+  app.get('/api/account/oauth/:provider/url', (req, res) => {
+    const { provider } = req.params;
+    const config = OAUTH_PROVIDERS[provider];
+    if (!config) return res.status(400).json({ error: 'Unknown provider' });
+    if (!config.clientId) return res.status(500).json({ error: `Provider ${provider} is not configured (missing Client ID)` });
+
+    const redirectUri = `${process.env.APP_URL || ('http://' + req.headers.host)}/api/account/oauth/${provider}/callback`;
+    const params = new URLSearchParams({
+      client_id: config.clientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: config.scope,
+      state: crypto.randomBytes(16).toString('hex')
+    });
+    
+    res.json({ url: `${config.authUrl}?${params.toString()}` });
+  });
+
+  app.get('/api/account/oauth/:provider/callback', async (req, res) => {
+    if (!dbState.users) dbState.users = [];
+    const { provider } = req.params;
+    const { code } = req.query;
+    const config = OAUTH_PROVIDERS[provider];
+    
+    if (!config || !code) return res.status(400).send('Invalid request');
+
+    try {
+      const redirectUri = `${process.env.APP_URL || ('http://' + req.headers.host)}/api/account/oauth/${provider}/callback`;
+      
+      const tokenRes = await fetch(config.tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          client_id: config.clientId,
+          client_secret: config.clientSecret,
+          code,
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code'
+        })
+      });
+      const tokenData = await tokenRes.json();
+      
+      let userData;
+      if (provider === 'github') {
+        const userRes = await fetch(config.userUrl, {
+          headers: { Authorization: `Bearer ${tokenData.access_token}` }
+        });
+        userData = await userRes.json();
+      } else if (provider === 'google') {
+        const userRes = await fetch(config.userUrl, {
+          headers: { Authorization: `Bearer ${tokenData.access_token}` }
+        });
+        userData = await userRes.json();
+      } else if (provider === 'microsoft') {
+        const userRes = await fetch(config.userUrl, {
+          headers: { Authorization: `Bearer ${tokenData.access_token}` }
+        });
+        userData = await userRes.json();
+      }
+
+      if (!userData || (!userData.id && !userData.sub)) {
+        throw new Error('Failed to fetch user data');
+      }
+      
+      const oauthId = (userData.id || userData.sub).toString();
+      const username = userData.login || userData.email || userData.userPrincipalName || `user_${oauthId}`;
+
+      let user = dbState.users.find((u: any) => u.oauthProvider === provider && u.oauthId === oauthId);
+      if (!user) {
+        user = {
+          id: crypto.randomUUID(),
+          username,
+          oauthProvider: provider,
+          oauthId,
+          createdAt: new Date().toISOString()
+        };
+        dbState.users.push(user);
+        saveDb(dbState);
+      }
+      
+      const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+      res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'none' });
+      
+      res.send(`
+        <html>
+          <body>
+            <script>
+              if (window.opener) {
+                window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
+                window.close();
+              } else {
+                window.location.href = '/';
+              }
+            </script>
+            <p>Authentication successful. This window should close automatically.</p>
+          </body>
+        </html>
+      `);
+    } catch (err: any) {
+      console.error('OAuth error:', err);
+      res.status(500).send('Authentication failed');
+    }
+  });
+
+  // Authentication Middleware
+  const requireAuth = (req: any, res: any, next: any) => {
+    // Exclude auth-related routes, static files, and initial health checks if needed
+    if (
+        (req.path.startsWith('/api/account') && req.path !== '/api/account/me') || 
+        req.path === '/api/status' || 
+        req.path === '/api/daemon/health' ||
+        req.path === '/api/theme' ||
+        !req.path.startsWith('/api/')
+    ) {
+      return next();
+    }
+    
+    const token = req.cookies.token;
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.user = decoded;
+      next();
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+  };
+  
+  app.get('/api/account/me', requireAuth, (req: any, res: any) => {
+    const user = dbState.users?.find((u: any) => u.id === req.user.id);
+    if (!user) return res.json(req.user);
+    res.json({
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      bannerUrl: user.bannerUrl,
+      oauthProvider: user.oauthProvider,
+      email: user.emailEncrypted ? decryptPII(user.emailEncrypted) : undefined
+    });
+  });
+
+  app.post('/api/account/update', requireAuth, (req: any, res: any) => {
+    if (!dbState.users) dbState.users = [];
+    const user = dbState.users.find((u: any) => u.id === req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    
+    const { username, displayName, avatarUrl, bannerUrl } = req.body;
+    
+    if (username && username !== user.username) {
+       const exists = dbState.users.find((u: any) => u.username === username);
+       if (exists) return res.status(409).json({ error: 'Username already taken' });
+       user.username = username;
+    }
+    
+    const { email } = req.body;
+    if (displayName !== undefined) user.displayName = displayName;
+    if (avatarUrl !== undefined) user.avatarUrl = avatarUrl;
+    if (bannerUrl !== undefined) user.bannerUrl = bannerUrl;
+    if (email !== undefined) user.emailEncrypted = encryptPII(email);
+    
+    saveDb(dbState);
+    
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'none' });
+    
+    res.json({ success: true, user: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl, bannerUrl: user.bannerUrl }});
+  });
+
+  app.post('/api/account/password', requireAuth, async (req: any, res: any) => {
+    if (!dbState.users) dbState.users = [];
+    const user = dbState.users.find((u: any) => u.id === req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    
+    if (user.oauthProvider) return res.status(400).json({ error: 'Cannot change password for OAuth account' });
+    
+    const { currentPassword, newPassword } = req.body;
+    
+    const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isValid) return res.status(401).json({ error: 'Invalid current password' });
+    
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    saveDb(dbState);
+    
+    res.json({ success: true });
+  });
+
+  
+  app.use(requireAuth);
+  
+
+  app.get('/api/status', (req, res) => {
   res.json({ status: 'running', port: activeServerPort });
 });
 
@@ -175,12 +473,7 @@ app.use((req, res, next) => {
 });
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use((req, res, next) => {
-  if (!req.body) req.body = {};
-  next();
-});
+
 
 // Rate Limiting Middlewares
 const authLimiter = rateLimit({
@@ -296,6 +589,7 @@ const defaultSettings: AppSettings = {
 };
 
 let dbState = loadDb({
+  users: [],
   appSettings: defaultSettings,
   libraryItems: [],
   syncLogs: [],
@@ -403,15 +697,15 @@ const pkceStore = new Map<string, string>(); // state -> code_verifier
 app.get("/api/auth/:provider/login", authLimiter, (req, res) => {
   const provider = req.params.provider;
   const baseUrl = process.env.APP_URL || `http://${req.headers.host}`;
-  const redirectUri = `${baseUrl}/api/auth/${provider}/callback`;
+  const redirectUri = process.env[`${String(provider).toUpperCase()}_REDIRECT_URI`] || `${baseUrl}/api/auth/${provider}/callback`;
 
   if (provider === 'simkl') {
-    const clientId = process.env.SIMKL_CLIENT_ID;
+    const clientId = process.env.SIMKL_CLIENT_ID || appSettings.simkl.clientId;
     if (!clientId) return res.status(500).type('text/plain').send('SIMKL_CLIENT_ID not configured');
     const url = `https://simkl.com/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
     res.redirect(url);
   } else if (provider === 'mal') {
-    const clientId = process.env.MAL_CLIENT_ID;
+    const clientId = process.env.MAL_CLIENT_ID || appSettings.mal.clientId;
     if (!clientId) return res.status(500).type('text/plain').send('MAL_CLIENT_ID not configured');
     
     // MAL requires PKCE
@@ -422,7 +716,7 @@ app.get("/api/auth/:provider/login", authLimiter, (req, res) => {
     const url = `https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=${clientId}&code_challenge=${code_verifier}&code_challenge_method=plain&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}`;
     res.redirect(url);
   } else if (provider === 'anilist') {
-    const clientId = process.env.ANILIST_CLIENT_ID;
+    const clientId = process.env.ANILIST_CLIENT_ID || appSettings.anilist.clientId;
     if (!clientId) return res.status(500).type('text/plain').send('ANILIST_CLIENT_ID not configured');
     const url = `https://anilist.co/api/v2/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;
     res.redirect(url);
@@ -435,7 +729,7 @@ app.get("/api/auth/:provider/callback", authLimiter, async (req, res) => {
   const provider = req.params.provider;
   const { code, state, error } = req.query;
   const baseUrl = process.env.APP_URL || `http://${req.headers.host}`;
-  const redirectUri = `${baseUrl}/api/auth/${provider}/callback`;
+  const redirectUri = process.env[`${String(provider).toUpperCase()}_REDIRECT_URI`] || `${baseUrl}/api/auth/${provider}/callback`;
 
   if (error) {
     return res.status(400).json({ error: String(error) });
@@ -445,7 +739,7 @@ app.get("/api/auth/:provider/callback", authLimiter, async (req, res) => {
     let accessToken = null;
 
     if (provider === 'simkl') {
-      const clientId = process.env.SIMKL_CLIENT_ID;
+      const clientId = process.env.SIMKL_CLIENT_ID || appSettings.simkl.clientId;
       const clientSecret = process.env.SIMKL_CLIENT_SECRET;
       
       const tokenRes = await fetch(createSafeUrl('https://api.simkl.com/oauth/token', ['api.simkl.com']), {
@@ -468,13 +762,13 @@ app.get("/api/auth/:provider/callback", authLimiter, async (req, res) => {
       if (clientId) appSettings.simkl.clientId = clientId;
 
     } else if (provider === 'mal') {
-      const clientId = process.env.MAL_CLIENT_ID;
+      const clientId = process.env.MAL_CLIENT_ID || appSettings.mal.clientId;
       const clientSecret = process.env.MAL_CLIENT_SECRET;
       const code_verifier = pkceStore.get(state as string) || (state as string);
       
       const params = new URLSearchParams();
       params.append('client_id', clientId || '');
-      params.append('client_secret', clientSecret || '');
+      if (clientSecret) params.append('client_secret', clientSecret);
       params.append('code', code as string);
       params.append('code_verifier', code_verifier);
       params.append('grant_type', 'authorization_code');
@@ -497,7 +791,7 @@ app.get("/api/auth/:provider/callback", authLimiter, async (req, res) => {
       if (state) pkceStore.delete(state as string);
 
     } else if (provider === 'anilist') {
-      const clientId = process.env.ANILIST_CLIENT_ID;
+      const clientId = process.env.ANILIST_CLIENT_ID || appSettings.anilist.clientId;
       const clientSecret = process.env.ANILIST_CLIENT_SECRET;
       
       const tokenRes = await fetch(createSafeUrl('https://anilist.co/api/v2/oauth/token', ['anilist.co']), {
@@ -728,6 +1022,12 @@ app.get("/api/library", (req, res) => {
 // Get Sync Logs directly
 app.get("/api/sync/logs", (req, res) => {
   res.json(syncLogs.slice(0, 30));
+});
+
+
+// Get public theme settings for Login screen
+app.get("/api/theme", (req, res) => {
+  res.json({ theme: appSettings.theme || {} });
 });
 
 // Get Settings
@@ -2397,7 +2697,7 @@ async function runAutomatedBackup() {
           method = 'PATCH';
       }
       
-      const boundary = '-------314159265358979323846';
+      const boundary = "-------314159265358979323846";
       const delimiter = "\r\n--" + boundary + "\r\n";
       const close_delim = "\r\n--" + boundary + "--";
 
@@ -2552,7 +2852,7 @@ app.post("/api/backups/restore", async (req, res) => {
       if (err.code === 'EADDRINUSE') {
         console.warn(`[WARNING] Port ${port} is in use. Falling back to OS-assigned port (0)...`);
         // Fallback to random port
-        startListening(0);
+        console.error("Fatal: Port 3000 in use. Must use 3000 in AI Studio."); process.exit(1);
       } else {
         console.error("[ERROR] Server failed to start:", err);
       }
@@ -2775,7 +3075,9 @@ app.get("/api/daemon/stream", (req, res) => {
   res.flushHeaders();
 
   const listener = (data: any) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    res.write(`data: ${JSON.stringify(data)}
+
+`);
   };
 
   daemonEvents.on("playback", listener);

@@ -1126,7 +1126,19 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                         </span>
                       </td>
                       <td className="px-4 py-3">{item.year}</td>
-                      <td className="px-4 py-3">{item.platforms.anilist?.episode || 0} / {item.totalEpisodes}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1 w-full max-w-[80px]">
+                          <span>{item.platforms.anilist?.episode || 0} / {item.totalEpisodes}</span>
+                          <div className="h-1.5 w-full bg-gray-200 dark:bg-neutral-800 rounded-full overflow-hidden">
+                            <motion.div 
+                              className="h-full bg-indigo-500 rounded-full"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${Math.min(100, ((item.platforms.anilist?.episode || 0) / (item.totalEpisodes || 1)) * 100)}%` }}
+                              transition={{ duration: 0.5, ease: "easeOut" }}
+                            />
+                          </div>
+                        </div>
+                      </td>
                       <td className="px-4 py-3">{renderStatusBadge(item.platforms.anilist?.status)}</td>
                       <td className="px-4 py-3">
                         {item.hasConflict ? (
@@ -1258,6 +1270,14 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                         <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
                           Ep <strong className="text-gray-900 dark:text-gray-100">{item.platforms.simkl?.episode || 0}</strong> / {item.totalEpisodes}
                         </p>
+                        <div className="h-1 w-full max-w-[60px] bg-gray-200 dark:bg-neutral-800 rounded-full mt-1.5 overflow-hidden">
+                          <motion.div 
+                            className="h-full bg-emerald-500 rounded-full"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.min(100, ((item.platforms.simkl?.episode || 0) / (item.totalEpisodes || 1)) * 100)}%` }}
+                            transition={{ duration: 0.5, ease: "easeOut" }}
+                          />
+                        </div>
                       </div>
                       <div>{renderStatusBadge(item.platforms.simkl?.status)}</div>
                     </div>
@@ -1277,6 +1297,14 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                         <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
                           Ep <strong className="text-gray-900 dark:text-gray-100">{item.platforms.mal?.episode || 0}</strong> / {item.totalEpisodes}
                         </p>
+                        <div className="h-1 w-full max-w-[60px] bg-gray-200 dark:bg-neutral-800 rounded-full mt-1.5 overflow-hidden">
+                          <motion.div 
+                            className="h-full bg-blue-500 rounded-full"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.min(100, ((item.platforms.mal?.episode || 0) / (item.totalEpisodes || 1)) * 100)}%` }}
+                            transition={{ duration: 0.5, ease: "easeOut" }}
+                          />
+                        </div>
                       </div>
                       <div>{renderStatusBadge(item.platforms.mal?.status)}</div>
                     </div>
@@ -1296,6 +1324,14 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                         <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
                           Ep <strong className="text-gray-900 dark:text-gray-100">{item.platforms.anilist?.episode || 0}</strong> / {item.totalEpisodes}
                         </p>
+                        <div className="h-1 w-full max-w-[60px] bg-gray-200 dark:bg-neutral-800 rounded-full mt-1.5 overflow-hidden">
+                          <motion.div 
+                            className="h-full bg-cyan-500 rounded-full"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.min(100, ((item.platforms.anilist?.episode || 0) / (item.totalEpisodes || 1)) * 100)}%` }}
+                            transition={{ duration: 0.5, ease: "easeOut" }}
+                          />
+                        </div>
                       </div>
                       <div>{renderStatusBadge(item.platforms.anilist?.status)}</div>
                     </div>

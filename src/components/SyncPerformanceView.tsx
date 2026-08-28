@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { Activity, BarChart2, TrendingUp, AlertTriangle, Zap, Server } from 'lucide-react';
-import {  Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Bar, Legend, ComposedChart } from 'recharts';
+import { Activity, BarChart2, TrendingUp, AlertTriangle, Zap, Server, MonitorPlay } from 'lucide-react';
+import {  Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Bar, Legend, ComposedChart, BarChart } from 'recharts';
 import { SyncAnalyticsPoint } from '../types';
 import { GridLayoutEngine } from './GridLayoutEngine';
 
@@ -17,6 +17,10 @@ const generateMockData = (): SyncAnalyticsPoint[] => {
     const conflicts = Math.floor(Math.random() * (baseSyncs * 0.15));
     const successful = baseSyncs - conflicts;
     
+    // Simulate weekend binges (if day is 0 (Sun) or 6 (Sat))
+    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+    const mediaViewingFrequency = isWeekend ? Math.floor(Math.random() * 80) + 50 : Math.floor(Math.random() * 30) + 10;
+
     data.push({
       date: d.toISOString(),
       label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -24,7 +28,8 @@ const generateMockData = (): SyncAnalyticsPoint[] => {
       successfulSyncs: successful,
       conflicts: conflicts,
       successRate: Math.round((successful / baseSyncs) * 100),
-      avgLatencyMs: Math.floor(Math.random() * 1200) + 300
+      avgLatencyMs: Math.floor(Math.random() * 1200) + 300,
+      mediaViewingFrequency
     });
   }
   return data;
@@ -34,8 +39,9 @@ const defaultLayout = [
   { i: 'header', x: 0, y: 0, w: 12, h: 3, type: 'PerformanceHeader', isStatic: true },
   { i: 'metrics', x: 0, y: 3, w: 12, h: 4, type: 'MetricsRow' },
   { i: 'activity', x: 0, y: 7, w: 12, h: 10, type: 'ActivityChart' },
-  { i: 'volume', x: 0, y: 17, w: 6, h: 10, type: 'VolumeChart' },
-  { i: 'latency', x: 6, y: 17, w: 6, h: 10, type: 'LatencyChart' }
+  { i: 'media_trends', x: 0, y: 17, w: 12, h: 10, type: 'MediaTrendsChart' },
+  { i: 'volume', x: 0, y: 27, w: 6, h: 10, type: 'VolumeChart' },
+  { i: 'latency', x: 6, y: 27, w: 6, h: 10, type: 'LatencyChart' }
 ];
 
 export const SyncPerformanceView: React.FC<{ isEditMode?: boolean }> = ({ isEditMode = false }) => {
@@ -162,6 +168,39 @@ export const SyncPerformanceView: React.FC<{ isEditMode?: boolean }> = ({ isEdit
                 />
                 <Line type="monotone" dataKey="avgLatencyMs" name="Avg Latency" stroke="#a855f7" strokeWidth={3} dot={{ r: 4, fill: '#a855f7', strokeWidth: 0 }} activeDot={{ r: 6 }} />
               </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )
+    },
+    {
+      type: 'MediaTrendsChart',
+      name: 'Media Trends',
+      component: ({ data }: any) => (
+        <div className="p-6 h-full flex flex-col bg-white dark:bg-[#0a0a0a]">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center flex-shrink-0">
+            <MonitorPlay className="w-4 h-4 mr-2 text-pink-500" />
+            Viewing Frequency Trends (Episodes / Movies)
+          </h3>
+          <div className="flex-1 w-full min-h-[200px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorTrends" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ec4899" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#ec4899" stopOpacity={0.2}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#333" opacity={0.2} />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '12px', color: '#fff' }}
+                  itemStyle={{ color: '#e5e5e5' }}
+                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                />
+                <Bar dataKey="mediaViewingFrequency" name="Media Consumed" fill="url(#colorTrends)" barSize={24} radius={[4, 4, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>

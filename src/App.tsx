@@ -23,6 +23,7 @@ const ExtensionCompanionView = React.lazy(() => import('./components/ExtensionCo
 const SettingsView = React.lazy(() => import('./components/SettingsView').then(module => ({ default: module.SettingsView })));
 const DatabaseView = React.lazy(() => import('./components/DatabaseView').then(module => ({ default: module.DatabaseView })));
 const ApiDocumentationView = React.lazy(() => import('./components/ApiDocumentationView').then(module => ({ default: module.ApiDocumentationView })));
+const AccountView = React.lazy(() => import('./components/AccountView'));
 const DockerBackendView = React.lazy(() => import('./components/DockerBackendView').then(module => ({ default: module.DockerBackendView })));
 const SystemHealthView = React.lazy(() => import('./components/SystemHealthView').then(module => ({ default: module.SystemHealthView })));
 const SyncPerformanceView = React.lazy(() => import('./components/SyncPerformanceView').then(module => ({ default: module.SyncPerformanceView })));
@@ -456,11 +457,67 @@ export default function App() {
 
   const handleClearLogs = () => setSystemLogs([]);
 
-  const handleTriggerExtensionAction = (action: string) => {
+  const handleTriggerExtensionAction = (actionData: any) => {
+    const action = typeof actionData === 'string' ? actionData : actionData.action;
+    
     if (action === 'toggle_overlay') {
       setExtensionState(prev => ({ ...prev, overlayVisible: !prev.overlayVisible }));
     } else if (action === 'toggle_autoscrobble') {
       setExtensionState(prev => ({ ...prev, autoScrobbleEnabled: !prev.autoScrobbleEnabled }));
+    } else if (action === 'detect_video') {
+      setExtensionState(prev => ({
+        ...prev,
+        currentMedia: {
+          title: actionData.mediaTitle,
+          episode: actionData.episode,
+          progressPercent: actionData.progressPercent,
+          site: actionData.site,
+          season: 1,
+          currentTime: (actionData.progressPercent / 100) * 1200,
+          duration: 1200,
+          isPlaying: true
+        }
+      }));
+    } else if (action === 'scrobble') {
+      addToast('success', 'Scrobbled', `Scrobbled ${actionData.mediaTitle} Episode ${actionData.episode} from ${actionData.site}`);
+      const newLog = {
+        id: `ext-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        source: actionData.site,
+        targetPlatform: 'all',
+        action: 'scrobble',
+        status: 'success' as const,
+        itemTitle: actionData.mediaTitle,
+        platformsAffected: ['simkl', 'mal', 'anilist', 'karakeep'] as PlatformType[],
+        details: `Extension detected completion for ${actionData.mediaTitle} Ep ${actionData.episode} on ${actionData.site}`
+      };
+      setSyncLogs(prev => [newLog, ...prev]);
+      
+      setItems(prev => prev.map(item => {
+        if (item.title === actionData.mediaTitle) {
+          return {
+            ...item,
+            platforms: {
+              ...item.platforms,
+              simkl: item.platforms.simkl ? { ...item.platforms.simkl, episode: Math.max(item.platforms.simkl.episode || 0, actionData.episode) } : undefined,
+              mal: item.platforms.mal ? { ...item.platforms.mal, episode: Math.max(item.platforms.mal.episode || 0, actionData.episode) } : undefined,
+              anilist: item.platforms.anilist ? { ...item.platforms.anilist, episode: Math.max(item.platforms.anilist.episode || 0, actionData.episode) } : undefined
+            }
+          };
+        }
+        return item;
+      }));
+    } else if (action === 'correct_mismatch') {
+      addToast('info', 'Metadata Updated', `Updated metadata to ${actionData.payload.title} S${actionData.payload.season} E${actionData.payload.episode}`);
+      setExtensionState(prev => ({
+        ...prev,
+        currentMedia: prev.currentMedia ? {
+          ...prev.currentMedia,
+          title: actionData.payload.title,
+          season: actionData.payload.season,
+          episode: actionData.payload.episode
+        } : undefined
+      }));
     }
   };
 
@@ -728,11 +785,11 @@ export default function App() {
           )}
 
           
-          {activeTab === 'health' && <div className="space-y-6"><SystemHealthView isEditMode={isEditMode} /><SyncPerformanceView isEditMode={isEditMode} /></div>}
+          {activeTab === 'health' && <div className="space-y-6"><SystemHealthView isEditMode={isEditMode} logs={syncLogs} /><SyncPerformanceView isEditMode={isEditMode} /></div>}
           {activeTab === 'docker-backend' && <DockerBackendView />}
           {activeTab === 'database' && <DatabaseView />}
           {activeTab === 'plex' && <PlexWebhookView settings={settings} webhookLogs={webhookLogs} libraryItems={items} onTriggerSimulatedWebhook={handleTriggerSimulatedWebhook} />}
-          {activeTab === 'extension' && <ExtensionCompanionView state={extensionState} libraryItems={items} onTriggerExtensionAction={handleTriggerExtensionAction} />}
+          {activeTab === 'extension' && <ExtensionCompanionView state={extensionState} libraryItems={items} onTriggerExtensionAction={handleTriggerExtensionAction} settings={settings} />}
           {activeTab === 'api-docs' && <ApiDocumentationView />}
 
           {activeTab === 'settings' && (
@@ -741,6 +798,9 @@ export default function App() {
               onSaveSettings={handleSaveSettings}
               addToast={addToast}
             />
+          )}
+          {activeTab === 'account' && (
+            <AccountView />
           )}
           {activeTab === 'bookmarks' && (
             <BookmarkTab settings={settings} />

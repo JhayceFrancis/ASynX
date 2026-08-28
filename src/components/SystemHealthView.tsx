@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {  Server, Clock, Cpu, Database, RefreshCw, CheckCircle2, WifiOff, Box } from 'lucide-react';
+import {  Server, Clock, Cpu, Database, RefreshCw, CheckCircle2, WifiOff, Box, Activity } from 'lucide-react';
 
 import { GridLayoutEngine } from './GridLayoutEngine';
 import { ASynXLogo } from './ASynXLogo';
@@ -8,14 +8,15 @@ import { SimklLogo, MalLogo, AniListLogo, PlexLogo, KarakeepLogo } from './Platf
 // Default layout for System Health
 const defaultLayout = [
   { i: 'header', x: 0, y: 0, w: 12, h: 3, type: 'HealthHeader', isStatic: true },
-  { i: 'daemon', x: 0, y: 3, w: 3, h: 4, type: 'DaemonStatus' },
-  { i: 'uptime', x: 3, y: 3, w: 3, h: 4, type: 'Uptime' },
-  { i: 'memory', x: 6, y: 3, w: 3, h: 4, type: 'Memory' },
-  { i: 'lastSync', x: 9, y: 3, w: 3, h: 4, type: 'LastSync' },
+  { i: 'daemon', x: 0, y: 3, w: 2, h: 4, type: 'DaemonStatus' },
+  { i: 'uptime', x: 2, y: 3, w: 2, h: 4, type: 'Uptime' },
+  { i: 'memory', x: 4, y: 3, w: 3, h: 4, type: 'Memory' },
+  { i: 'lastSync', x: 7, y: 3, w: 2, h: 4, type: 'LastSync' },
+  { i: 'successRate', x: 9, y: 3, w: 3, h: 4, type: 'SyncSuccessRate' },
   { i: 'integrations', x: 0, y: 7, w: 12, h: 8, type: 'IntegrationsGrid' }
 ];
 
-export const SystemHealthView: React.FC<{ isEditMode?: boolean }> = ({ isEditMode = false }) => {
+export const SystemHealthView: React.FC<{ isEditMode?: boolean, logs?: any[] }> = ({ isEditMode = false, logs = [] }) => {
   const [healthData, setHealthData] = useState<any>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -177,16 +178,62 @@ export const SystemHealthView: React.FC<{ isEditMode?: boolean }> = ({ isEditMod
       )
     },
     {
+      type: 'SyncSuccessRate',
+      name: 'Sync Success Rate (30d)',
+      component: ({ logs }: any) => {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        const recentLogs = (logs || []).filter((log: any) => new Date(log.timestamp) >= thirtyDaysAgo);
+        const totalLogs = recentLogs.length;
+        const successLogs = recentLogs.filter((log: any) => log.status === 'success').length;
+        const successRate = totalLogs > 0 ? Math.round((successLogs / totalLogs) * 100) : 100;
+        
+        return (
+          <div className="p-5 h-full flex flex-col justify-between">
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">30d Success Rate</p>
+              <div className="flex items-end space-x-2 mt-1">
+                <p className="text-xl font-bold text-gray-800 dark:text-gray-200">
+                  {successRate}%
+                </p>
+                <p className="text-[10px] text-gray-500 mb-1">{totalLogs} events</p>
+              </div>
+            </div>
+          </div>
+        );
+      }
+    },
+    {
       type: 'IntegrationsGrid',
-      name: 'External Integrations',
-      component: ({ healthData, getStatusColor }: any) => {
+      name: 'Service Monitoring',
+      component: ({ healthData, getStatusColor, isRefreshing }: any) => {
         const integrationsList = Object.entries(healthData?.integrations || {});
         return (
           <div className="p-5 h-full overflow-y-auto">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-4 border-b border-gray-200 dark:border-neutral-900 pb-2">External Integrations Health</h3>
+            <div className="flex items-center justify-between mb-4 border-b border-gray-200 dark:border-neutral-900 pb-2">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center space-x-2">
+                <Activity className="w-4 h-4 text-indigo-500" />
+                <span>Service Monitoring</span>
+              </h3>
+              {isRefreshing && (
+                <span className="text-[10px] text-indigo-500 font-bold uppercase animate-pulse flex items-center space-x-1">
+                  <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                  <span>Pinging...</span>
+                </span>
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {integrationsList.map(([key, data]: [string, any]) => (
-                <div key={key} className="p-3 rounded-xl border bg-gray-50 dark:bg-neutral-900/40 border-gray-200 dark:border-neutral-800 shadow-sm">
+                <div key={key} className="p-3 rounded-xl border bg-gray-50 dark:bg-neutral-900/40 border-gray-200 dark:border-neutral-800 shadow-sm relative overflow-hidden">
+                  {isRefreshing && (
+                    <div className="absolute top-0 left-0 h-0.5 bg-indigo-500 animate-[pulse_1s_ease-in-out_infinite] w-full" />
+                  )}
                   <div className="flex justify-between items-center mb-2">
                     <div className="flex items-center space-x-2">
                       {key.toLowerCase() === 'simkl' ? <SimklLogo className="w-4 h-4 text-emerald-400" /> : 
@@ -232,7 +279,7 @@ export const SystemHealthView: React.FC<{ isEditMode?: boolean }> = ({ isEditMod
         tabId="health"
         defaultLayout={defaultLayout}
         availableWidgets={availableWidgets}
-        widgetProps={{ healthData, isRefreshing, error, fetchHealth, formatUptime, getStatusColor }}
+        widgetProps={{ healthData, isRefreshing, error, fetchHealth, formatUptime, getStatusColor, logs }}
         isEditMode={isEditMode}
       />
     </div>

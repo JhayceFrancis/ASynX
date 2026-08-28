@@ -1405,6 +1405,65 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
+      {/* Section 8.5: Sync Policy */}
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
+        <div className="flex items-center space-x-2 border-b border-gray-200 dark:border-neutral-900 pb-3">
+          <Sliders className="w-5 h-5 text-indigo-500" />
+          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Sync Policy & Conflict Resolution</h3>
+        </div>
+        
+        <div className="space-y-6 pt-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">AI Conflict Auto-Resolution</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Automatically use AI analysis to resolve episode and score desyncs without manual intervention.
+              </p>
+            </div>
+            <button type="button"
+              onClick={() => setFormState(prev => ({ ...prev, syncRules: { ...prev.syncRules, autoResolveWithAI: !prev.syncRules.autoResolveWithAI } }))}
+              className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${formState.syncRules?.autoResolveWithAI ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${formState.syncRules?.autoResolveWithAI ? 'translate-x-7' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Source of Truth Priority</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Define a fallback hierarchy for platforms when a sync conflict occurs and AI resolution is disabled or uncertain.
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {(formState.syncRules?.platformPriority || ['mal', 'anilist', 'simkl']).map((platform, idx) => (
+                <div key={idx} className="flex flex-col space-y-1">
+                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Priority {idx + 1}</label>
+                  <select
+                    value={platform}
+                    onChange={(e) => {
+                      const newPriority = [...(formState.syncRules?.platformPriority || ['mal', 'anilist', 'simkl'])];
+                      const oldIdx = newPriority.indexOf(e.target.value as PlatformType);
+                      if (oldIdx !== -1) {
+                        newPriority[oldIdx] = newPriority[idx];
+                      }
+                      newPriority[idx] = e.target.value as PlatformType;
+                      setFormState(prev => ({ ...prev, syncRules: { ...prev.syncRules, platformPriority: newPriority } }));
+                    }}
+                    className="w-full bg-gray-50 dark:bg-[#111] border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 transition-colors font-sans"
+                  >
+                    <option value="simkl">Simkl</option>
+                    <option value="mal">MyAnimeList</option>
+                    <option value="anilist">AniList</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Section 9: Automated Cloud Backups */}
       <BackupSettingsView formState={formState} setFormState={setFormState} />
 
@@ -1690,6 +1749,57 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               className="px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 rounded-lg text-sm font-semibold transition"
             >
               Reset All Dashboard Layouts to Default
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
+        <div className="flex items-center space-x-2 border-b border-gray-200 dark:border-neutral-900 pb-3">
+          <ShieldCheck className="w-5 h-5 text-indigo-500" />
+          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Privacy & GDPR Data Portability</h3>
+        </div>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Export your personal tracking data, sync histories, and system logs to comply with GDPR data portability guidelines. The exported payload will be securely formatted as JSON.
+          </p>
+          <div className="flex flex-wrap items-center gap-4 pt-2">
+            <button type="button"
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/remote-sync/export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey: formState.remoteSync?.apiKey || '' })
+                  });
+                  if (!res.ok) throw new Error('Failed to fetch data');
+                  const data = await res.json();
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `asynx_gdpr_export_${new Date().toISOString().split('T')[0]}.json`;
+                  a.click();
+                  if (addToast) addToast('success', 'Data Exported', 'Your personal data archive has been downloaded.');
+                } catch (e: any) {
+                  // Fallback to local storage if API fails
+                  const data = {
+                    settings: JSON.parse(localStorage.getItem('asynx_settings') || '{}'),
+                    libraryItems: JSON.parse(localStorage.getItem('asynx_library_items') || '[]'),
+                    syncLogs: JSON.parse(localStorage.getItem('asynx_sync_logs') || '[]')
+                  };
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `asynx_gdpr_local_export_${new Date().toISOString().split('T')[0]}.json`;
+                  a.click();
+                  if (addToast) addToast('info', 'Local Data Exported', 'API unavailable. Downloaded local data archive instead.');
+                }
+              }}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white border border-transparent rounded-lg text-sm font-semibold transition"
+            >
+              Export Privacy Archive (JSON)
             </button>
           </div>
         </div>

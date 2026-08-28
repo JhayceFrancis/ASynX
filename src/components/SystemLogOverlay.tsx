@@ -24,15 +24,18 @@ export const SystemLogOverlay: React.FC<SystemLogOverlayProps> = ({
   onClearLogs
 }) => {
   const [searchTerm, setSearchTerm] = React.useState('');
+  const [severityFilter, setSeverityFilter] = React.useState<string>('all');
   const [autoScroll, setAutoScroll] = React.useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const filteredLogs = React.useMemo(() => {
-    return logs.filter(log => 
-      log.message.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      (log.category && log.category.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-  }, [logs, searchTerm]);
+    return logs.filter(log => {
+      const matchesSearch = log.message.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (log.category && log.category.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesSeverity = severityFilter === 'all' || log.level === severityFilter;
+      return matchesSearch && matchesSeverity;
+    });
+  }, [logs, searchTerm, severityFilter]);
 
   useEffect(() => {
     if (autoScroll && scrollRef.current) {
@@ -101,6 +104,17 @@ export const SystemLogOverlay: React.FC<SystemLogOverlayProps> = ({
                     className="w-48 bg-white dark:bg-[#111] border border-gray-200 dark:border-neutral-800 rounded px-2 pl-7 py-1 text-[11px] text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 transition-colors"
                   />
                 </div>
+                <select
+                  value={severityFilter}
+                  onChange={(e) => setSeverityFilter(e.target.value)}
+                  className="bg-white dark:bg-[#111] border border-gray-200 dark:border-neutral-800 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 transition-colors font-sans"
+                >
+                  <option value="all">All Levels</option>
+                  <option value="info">Info</option>
+                  <option value="warn">Warning</option>
+                  <option value="error">Error</option>
+                  <option value="success">Success</option>
+                </select>
                 <div className="h-4 w-px bg-gray-300 dark:bg-neutral-800" />
                 <button
                   onClick={() => setAutoScroll(!autoScroll)}

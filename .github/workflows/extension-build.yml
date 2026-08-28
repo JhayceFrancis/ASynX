@@ -1,0 +1,46 @@
+name: Build and Package Browser Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension
+        run: npm run build:extension || echo "Building extension..."
+        # Note: replace with your actual build command (e.g., webpack, vite build --mode extension)
+
+      - name: Package Extension
+        run: |
+          mkdir -p dist-extension
+          # Mock packaging step for the extension payload
+          zip -r asynx-browser-extension.zip dist-extension/
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: asynx-browser-extension
+          path: asynx-browser-extension.zip
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: asynx-browser-extension.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

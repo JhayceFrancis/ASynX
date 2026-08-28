@@ -116,6 +116,7 @@ export interface BrowserExtensionState {
 }
 
 export interface AppSettings {
+  extensionEnabled?: boolean;
   pushNotifications?: {
     enabled: boolean;
     browserNotifications: boolean;
@@ -247,6 +248,7 @@ export interface AppSettings {
     syncSpecificTime?: string;
     conflictPolicy: 'ask_user' | 'source_of_truth' | 'highest_episode';
     defaultSourceOfTruth: PlatformType;
+    platformPriority?: PlatformType[];
     autoResolveWithAI: boolean;
     syncDramasFromSimklToMAL: boolean;
     scheduledRules?: Array<{
@@ -278,6 +280,7 @@ export interface SyncAnalyticsPoint {
   conflicts: number;
   successRate: number;
   avgLatencyMs: number;
+  mediaViewingFrequency?: number;
 }
 
 export interface HealthCheckService {

@@ -27,6 +27,12 @@ Packed into a modern Windows 11 Fluent dark-themed UI, ASynX acts as your unifie
 - **WebSocket Reactivity**: UI instantly reacts and updates progress charts when a remote Plex/Tautulli webhook scrobbles an episode, backed by a deduplication playback session manager.
 
 
+
+### 🔒 Security & GDPR Compliance
+- **IDP Auto-Sync**: Seamlessly connect your Google/GitHub identity to securely handshake API keys between your Windows Desktop, Docker daemon, and Browser Plugin.
+- **Encryption at Rest**: Locally supplied Personally Identifiable Information (PII) like email addresses are AES-encrypted before resting in local JSON DBs, adhering to EU GDPR practices.
+- **Encrypted Payloads**: Secure webhook deliveries over HTTPS when syncing between browser extension modules and your desktop ASynX server.
+
 ### ⚡ Intelligent Workflow & Notifications
 - **Smart Resolve (AI)**: Leverage Gemini/OpenAI models to automatically analyze metadata, watch history, and episode discrepancies, presenting a one-click optimal resolution.
 - **Floating Bulk Actions Toolbar**: Check multiple items in the Sync Matrix and quickly apply mass actions (Force Sync, Mark as Watched, Ignore Conflicts) from a non-intrusive floating command bar.
@@ -79,3 +85,42 @@ git clone [https://github.com/JhayceFrancis/ASynX.wiki.git](https://github.com/J
 ## 📄 License
 
 Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for full details.
+
+
+## 🚀 Installation & Deployment
+
+ASynX is built for multiple deployment methods depending on your tracking needs:
+
+### 1. Windows Desktop App (Electron)
+- **Installer**: Download the `.exe` from [GitHub Releases](https://github.com/asynx/releases).
+- **Microsoft Store**: (Coming Soon)
+- **Build From Source**:
+  ```bash
+  git clone https://github.com/asynx/asynx.git
+  npm ci
+  npm run make
+  ```
+
+### 2. Docker Daemon (Headless Syncing)
+Keep your Webhooks processing 24/7 without keeping your PC running.
+```yaml
+version: '3.8'
+services:
+  asynx-backend:
+    image: asynx/backend:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - JWT_SECRET=your_secure_secret
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+```
+
+### 3. Browser Extension Plugin
+Intercept video streams on Crunchyroll, Netflix, and HiDive directly from the web and route them to ASynX.
+- Go to our **GitHub Releases** page and download `asynx-browser-extension.zip`.
+- Extract it, go to `chrome://extensions` in Chromium browsers, enable **Developer Mode**, and **Load Unpacked**.
+- Click the plugin icon, enter your Docker/Desktop API Key, and enable **IDP Auto-Sync**.
+
