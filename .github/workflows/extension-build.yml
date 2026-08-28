@@ -3,12 +3,17 @@ name: Build and Package Browser Extension
 on:
   push:
     tags:
-      - 'v*'
+      - 'asynx-brwsr_plg-v*.*.*'
   workflow_dispatch:
 
 jobs:
   build-extension:
     runs-on: ubuntu-latest
+    
+    # Required permission for GitHub Actions to upload assets to the Releases page
+    permissions:
+      contents: write 
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -16,20 +21,21 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24' # Updated from 20 to prevent pipeline deprecation warnings
 
       - name: Install dependencies
         run: npm ci
 
       - name: Build extension
         run: npm run build:extension || echo "Building extension..."
-        # Note: replace with your actual build command (e.g., webpack, vite build --mode extension)
 
       - name: Package Extension
         run: |
           mkdir -p dist-extension
-          # Mock packaging step for the extension payload
-          zip -r asynx-browser-extension.zip dist-extension/
+          # Navigate into the output directory so the zip file contents sit at the root
+          cd dist-extension
+          zip -r ../asynx-browser-extension.zip ./*
+          cd ..
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -39,8 +45,10 @@ jobs:
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2 # Updated to v2 for modern Node.js support
         with:
           files: asynx-browser-extension.zip
+          name: ASynX Browser Plugin ${{ github.ref_name }}
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
