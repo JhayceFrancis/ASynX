@@ -5,7 +5,8 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - 'asynx-win-v*.*.*'
+      - 'asynx-docker-v*.*.*'
   workflow_dispatch: # Allows manual trigger
 
 permissions:
@@ -44,8 +45,8 @@ jobs:
           npm version patch --no-git-tag-version
           git add package.json package-lock.json
           git commit -m "chore(release): bump version [skip ci]"
-          git pull --rebase origin ${{ github.ref_name }}
-          git push origin HEAD:${{ github.ref }}
+          git pull --rebase origin main
+          git push origin HEAD:refs/heads/main
 
   # ==========================================
   # JOB 2: Windows Electron (.exe) Publisher
@@ -53,6 +54,8 @@ jobs:
   build-electron:
     name: Build & Publish Electron Installer
     needs: bump-version
+    # Only run if triggered by main branch, workflow dispatch, or the 'win' tag
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/asynx-win-v') || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - name: Checkout Repository
@@ -103,8 +106,8 @@ jobs:
       - name: Create Unified GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: v${{ env.VERSION }}
-          name: ASynX v${{ env.VERSION }}
+          tag_name: asynx-win-v${{ env.VERSION }}
+          name: ASynX Windows v${{ env.VERSION }}
           draft: true
           prerelease: false
           files: |
@@ -120,6 +123,8 @@ jobs:
   build-docker:
     name: Build & Push Docker Image
     needs: bump-version
+    # Only run if triggered by main branch, workflow dispatch, or the 'docker' tag
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/asynx-docker-v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
