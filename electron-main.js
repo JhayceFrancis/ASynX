@@ -68,7 +68,8 @@ app.whenReady().then(async () => {
   await dbUpdater.init();
   relationsDb = await dbUpdater.loadCache();
   
-  const iconPath = path.join(__dirname, 'dist', 'icon.png');
+  // Updated to match the new image asset in the public/ folder
+  const iconPath = path.join(__dirname, 'dist', 'asynx-logo.png');
   
   // Defensive circuit breaker for the System Tray
   if (fs.existsSync(iconPath)) {
