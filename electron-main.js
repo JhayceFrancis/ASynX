@@ -6,6 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const require = createRequire(import.meta.url);
+const fs = require('node:fs');
 const { app, BrowserWindow, Tray, Menu } = require('electron');
 const path = require('path');
 const { fork } = require('child_process');
@@ -13,11 +14,11 @@ const AnimeRelationsUpdater = require('./main/database-updater.cjs');
 const BookmarkManager = require('./main/bookmark-manager.cjs');
 const startLocalApi = require('./main/local-api.cjs');
 const ScrobbleManager = require('./main/scrobble-manager.cjs');
+
 let scrobbleManager;
 let bookmarkManager;
 let dbUpdater;
 let relationsDb = {};
-
 
 // Hardware acceleration fix
 app.disableHardwareAcceleration();
@@ -49,7 +50,7 @@ function createWindow(port) {
 }
 
 app.whenReady().then(async () => {
-    bookmarkManager = new BookmarkManager();
+  bookmarkManager = new BookmarkManager();
   startLocalApi(bookmarkManager);
 
   require('electron').ipcMain.handle('bookmarks:fetch', async () => {
@@ -66,23 +67,30 @@ app.whenReady().then(async () => {
   dbUpdater = new AnimeRelationsUpdater();
   await dbUpdater.init();
   relationsDb = await dbUpdater.loadCache();
+  
   const iconPath = path.join(__dirname, 'dist', 'icon.png');
-  tray = new Tray(iconPath);
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Show ASynX', click: () => { if (mainWindow) mainWindow.show(); } },
-    { label: 'Quit', click: () => { app.quit(); } }
-  ]);
-  tray.setToolTip('ASynX');
-  tray.setContextMenu(contextMenu);
-  tray.on('click', () => {
-    if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        mainWindow.hide();
-      } else {
-        mainWindow.show();
+  
+  // Defensive circuit breaker for the System Tray
+  if (fs.existsSync(iconPath)) {
+    tray = new Tray(iconPath);
+    const contextMenu = Menu.buildFromTemplate([
+      { label: 'Show ASynX', click: () => { if (mainWindow) mainWindow.show(); } },
+      { label: 'Quit', click: () => { app.quit(); } }
+    ]);
+    tray.setToolTip('ASynX');
+    tray.setContextMenu(contextMenu);
+    tray.on('click', () => {
+      if (mainWindow) {
+        if (mainWindow.isVisible()) {
+          mainWindow.hide();
+        } else {
+          mainWindow.show();
+        }
       }
-    }
-  });
+    });
+  } else {
+    console.warn(`[Warning] Tray icon not found at ${iconPath}. Skipping System Tray creation.`);
+  }
 
   const serverPath = path.join(__dirname, 'dist', 'server.cjs');
   const userDataPath = app.getPath('userData');
@@ -97,12 +105,10 @@ app.whenReady().then(async () => {
   });
   
   serverProcess.on('message', (msg) => {
-    
     if (msg && msg.type === 'server-started' && msg.port) {
       if (!scrobbleManager) {
         scrobbleManager = new ScrobbleManager(`http://localhost:${msg.port}`, relationsDb);
       }
-
       createWindow(msg.port);
     }
 
@@ -135,7 +141,6 @@ app.whenReady().then(async () => {
         scrobbleManager.updateHubSettings(msg.settings.remoteSync);
       }
     }
-
   });
   
   app.on('activate', () => {
