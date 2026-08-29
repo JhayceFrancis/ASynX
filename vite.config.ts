@@ -16,7 +16,7 @@ export default defineConfig(() => {
       chunkSizeWarningLimit: 1000
     },
     server: {
-      port: process.env.VITE_PORT ? parseInt(process.env.VITE_PORT, 10) : 4000,
+      port: process.env.VITE_PORT ? parseInt(process.env.VITE_PORT, 10) : (process.env.PORT ? parseInt(process.env.PORT, 10) : 3000),
       
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.

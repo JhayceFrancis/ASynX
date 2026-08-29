@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../apiFetch';
 import React, { useState, useEffect } from 'react';
 import { Database, Table, RefreshCw } from 'lucide-react';
 

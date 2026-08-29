@@ -6,6 +6,8 @@ import { logger } from './logger.ts';
 import { AuthProvider, useAuth } from './AuthContext';
 import LoginView from './components/LoginView';
 
+
+
 // Global error handlers to capture and send client-side errors to the backend
 window.addEventListener('error', (event) => {
   const msg = (event.message || '').toLowerCase();

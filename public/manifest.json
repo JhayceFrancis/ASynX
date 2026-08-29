@@ -1,21 +1,25 @@
 {
+  "manifest_version": 3,
   "name": "ASynX Studio",
   "short_name": "ASynX",
-  "description": "ASynX Sync Matrix",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#6366f1",
-  "icons": [
-    {
-      "src": "/asynx-logo.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
-    },
-    {
-      "src": "/ASynX-split/ASynX_000.png",
-      "sizes": "200x200",
-      "type": "image/png"
-    }
+  "version": "2.5.8",
+  "description": "ASynX - Cross-Platform Anime & Drama Sync Studio",
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Open ASynX"
+  },
+  "icons": {
+    "16": "ASynX-split/ASynX_000.png",
+    "48": "ASynX-split/ASynX_000.png",
+    "128": "ASynX-split/ASynX_000.png"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:*/*",
+    "https://*/*"
   ]
 }

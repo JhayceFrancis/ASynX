@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../apiFetch';
 import React, { useState, useEffect } from 'react';
 import {  
   LibraryItem, 
@@ -25,7 +26,8 @@ import { Search, Settings2, ChevronDown,
   LayoutTemplate,
   List,
   Upload,
-  ArrowUpDown
+  ArrowUpDown,
+  RotateCcw
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -217,6 +219,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showRevertModal, setShowRevertModal] = useState(false);
 
   const storageKey = 'asynx_matrix_layout';
   const [layout, setLayout] = useState<PanelConfig[]>(() => {
@@ -971,14 +974,25 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
           {/* Main Content Area */}
           {activeFilter === 'history' ? (
             <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-2xl shadow-sm p-6 space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0 sm:space-x-3 mb-6 border-b border-gray-200 dark:border-neutral-800 pb-4">
-                <div className="w-12 h-12 flex items-center justify-center bg-indigo-500/10 text-indigo-500 rounded-xl border border-indigo-500/20 shrink-0">
-                  <Clock className="w-6 h-6" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-4 sm:space-y-0 sm:space-x-3 mb-6 border-b border-gray-200 dark:border-neutral-800 pb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 flex items-center justify-center bg-indigo-500/10 text-indigo-500 rounded-xl border border-indigo-500/20 shrink-0">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Recent Synchronization History</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Track and revert the last 10 synchronization actions across your library.</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Recent Synchronization History</h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Track and revert the last 10 synchronization actions across your library.</p>
-                </div>
+                {logs.length > 0 && (
+                  <button
+                    onClick={() => setShowRevertModal(true)}
+                    className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-xl font-semibold text-sm transition-colors flex items-center space-x-2 shrink-0"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Revert Last Batch</span>
+                  </button>
+                )}
               </div>
 
               {logs.length === 0 ? (
@@ -1508,6 +1522,64 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
               <div className="mt-6 flex justify-end">
                 <button
                   onClick={() => setShowBulkModal(false)}
+                  className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Revert Modal */}
+      <AnimatePresence>
+        {showRevertModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 shadow-xl max-w-md w-full"
+            >
+              <div className="flex items-center space-x-3 mb-2">
+                <div className="p-2 bg-amber-500/10 text-amber-500 rounded-xl">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Revert Last Batch</h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                Are you sure you want to revert the most recent batch of synchronization actions? This will undo the changes and restore the previous state.
+              </p>
+              
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    if (onUndoAction && logs.length > 0) {
+                      const latestTimestamp = new Date(logs[0].timestamp).getTime();
+                      // Find all logs within 60 seconds of the most recent log
+                      const batchLogs = logs.filter(l => new Date(l.timestamp).getTime() >= latestTimestamp - 60000);
+                      batchLogs.forEach(log => {
+                        if (log.itemId) onUndoAction(log.itemId);
+                        else onUndoAction(log.id);
+                      });
+                    }
+                    setShowRevertModal(false);
+                  }}
+                  className="w-full flex items-center justify-between p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition group text-left cursor-pointer"
+                >
+                  <div>
+                    <span className="block font-bold text-amber-700 dark:text-amber-400">Confirm Revert</span>
+                    <span className="block text-xs text-amber-600/80 dark:text-amber-400/80 mt-1">Undo the most recent sync actions.</span>
+                  </div>
+                  <RotateCcw className="w-5 h-5 text-amber-500 group-hover:-rotate-180 transition-transform duration-500" />
+                </button>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowRevertModal(false)}
                   className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition cursor-pointer"
                 >
                   Cancel

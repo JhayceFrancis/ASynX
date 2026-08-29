@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './apiFetch';
 /**
  * Centralized logging helper to send client-side errors and warnings
  * to the background Express server. This is especially useful for debugging

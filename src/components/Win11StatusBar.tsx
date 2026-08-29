@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import packageJson from '../../package.json';
-import { Cpu, HardDrive, Activity, ShieldCheck, Clock, RefreshCw, Loader2, Terminal } from 'lucide-react';
+import { Cpu, HardDrive, Activity, ShieldCheck, Clock, RefreshCw, Loader2, Terminal, WifiOff } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
 interface Win11StatusBarProps {
@@ -11,6 +11,8 @@ interface Win11StatusBarProps {
   onRefresh?: () => void;
   isOffline?: boolean;
   onToggleTerminal?: () => void;
+  queuedActionsCount?: number;
+  onTogglePause?: () => void;
 }
 
 export const Win11StatusBar: React.FC<Win11StatusBarProps> = ({
@@ -20,7 +22,9 @@ export const Win11StatusBar: React.FC<Win11StatusBarProps> = ({
   maintenanceMode,
   onRefresh,
   isOffline,
-  onToggleTerminal
+  onToggleTerminal,
+  queuedActionsCount = 0,
+  onTogglePause
 }) => {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
@@ -34,18 +38,33 @@ export const Win11StatusBar: React.FC<Win11StatusBarProps> = ({
     <footer className="bg-gray-50 dark:bg-black/90 backdrop-blur-md border-t border-gray-200 dark:border-neutral-900/80 text-gray-600 dark:text-gray-400 px-4 py-1.5 text-[11px] font-sans flex flex-wrap items-center justify-between gap-2 select-none">
       {/* Left */}
       <div className="flex items-center space-x-3">
-        <Tooltip title="Engine Execution State" description="Current active state of the ASynX synchronization engine." position="top">
+        <Tooltip title="Engine Execution State" description={isOffline ? "Connection lost. Actions are queued locally." : "Current active state of the ASynX synchronization engine."} position="top">
           <div className="flex items-center space-x-1.5 text-gray-700 dark:text-gray-300 font-medium cursor-help">
             {isOffline ? (
-              <Activity className="w-3.5 h-3.5 text-rose-400" />
+              <WifiOff className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
             ) : isSyncing ? (
               <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
             ) : (
               <Activity className="w-3.5 h-3.5 text-indigo-400" />
             )}
-            <span className={isOffline ? "text-rose-500 font-bold" : ""}>Status: {isOffline ? 'Offline Mode' : isSyncing ? 'Syncing...' : 'Idle'}</span>
+            <span className={isOffline ? "text-rose-500 font-bold" : ""}>
+              Status: {isOffline ? 'Offline Mode' : isSyncing ? 'Syncing...' : 'Idle'}
+            </span>
           </div>
         </Tooltip>
+        
+        {isOffline && queuedActionsCount > 0 && (
+          <>
+            <span className="text-slate-800">|</span>
+            <Tooltip title="Local Action Queue" description="Sync actions are stored locally and will execute when connection is restored." position="top">
+              <div className="flex items-center space-x-1 cursor-help bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20 text-rose-400 font-bold">
+                <RefreshCw className="w-3 h-3 animate-pulse" />
+                <span>{queuedActionsCount} Queued</span>
+              </div>
+            </Tooltip>
+          </>
+        )}
+
         <span className="text-slate-800">|</span>
         <Tooltip title="Background CPU Load" description="Processing resource allocation for background sync loops and local scrobble detection." position="top">
           <div className="flex items-center space-x-1 cursor-help">
@@ -79,18 +98,18 @@ export const Win11StatusBar: React.FC<Win11StatusBarProps> = ({
       {/* Right */}
       <div className="flex items-center space-x-3">
         {maintenanceMode ? (
-          <Tooltip title="Maintenance Override" description="All automatic webhooks and local media detection are currently paused." position="top">
-            <span className="px-2 py-0.5 rounded bg-red-500/10 text-red-500 dark:text-red-400 border border-red-500/20 text-[10px] font-semibold flex items-center space-x-1 animate-pulse cursor-help">
-              <ShieldCheck className="w-3 h-3" />
-              <span>MAINTENANCE MODE ACTIVE</span>
-            </span>
+          <Tooltip title="Global Pause Active" description="All automatic webhooks and queue processing are suspended. Click to resume." position="top">
+            <button onClick={onTogglePause} className="px-2 py-0.5 rounded bg-red-500/10 hover:bg-red-500/20 text-red-500 dark:text-red-400 border border-red-500/20 text-[10px] font-semibold flex items-center space-x-1 transition-colors">
+              <ShieldCheck className="w-3 h-3 animate-pulse" />
+              <span>GLOBAL PAUSE</span>
+            </button>
           </Tooltip>
         ) : (
-          <Tooltip title="Media Webhook Daemon" description="Listens for incoming Plex scrobble webhooks and Tautulli media play notifications." position="top">
-            <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold flex items-center space-x-1 cursor-help">
+          <Tooltip title="Daemons Active" description="Background sync webhooks and queue processing are active. Click to pause." position="top">
+            <button onClick={onTogglePause} className="px-2 py-0.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold flex items-center space-x-1 transition-colors">
               <ShieldCheck className="w-3 h-3" />
-              <span>Plex & Tautulli Daemons Active</span>
-            </span>
+              <span>ACTIVE DAEMONS</span>
+            </button>
           </Tooltip>
         )}
         

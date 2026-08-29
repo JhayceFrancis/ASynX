@@ -1,7 +1,9 @@
+import { apiFetch as fetch } from '../apiFetch';
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../AuthContext';
 import { UserCircle, Shield, Upload, Save, Lock, Layout, Link2, Share2, LogIn } from 'lucide-react';
+import { SecureCredentialManager } from './SecureCredentialManager';
 
 export default function AccountView() {
   const { user, login } = useAuth();
@@ -306,6 +308,8 @@ export default function AccountView() {
               </button>
             </div>
           </div>
+          <SecureCredentialManager />
+
         </div>
       </div>
 

@@ -15,7 +15,8 @@
     "lint": "tsc --noEmit",
     "build:extension": "vite build --outDir dist-extension",
     "electron:start": "npm run build && electron .",
-    "build:exe": "npm run build && electron-builder --win"
+    "build:exe": "npm run build && electron-builder --win",
+    "version": "node -e \"const fs=require('fs'); const pkg=require('./package.json'); const man=JSON.parse(fs.readFileSync('./public/manifest.json')); man.version=pkg.version; fs.writeFileSync('./public/manifest.json', JSON.stringify(man, null, 2));\" && git add public/manifest.json"
   },
   "build": {
     "appId": "net.itsjc.asynx",
@@ -25,7 +26,10 @@
     },
     "files": [
       "dist/**/*",
-      "electron-main.js"
+      "electron-main.js",
+      "package.json",
+      "build/icon.png",
+      "main/**/*"
     ],
     "asarUnpack": [],
     "win": {
@@ -40,6 +44,12 @@
       "publisherDisplayName": "JhayceFrancis",
       "displayName": "ASynX",
       "backgroundColor": "#1A1A24"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
     }
   },
   "dependencies": {
@@ -48,15 +58,22 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@google/genai": "^2.18.0",
     "@tailwindcss/vite": "^4.1.14",
+    "@types/csurf": "^1.11.5",
     "@vitejs/plugin-react": "^6.1.0",
+    "anitomy-js": "^5.4.0",
     "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^13.0.3",
     "clsx": "^2.1.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
+    "csrf-csrf": "^4.0.3",
+    "csrf-sync": "^4.2.1",
+    "csurf": "^1.11.0",
     "dotenv": "^17.2.3",
     "electron-log": "^5.4.4",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
+    "glob": "^13.0.6",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^1.33.0",
     "motion": "^13.1.1",
@@ -67,13 +84,15 @@
     "recharts": "^3.10.1",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "tiny-csrf": "^1.1.6"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.6",
     "@types/bcryptjs": "^3.0.0",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

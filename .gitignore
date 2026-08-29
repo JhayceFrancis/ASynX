@@ -11,3 +11,8 @@ coverage/
 asynx_data.enc
 .db_key
 .bak/
+
+# Builds & Artifacts
+release/
+dist-extension/
+asynx-browser-extension.zip

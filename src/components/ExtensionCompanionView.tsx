@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../apiFetch';
 import React, { useState, useEffect } from 'react';
 import { BrowserExtensionState, LibraryItem, AppSettings } from '../types';
 import { 
@@ -39,7 +40,7 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
   const [testEpisode, setTestEpisode] = useState(10);
   const [testProgress, setTestProgress] = useState(88);
   const [activeTab, setActiveTab] = useState<'simulator' | 'settings'>('simulator');
-  const [backendUrl, setBackendUrl] = useState('http://localhost:3000');
+  const [backendUrl, setBackendUrl] = useState(`http://localhost:${import.meta.env.VITE_PORT || 3000}`);
   const [apiKey, setApiKey] = useState('sync_key_abc123');
   const [idpSyncEnabled, setIdpSyncEnabled] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
@@ -366,7 +367,7 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
                     value={backendUrl}
                     onChange={(e) => { setBackendUrl(e.target.value); setConnectionStatus('disconnected'); }}
                     className="flex-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-4 py-2.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                    placeholder="http://localhost:3000"
+                    placeholder={`http://localhost:${import.meta.env.VITE_PORT || 3000}`}
                   />
                 </div>
               </div>

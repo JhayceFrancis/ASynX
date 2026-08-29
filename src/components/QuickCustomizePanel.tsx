@@ -68,35 +68,48 @@ export const QuickCustomizePanel: React.FC<QuickCustomizePanelProps> = ({
                 <Layout className="w-3 h-3" />
                 <span>Heading BG (Solid or Gradient)</span>
               </label>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => updateTheme({ headerColor: 'transparent', headerIsGradient: false })}
-                  className="px-2 py-1 text-[10px] rounded border border-gray-200 dark:border-neutral-700"
-                >Clear</button>
-                {['#000000', '#ffffff', '#1f2937', '#111827', '#4f46e5'].map(color => (
-                  <button
-                    key={color}
-                    onClick={() => updateTheme({ headerColor: color, headerIsGradient: false })}
-                    className="w-6 h-6 rounded-full border-2 border-transparent"
-                    style={{ backgroundColor: color }}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    checked={!t.headerIsGradient}
+                    onChange={() => updateTheme({ headerIsGradient: false })}
+                    className="accent-indigo-500"
                   />
-                ))}
-                {/* Gradient Options */}
-                <button
-                  onClick={() => updateTheme({ headerIsGradient: true, headerGradientColors: ['#ff9a9e', '#fecfef'], headerGradientDirection: 'to right' })}
-                  className="w-6 h-6 rounded-full"
-                  style={{ background: 'linear-gradient(to right, #ff9a9e, #fecfef)' }}
-                />
-                <button
-                  onClick={() => updateTheme({ headerIsGradient: true, headerGradientColors: ['#4facfe', '#00f2fe'], headerGradientDirection: 'to right' })}
-                  className="w-6 h-6 rounded-full"
-                  style={{ background: 'linear-gradient(to right, #4facfe, #00f2fe)' }}
-                />
-                <button
-                  onClick={() => updateTheme({ headerIsGradient: true, headerGradientColors: ['#43e97b', '#38f9d7'], headerGradientDirection: 'to right' })}
-                  className="w-6 h-6 rounded-full"
-                  style={{ background: 'linear-gradient(to right, #43e97b, #38f9d7)' }}
-                />
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Solid:</span>
+                  <input
+                    type="color"
+                    value={t.headerColor === 'transparent' ? '#ffffff' : (t.headerColor || '#000000')}
+                    onChange={(e) => updateTheme({ headerColor: e.target.value, headerIsGradient: false })}
+                    className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent p-0"
+                  />
+                  <button
+                    onClick={() => updateTheme({ headerColor: 'transparent', headerIsGradient: false })}
+                    className="px-2 py-1 text-[10px] rounded border border-gray-200 dark:border-neutral-700"
+                  >Clear</button>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    checked={t.headerIsGradient}
+                    onChange={() => updateTheme({ headerIsGradient: true, headerGradientColors: t.headerGradientColors || ['#ff9a9e', '#fecfef'] })}
+                    className="accent-indigo-500"
+                  />
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Gradient:</span>
+                  <input
+                    type="color"
+                    value={t.headerGradientColors?.[0] || '#ff9a9e'}
+                    onChange={(e) => updateTheme({ headerIsGradient: true, headerGradientColors: [e.target.value, t.headerGradientColors?.[1] || '#fecfef'] })}
+                    className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent p-0"
+                  />
+                  <span className="text-xs text-gray-500">to</span>
+                  <input
+                    type="color"
+                    value={t.headerGradientColors?.[1] || '#fecfef'}
+                    onChange={(e) => updateTheme({ headerIsGradient: true, headerGradientColors: [t.headerGradientColors?.[0] || '#ff9a9e', e.target.value] })}
+                    className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent p-0"
+                  />
+                </div>
               </div>
             </div>
 
@@ -106,15 +119,13 @@ export const QuickCustomizePanel: React.FC<QuickCustomizePanelProps> = ({
                 <Palette className="w-3 h-3" />
                 <span>Button & Icon Color</span>
               </label>
-              <div className="flex flex-wrap gap-2">
-                 {['#4f46e5', '#ec4899', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#000000', '#ffffff'].map(color => (
-                  <button
-                    key={color}
-                    onClick={() => updateTheme({ buttonColor: color, iconColor: color })}
-                    className="w-6 h-6 rounded-full border-2 border-transparent"
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="color"
+                  value={t.buttonColor || '#4f46e5'}
+                  onChange={(e) => updateTheme({ buttonColor: e.target.value, iconColor: e.target.value })}
+                  className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent p-0"
+                />
                 <button
                   onClick={() => updateTheme({ buttonColor: '', iconColor: 'currentColor' })}
                   className="px-2 py-1 text-[10px] rounded border border-gray-200 dark:border-neutral-700"
@@ -128,15 +139,13 @@ export const QuickCustomizePanel: React.FC<QuickCustomizePanelProps> = ({
                 <Type className="w-3 h-3" />
                 <span>Button Text Color</span>
               </label>
-              <div className="flex flex-wrap gap-2">
-                 {['#ffffff', '#000000', '#e5e7eb', '#374151'].map(color => (
-                  <button
-                    key={color}
-                    onClick={() => updateTheme({ buttonTextColor: color })}
-                    className="w-6 h-6 rounded-full border-2 border-transparent"
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="color"
+                  value={t.buttonTextColor || '#ffffff'}
+                  onChange={(e) => updateTheme({ buttonTextColor: e.target.value })}
+                  className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent p-0"
+                />
               </div>
             </div>
 
@@ -146,15 +155,13 @@ export const QuickCustomizePanel: React.FC<QuickCustomizePanelProps> = ({
                 <Palette className="w-3 h-3" />
                 <span>Base Accent</span>
               </label>
-              <div className="flex flex-wrap gap-2">
-                {['#4f46e5', '#ec4899', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6'].map(color => (
-                  <button
-                    key={color}
-                    onClick={() => updateTheme({ accentColor: color, isGradient: false })}
-                    className={`w-6 h-6 rounded-full border-2 transition-transform ${t.accentColor === color && !t.isGradient ? 'border-gray-900 dark:border-white scale-110' : 'border-transparent'}`}
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="color"
+                  value={t.accentColor || '#4f46e5'}
+                  onChange={(e) => updateTheme({ accentColor: e.target.value, isGradient: false })}
+                  className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent p-0"
+                />
               </div>
             </div>
 
@@ -181,23 +188,17 @@ export const QuickCustomizePanel: React.FC<QuickCustomizePanelProps> = ({
                 <Palette className="w-3 h-3" />
                 <span>Subheader Color</span>
               </label>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { value: '', label: 'Default' },
-                  { value: 'rgba(255, 255, 255, 0.95)', label: 'Light' },
-                  { value: 'rgba(10, 10, 10, 0.95)', label: 'Dark' },
-                  { value: 'rgba(79, 70, 229, 0.1)', label: 'Indigo' },
-                  { value: 'rgba(236, 72, 153, 0.1)', label: 'Pink' },
-                  { value: 'transparent', label: 'Transparent' }
-                ].map(option => (
-                  <button
-                    key={option.value}
-                    onClick={() => updateTheme({ subheaderColor: option.value })}
-                    className={`px-2 py-1 text-[10px] rounded border transition ${t.subheaderColor === option.value || (!t.subheaderColor && option.value === '') ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30' : 'border-gray-200 dark:border-neutral-700'}`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="color"
+                  value={t.subheaderColor === 'transparent' || !t.subheaderColor ? '#ffffff' : (t.subheaderColor.startsWith('#') ? t.subheaderColor : '#ffffff')}
+                  onChange={(e) => updateTheme({ subheaderColor: e.target.value })}
+                  className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent p-0"
+                />
+                <button
+                  onClick={() => updateTheme({ subheaderColor: 'transparent' })}
+                  className="px-2 py-1 text-[10px] rounded border border-gray-200 dark:border-neutral-700"
+                >Clear</button>
               </div>
             </div>
 
@@ -208,24 +209,42 @@ export const QuickCustomizePanel: React.FC<QuickCustomizePanelProps> = ({
                 <span>Background Gradient</span>
               </label>
               <div className="flex flex-col gap-2">
-                {[
-                  { value: '', label: 'None (Default)' },
-                  { value: 'linear-gradient(to bottom, #f3f4f6, #e5e7eb)', label: 'Light Gray (Light Mode)' },
-                  { value: 'linear-gradient(to bottom, #0a0a0a, #171717)', label: 'Dark Gray (Dark Mode)' },
-                  { value: 'linear-gradient(to bottom right, rgba(79,70,229,0.1), rgba(236,72,153,0.1))', label: 'Indigo to Pink' },
-                  { value: 'linear-gradient(to bottom right, rgba(16,185,129,0.1), rgba(59,130,246,0.1))', label: 'Emerald to Blue' },
-                ].map(option => (
-                  <button
-                    key={option.value}
-                    onClick={() => updateTheme({ appBackgroundGradient: option.value })}
-                    className={`px-2 py-1.5 text-xs text-left rounded border transition ${t.appBackgroundGradient === option.value || (!t.appBackgroundGradient && option.value === '') ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30' : 'border-gray-200 dark:border-neutral-700'}`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Gradient:</span>
+                  <input
+                    type="color"
+                    value={t.appBgGradStart || '#f3f4f6'}
+                    onChange={(e) => {
+                      const start = e.target.value;
+                      const end = t.appBgGradEnd || '#e5e7eb';
+                      updateTheme({ 
+                        appBgGradStart: start, 
+                        appBackgroundGradient: `linear-gradient(${t.gradientDirection || 'to bottom right'}, ${start}, ${end})` 
+                      });
+                    }}
+                    className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent p-0"
+                  />
+                  <span className="text-xs text-gray-500">to</span>
+                  <input
+                    type="color"
+                    value={t.appBgGradEnd || '#e5e7eb'}
+                    onChange={(e) => {
+                      const start = t.appBgGradStart || '#f3f4f6';
+                      const end = e.target.value;
+                      updateTheme({ 
+                        appBgGradEnd: end, 
+                        appBackgroundGradient: `linear-gradient(${t.gradientDirection || 'to bottom right'}, ${start}, ${end})` 
+                      });
+                    }}
+                    className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent p-0"
+                  />
+                </div>
+                <button
+                  onClick={() => updateTheme({ appBackgroundGradient: '', appBgGradStart: '', appBgGradEnd: '' })}
+                  className="px-2 py-1 text-[10px] rounded border border-gray-200 dark:border-neutral-700"
+                >Clear</button>
               </div>
             </div>
-
 
             {/* Layout Density */}
             <div className="space-y-2">

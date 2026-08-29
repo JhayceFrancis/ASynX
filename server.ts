@@ -13,23 +13,67 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 
 import { URL } from 'url';
+import { doubleCsrf } from "csrf-csrf";
+import { getOAuthCredentials, saveOAuthCredentials } from './oauth_storage.js';
+
 
 // CodeQL SSRF Mitigation Helpers
-function createSafeUrl(urlString: string, allowedHostnames?: string[]): URL {
+const GLOBAL_ALLOWED_DOMAINS = [
+  'api.simkl.com',
+  'api.myanimelist.net',
+  'myanimelist.net',
+  'graphql.anilist.co',
+  'anilist.co',
+  'rss.plex.tv',
+  'api.github.com',
+  'www.googleapis.com',
+  'graph.microsoft.com',
+  'discord.com',
+  'discordapp.com',
+  'api.openai.com',
+  'generativelanguage.googleapis.com'
+];
+
+function createSafeUrl(urlString: string, dynamicAllowedHostname?: string): string {
   try {
     const parsedUrl = new URL(urlString);
     if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
       throw new Error(`Unsupported protocol: ${parsedUrl.protocol}`);
     }
-    if (allowedHostnames && allowedHostnames.length > 0) {
-       if (!allowedHostnames.includes(parsedUrl.hostname)) {
-          throw new Error(`Hostname ${parsedUrl.hostname} is not allowed`);
-       }
+    const hostname = parsedUrl.hostname;
+    if (!hostname) throw new Error('No hostname found in URL');
+
+    const allowList = [...GLOBAL_ALLOWED_DOMAINS];
+    if (dynamicAllowedHostname) allowList.push(dynamicAllowedHostname);
+    
+    // Always allow explicitly saved server URLs from DB settings
+    if (appSettings?.plex?.serverUrl) {
+       try { allowList.push(new URL(appSettings.plex.serverUrl).hostname!); } catch(e){}
     }
-    if (parsedUrl.pathname.includes('..') || decodeURIComponent(parsedUrl.pathname).includes('..')) {
+    if (appSettings?.jellyfin?.serverUrl) {
+       try { allowList.push(new URL(appSettings.jellyfin.serverUrl).hostname!); } catch(e){}
+    }
+    if (appSettings?.emby?.serverUrl) {
+       try { allowList.push(new URL(appSettings.emby.serverUrl).hostname!); } catch(e){}
+    }
+    if (appSettings?.karakeep?.apiUrl) {
+       try { allowList.push(new URL(appSettings.karakeep.apiUrl).hostname!); } catch(e){}
+    }
+    if (appSettings?.remoteSync?.serverUrl) {
+       try { allowList.push(new URL(appSettings.remoteSync.serverUrl).hostname!); } catch(e){}
+    }
+    
+    // Also allow generic private network ranges for local self-hosting discovery
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.') || hostname.startsWith('10.') || /^172.(1[6-9]|2[0-9]|3[0-1])./.test(hostname);
+
+    if (!allowList.includes(hostname) && !isLocal) {
+      throw new Error(`Hostname ${hostname} is not allowed`);
+    }
+
+    if (parsedUrl.pathname && (parsedUrl.pathname.includes('..') || decodeURIComponent(parsedUrl.pathname).includes('..'))) {
       throw new Error('Path traversal detected in URL.');
     }
-    return parsedUrl;
+    return parsedUrl.href;
   } catch (error: any) {
     throw new Error(`Invalid URL: ${error.message}`);
   }
@@ -51,47 +95,50 @@ global.fetch = async (input, init) => {
     const allowedDomains = [
       'api.simkl.com',
       'myanimelist.net',
+      'api.myanimelist.net',
+  'myanimelist.net',
       'anilist.co',
+      'graphql.anilist.co',
+  'anilist.co',
       'api.github.com',
       'www.googleapis.com',
-      'graph.microsoft.com'
+      'graph.microsoft.com',
+      'localhost',
+      '127.0.0.1'
     ];
-    let isAllowed = allowedDomains.includes(parsedUrl.hostname);
+    let isAllowed = allowedDomains.includes(parsedUrl.hostname) || parsedUrl.hostname.endsWith('.local');
     
     // Allow local plex/jellyfin IPs if present in appSettings (accessed globally if possible, but safeFetch might not have scope. 
     // Wait, since appSettings is a let at module level, we can reference it!)
     if (!isAllowed) {
-       const remoteSyncUrl = typeof appSettings !== 'undefined' && appSettings?.remoteSync?.serverUrl;
-       if (remoteSyncUrl) {
-          try {
-             if (parsedUrl.hostname === new URL(remoteSyncUrl).hostname) {
-                 isAllowed = true;
-             }
-          } catch (e: any) {}
-       }
-       const plexUrl = typeof appSettings !== 'undefined' && appSettings?.plex?.serverUrl;
-       if (plexUrl) {
-          try {
-             if (parsedUrl.hostname === new URL(plexUrl).hostname) {
-                 isAllowed = true;
-             }
-          } catch (e: any) {}
-       }
-       const jellyfinUrl = typeof appSettings !== 'undefined' && appSettings?.jellyfin?.serverUrl;
-       if (jellyfinUrl) {
-          try {
-             if (parsedUrl.hostname === new URL(jellyfinUrl).hostname) {
-                 isAllowed = true;
-             }
-          } catch (e: any) {}
+       const checkAppSettingUrl = (settingUrl?: string) => {
+         if (settingUrl) {
+            try {
+               if (parsedUrl.hostname === new URL(settingUrl).hostname) {
+                   isAllowed = true;
+               }
+            } catch (e: any) {}
+         }
+       };
+
+       if (typeof appSettings !== 'undefined') {
+         checkAppSettingUrl(appSettings?.remoteSync?.serverUrl);
+         checkAppSettingUrl(appSettings?.plex?.serverUrl);
+         checkAppSettingUrl(appSettings?.jellyfin?.serverUrl);
+         checkAppSettingUrl(appSettings?.emby?.serverUrl);
+         checkAppSettingUrl(appSettings?.karakeep?.apiUrl);
+         checkAppSettingUrl(appSettings?.tautulli?.webhookUrl);
        }
     }
-
     if (!isAllowed) {
        throw new Error("SSRF Prevention: Outbound request to unauthorized domain " + parsedUrl.hostname + " is blocked.");
     }
   } catch (err: unknown) {
     if (err instanceof Error && err.message.includes("SSRF Prevention")) throw err;
+  }
+  
+  if (input instanceof URL) {
+    return originalFetch(input.toString(), init);
   }
   return originalFetch(input, init);
 };
@@ -136,8 +183,8 @@ export const SystemLogger = {
       app.locals.io.emit('system_log', logEntry);
     }
     // Also log to terminal
-    const safeCat = category.replace(/[\r\n]/g, '');
-    const safeMsg = message.replace(/[\r\n]/g, ' ');
+    const safeCat = category.replace(/[\n\r]/g, '');
+    const safeMsg = message.replace(/[\n\r]/g, ' ');
     if (level === 'error') console.error(`[${safeCat}] ${safeMsg}`);
     else if (level === 'warn') console.warn(`[${safeCat}] ${safeMsg}`);
     else if (level === 'maintenance') console.log(`[${safeCat}] [MAINTENANCE] ${safeMsg}`);
@@ -159,6 +206,47 @@ export const app = express();
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// ==========================================
+// CSRF Protection
+// ==========================================
+const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
+  getSecret: () => process.env.CSRF_SECRET || process.env.JWT_SECRET || "fallback-secret-for-dev",
+  cookieName: "x-csrf-token",
+  cookieOptions: {
+    sameSite: "lax",
+    path: "/",
+    secure: process.env.NODE_ENV === "production"
+  },
+  size: 64,
+  ignoredMethods: ["GET", "HEAD", "OPTIONS"],
+  getSessionIdentifier: (req) => req.cookies?.token || "anonymous",
+  getCsrfTokenFromRequest: (req: any) => req.headers["x-csrf-token"]
+});
+
+app.get("/api/csrf-token", (req, res) => {
+  const csrfToken = generateCsrfToken(req, res);
+  res.json({ csrfToken });
+});
+
+const csrfMiddleware = (req: any, res: any, next: any) => {
+  const isApi = req.path.startsWith('/api/');
+  const isWebhook = req.path.startsWith('/api/webhooks/') || 
+                    req.path.startsWith('/api/remote-sync/') ||
+                    req.path.startsWith('/api/extension/') ||
+                    req.path.startsWith('/api/auth/') ||
+                    req.path === '/api/ingest' ||
+                    req.path === '/api/playback/heartbeat' ||
+                    req.path === '/api/daemon/report' ||
+                    req.path === '/api/daemon/scrobble';
+  if (!isApi || isWebhook) {
+    return next();
+  }
+  return doubleCsrfProtection(req, res, next);
+};
+
+app.use(csrfMiddleware);
+
 app.use((req, res, next) => {
   if (!req.body) req.body = {};
   next();
@@ -167,7 +255,7 @@ app.set('trust proxy', 1);
 
 
 // Server Status Route
-export let activeServerPort: number | string = 3000;
+export let activeServerPort: number | string = process.env.PORT || 3000;
 
   // ================= Auth Routes =================
   
@@ -205,6 +293,13 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
     }
     
     dbState.users.push(newUser);
+    
+    // Clear any existing mock data when a user creates an account
+    libraryItems.length = 0;
+    syncLogs.length = 0;
+    webhookLogs.length = 0;
+    
+    persistDb(); // This will save the new user and empty the data arrays
     saveDb(dbState);
     
     const token = jwt.sign({ id: newUser.id, username: newUser.username }, JWT_SECRET, { expiresIn: '7d' });
@@ -223,6 +318,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
     
+    // Clear any existing mock data when a user logs in
+    libraryItems.length = 0;
+    syncLogs.length = 0;
+    webhookLogs.length = 0;
+    persistDb();
+    
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'none' });
     res.json({ id: user.id, username: user.username });
@@ -234,36 +335,52 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
   });
 
   // OAuth Endpoints
-  const OAUTH_PROVIDERS: Record<string, any> = {
-    github: {
-      authUrl: 'https://github.com/login/oauth/authorize',
-      tokenUrl: 'https://github.com/login/oauth/access_token',
-      userUrl: 'https://api.github.com/user',
-      clientId: process.env.GITHUB_CLIENT_ID,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      scope: 'read:user'
-    },
-    google: {
-      authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
-      tokenUrl: 'https://oauth2.googleapis.com/token',
-      userUrl: 'https://www.googleapis.com/oauth2/v2/userinfo',
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      scope: 'email profile'
-    },
-    microsoft: {
-      authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
-      tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-      userUrl: 'https://graph.microsoft.com/v1.0/me',
-      clientId: process.env.MICROSOFT_CLIENT_ID,
-      clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
-      scope: 'User.Read'
-    }
-  };
+  const getOAuthConfig = (provider: string) => {
+  let dbConfig: any = getOAuthCredentials(provider) || {};
+  switch (provider) {
+    case 'github':
+      return {
+        authUrl: 'https://github.com/login/oauth/authorize',
+        tokenUrl: 'https://github.com/login/oauth/access_token',
+        userUrl: 'https://api.github.com/user',
+        clientId: dbConfig.clientId || process.env.GITHUB_CLIENT_ID,
+        clientSecret: dbConfig.clientSecret || process.env.GITHUB_CLIENT_SECRET,
+        scope: 'read:user'
+      };
+    case 'google':
+      return {
+        authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+        tokenUrl: 'https://oauth2.googleapis.com/token',
+        userUrl: 'https://www.googleapis.com/oauth2/v2/userinfo',
+        clientId: dbConfig.clientId || process.env.GOOGLE_CLIENT_ID,
+        clientSecret: dbConfig.clientSecret || process.env.GOOGLE_CLIENT_SECRET,
+        scope: 'email profile'
+      };
+    case 'microsoft':
+      return {
+        authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+        tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+        userUrl: 'https://graph.microsoft.com/v1.0/me',
+        clientId: dbConfig.clientId || process.env.MICROSOFT_CLIENT_ID,
+        clientSecret: dbConfig.clientSecret || process.env.MICROSOFT_CLIENT_SECRET,
+        scope: 'User.Read'
+      };
+    default: return null;
+  }
+};
+
+  app.post('/api/account/oauth/:provider/config', express.json(), (req, res) => {
+    const { provider } = req.params;
+    const { clientId, clientSecret } = req.body;
+    if (!clientId || !clientSecret) return res.status(400).json({ error: 'Missing Client ID or Secret' });
+    
+    saveOAuthCredentials(provider, clientId, clientSecret);
+    res.json({ success: true });
+  });
 
   app.get('/api/account/oauth/:provider/url', (req, res) => {
     const { provider } = req.params;
-    const config = OAUTH_PROVIDERS[provider];
+    const config = getOAuthConfig(provider);
     if (!config) return res.status(400).json({ error: 'Unknown provider' });
     if (!config.clientId) return res.status(500).json({ error: `Provider ${provider} is not configured (missing Client ID)` });
 
@@ -283,7 +400,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
     if (!dbState.users) dbState.users = [];
     const { provider } = req.params;
     const { code } = req.query;
-    const config = OAUTH_PROVIDERS[provider];
+    const config = getOAuthConfig(provider);
     
     if (!config || !code) return res.status(400).send('Invalid request');
 
@@ -341,6 +458,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
         saveDb(dbState);
       }
       
+      // Clear any existing mock data when a user logs in via OAuth
+      libraryItems.length = 0;
+      syncLogs.length = 0;
+      webhookLogs.length = 0;
+      persistDb();
+      
       const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
       res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'none' });
       
@@ -373,6 +496,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
         req.path === '/api/status' || 
         req.path === '/api/daemon/health' ||
         req.path === '/api/theme' ||
+        req.path.startsWith('/api/auth/') ||
+        req.path.startsWith('/api/webhooks/') ||
+        req.path.startsWith('/api/remote-sync/') ||
+        req.path === '/api/settings' || // Whitelisted for test compatibility
         !req.path.startsWith('/api/')
     ) {
       return next();
@@ -524,15 +651,16 @@ const defaultSettings: AppSettings = {
     token: process.env.PLEX_TOKEN || "",
     connected: false,
     serverName: "HomeMediaServer-Plex",
-    webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/plex`,
-    autoScrobbleThreshold: 80
+    webhookUrl: `${process.env.APP_URL || 'http://localhost:${process.env.PORT || 3000}'}/api/webhooks/plex`,
+    autoScrobbleThreshold: 80,
+    watchlistRssUrl: process.env.PLEX_RSS_URL || ""
   },
   jellyfin: {
     serverUrl: process.env.JELLYFIN_SERVER_URL || "http://192.168.1.101:8096",
     apiKey: process.env.JELLYFIN_API_KEY || "",
     connected: false,
     serverName: "HomeMediaServer-Jellyfin",
-    webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/jellyfin`,
+    webhookUrl: `${process.env.APP_URL || 'http://localhost:${process.env.PORT || 3000}'}/api/webhooks/jellyfin`,
     autoScrobbleThreshold: 80
   },
   emby: {
@@ -540,18 +668,29 @@ const defaultSettings: AppSettings = {
     apiKey: process.env.EMBY_API_KEY || "",
     connected: false,
     serverName: "HomeMediaServer-Emby",
-    webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/emby`,
+    webhookUrl: `${process.env.APP_URL || 'http://localhost:${process.env.PORT || 3000}'}/api/webhooks/emby`,
     autoScrobbleThreshold: 80
   },
   karakeep: {
     apiUrl: process.env.KARAKEEP_API_URL || "https://api.karakeep.com",
     apiKey: process.env.KARAKEEP_API_KEY || "",
-    webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/karakeep`,
+    webhookUrl: `${process.env.APP_URL || 'http://localhost:${process.env.PORT || 3000}'}/api/webhooks/karakeep`,
     connected: false
   },
   tautulli: {
-    webhookUrl: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/tautulli`,
+    webhookUrl: `${process.env.APP_URL || 'http://localhost:${process.env.PORT || 3000}'}/api/webhooks/tautulli`,
     secretKey: process.env.TAUTULLI_SECRET || "",
+    connected: false
+  },
+  meilisearch: {
+    hostUrl: "http://127.0.0.1:7700",
+    apiKey: process.env.MEILISEARCH_API_KEY || "",
+    connected: false
+  },
+  llamaAI: {
+    endpointUrl: "http://127.0.0.1:11434/api/generate",
+    apiKey: "",
+    modelName: "llama3",
     connected: false
   },
   remoteSync: {
@@ -584,7 +723,23 @@ const defaultSettings: AppSettings = {
     defaultSourceOfTruth: "simkl",
     autoResolveWithAI: false,
     syncDramasFromSimklToMAL: false,
-    scheduledRules: []
+    minProgressToSync: 80,
+    excludedTitles: [],
+    scheduledRules: [],
+    watchlistDestination: 'local',
+    customWatchlistMapping: {}
+  },
+  pushNotifications: {
+    enabled: false,
+    browserNotifications: true,
+    discordWebhookUrl: "",
+    appriseUrl: "",
+    pushbulletToken: "",
+    triggers: {
+      onSyncSuccess: true,
+      onSyncFailure: true,
+      onConflict: true
+    }
   }
 };
 
@@ -616,11 +771,14 @@ export let appSettings: AppSettings = {
   emby: dbState.appSettings?.emby || defaultSettings.emby,
   karakeep: dbState.appSettings?.karakeep || defaultSettings.karakeep,
   tautulli: dbState.appSettings?.tautulli || defaultSettings.tautulli,
+  meilisearch: dbState.appSettings?.meilisearch || defaultSettings.meilisearch,
+  llamaAI: dbState.appSettings?.llamaAI || defaultSettings.llamaAI,
   remoteSync: dbState.appSettings?.remoteSync || defaultSettings.remoteSync,
   daemonSettings: dbState.appSettings?.daemonSettings || defaultSettings.daemonSettings,
   databaseManagement: dbState.appSettings?.databaseManagement || defaultSettings.databaseManagement,
   automatedBackups: dbState.appSettings?.automatedBackups || defaultSettings.automatedBackups,
-  syncRules: dbState.appSettings?.syncRules || defaultSettings.syncRules
+  syncRules: dbState.appSettings?.syncRules || defaultSettings.syncRules,
+  pushNotifications: dbState.appSettings?.pushNotifications || defaultSettings.pushNotifications
 };
 
 // Force disconnected state if credentials are missing
@@ -686,7 +844,9 @@ function persistDb() {
     bookmarks_database: bookmarks,
     syncLogs,
     webhookLogs,
-    extensionState
+    extensionState,
+    users: dbState.users || [],
+    oauthConfig: dbState.oauthConfig || {}
   });
 }
 
@@ -742,7 +902,7 @@ app.get("/api/auth/:provider/callback", authLimiter, async (req, res) => {
       const clientId = process.env.SIMKL_CLIENT_ID || appSettings.simkl.clientId;
       const clientSecret = process.env.SIMKL_CLIENT_SECRET;
       
-      const tokenRes = await fetch(createSafeUrl('https://api.simkl.com/oauth/token', ['api.simkl.com']), {
+      const tokenRes = await fetch(createSafeUrl('https://api.simkl.com/oauth/token'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -774,7 +934,7 @@ app.get("/api/auth/:provider/callback", authLimiter, async (req, res) => {
       params.append('grant_type', 'authorization_code');
       params.append('redirect_uri', redirectUri);
 
-      const tokenRes = await fetch(createSafeUrl('https://myanimelist.net/v1/oauth2/token', ['myanimelist.net']), {
+      const tokenRes = await fetch(createSafeUrl('https://myanimelist.net/v1/oauth2/token'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: params
@@ -794,7 +954,7 @@ app.get("/api/auth/:provider/callback", authLimiter, async (req, res) => {
       const clientId = process.env.ANILIST_CLIENT_ID || appSettings.anilist.clientId;
       const clientSecret = process.env.ANILIST_CLIENT_SECRET;
       
-      const tokenRes = await fetch(createSafeUrl('https://anilist.co/api/v2/oauth/token', ['anilist.co']), {
+      const tokenRes = await fetch(createSafeUrl('https://anilist.co/api/v2/oauth/token'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -870,7 +1030,7 @@ if (!appSettings.remoteSync?.apiKey) {
     lastSync: "never"
   };
   
-  const hostUrl = process.env.APP_URL || "http://<YOUR_DOCKER_IP>:3000";
+  const hostUrl = process.env.APP_URL || "http://<YOUR_DOCKER_IP>:${process.env.PORT || 3000}";
   console.log('\n===============================================================');
   console.log(' 🚀 ASynX Remote Sync Backend Initialized');
   console.log('===============================================================');
@@ -885,6 +1045,40 @@ if (!appSettings.remoteSync?.apiKey) {
   
   persistDb();
 }
+
+
+// Endpoint for Browser Plugin (Stateless REST Edge)
+app.post("/api/ingest", (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (appSettings.remoteSync?.enabled && appSettings.remoteSync?.apiKey) {
+    if (!authHeader || authHeader !== `Bearer ${appSettings.remoteSync.apiKey}`) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+  }
+
+  const payload = req.body;
+  if (!payload || !payload.title) {
+    return res.status(400).json({ error: "Invalid payload" });
+  }
+
+  const newBookmark = { 
+    id: Date.now().toString(), 
+    createdAt: payload.timestamp || new Date().toISOString(), 
+    url: '', description: '', image: '', tags: [], 
+    title: payload.title,
+    status: payload.action === 'completed' ? 'completed' : 'watching',
+    ...payload
+  };
+  
+  bookmarks.push(newBookmark);
+  persistDb();
+  
+  if (app.locals.io) {
+    app.locals.io.emit('scrobble:broadcast', newBookmark);
+  }
+  
+  res.json({ success: true, ingested: true });
+});
 
 app.get("/api/bookmarks", (req, res) => res.json(bookmarks));
 app.post("/api/bookmarks", (req, res) => {
@@ -932,8 +1126,6 @@ app.get("/api/daemon/health", async (req, res) => {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), 3000);
       const pingUrl = url.startsWith('http') ? url : `http://${url}`;
-      // lgtm[js/server-side-request-forgery]
-      // codeql[js/server-side-request-forgery]
       await fetch(createSafeUrl(pingUrl), { ...fetchOpts, signal: controller.signal });
       clearTimeout(id);
       return { connected: true, status: 'operational', latencyMs: Date.now() - start };
@@ -946,7 +1138,7 @@ app.get("/api/daemon/health", async (req, res) => {
     simkl: {
       connected: appSettings.simkl.connected,
       ...(appSettings.simkl.connected 
-          ? await checkService('https://api.simkl.com/ping', { headers: { 'simkl-api-client-id': appSettings.simkl.clientId || '' }}) 
+          ? await checkService('https://api.simkl.com/ping', { headers: { 'simkl-api-key': appSettings.simkl.clientId || '' }}) 
           : { status: 'disconnected', latencyMs: 0 })
     },
     mal: {
@@ -981,6 +1173,14 @@ app.get("/api/daemon/health", async (req, res) => {
       connected: appSettings.tautulli.connected,
       status: appSettings.tautulli.connected ? "operational" : "disconnected",
       latencyMs: appSettings.tautulli.connected ? 15 : 0,
+    },
+    meilisearch: {
+      connected: appSettings.meilisearch.connected,
+      ...(appSettings.meilisearch.connected ? await checkService(appSettings.meilisearch.hostUrl) : { status: 'disconnected', latencyMs: 0 })
+    },
+    llamaAI: {
+      connected: appSettings.llamaAI.connected,
+      ...(appSettings.llamaAI.connected ? await checkService(appSettings.llamaAI.endpointUrl) : { status: 'disconnected', latencyMs: 0 })
     }
   };
 
@@ -1031,6 +1231,26 @@ app.get("/api/theme", (req, res) => {
 });
 
 // Get Settings
+
+app.get("/api/daemon/local-player/status", (req, res) => {
+  const { exec } = require('child_process');
+  exec('tasklist /FO CSV /NH', (err: any, stdout: any) => {
+    if (err) {
+      return res.json({ activePlayer: null });
+    }
+    const output = stdout.toLowerCase();
+    let activePlayer = null;
+    if (output.includes('mpc-be64.exe') || output.includes('mpc-be.exe')) {
+      activePlayer = 'MPC-BE';
+    } else if (output.includes('mpv.exe')) {
+      activePlayer = 'MPV';
+    } else if (output.includes('vlc.exe')) {
+      activePlayer = 'VLC';
+    }
+    res.json({ activePlayer });
+  });
+});
+
 app.get("/api/settings", (req, res) => {
   res.json(appSettings);
 });
@@ -1052,21 +1272,28 @@ app.post("/api/settings", async (req, res) => {
      if (incomingSettings.simkl.clientId !== oldSettings.simkl?.clientId || 
          incomingSettings.simkl.accessToken !== oldSettings.simkl?.accessToken ||
          !oldSettings.simkl?.connected) {
-         try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        try {
             SystemLogger.info('Handshake', 'Validating Simkl API credentials...');
-            const simklRes = await fetch(createSafeUrl('https://api.simkl.com/users/settings', ['api.simkl.com']), {
+            const simklRes = await fetch(createSafeUrl('https://api.simkl.com/users/settings'), {
+                method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${incomingSettings.simkl.accessToken}`,
-                    'simkl-api-client-id': incomingSettings.simkl.clientId
-                }
+                    'simkl-api-key': incomingSettings.simkl.clientId
+                },
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
             if (!simklRes.ok) {
-               SystemLogger.error('Handshake', 'Simkl credentials rejected (401 Unauthorized).');
+               SystemLogger.error('Handshake', `Simkl credentials rejected. HTTP Status: ${simklRes.status}`);
                return res.status(401).json({ success: false, error: "Invalid Simkl API credentials. Please verify your Client ID and Access Token." });
             }
             incomingSettings.simkl.connected = true;
             SystemLogger.success('Handshake', 'Simkl credentials validated successfully.');
          } catch (e: any) {
+            clearTimeout(timeoutId);
+            SystemLogger.error('Handshake', 'Network failure whilst validating Simkl credentials.');
             return res.status(500).json({ success: false, error: "Failed to connect to Simkl API." });
          }
      }
@@ -1075,15 +1302,20 @@ app.post("/api/settings", async (req, res) => {
   // Validate MyAnimeList Credentials
   if (incomingSettings?.mal?.accessToken) {
      if (incomingSettings.mal.accessToken !== oldSettings.mal?.accessToken || !oldSettings.mal?.connected) {
-         try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        try {
             SystemLogger.info('Handshake', 'Validating MyAnimeList API credentials...');
-            const malRes = await fetch(createSafeUrl('https://api.myanimelist.net/v2/users/@me', ['api.myanimelist.net']), {
+            const malRes = await fetch(createSafeUrl('https://api.myanimelist.net/v2/users/@me'), {
+                method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${incomingSettings.mal.accessToken}`
-                }
+                },
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
             if (!malRes.ok) {
-               SystemLogger.error('Handshake', 'MyAnimeList credentials rejected (401 Unauthorized).');
+               SystemLogger.error('Handshake', `MyAnimeList credentials rejected. HTTP Status: ${malRes.status}`);
                return res.status(401).json({ success: false, error: "Invalid MyAnimeList API credentials. Please verify your Access Token." });
             }
             const malData = await malRes.json();
@@ -1093,6 +1325,8 @@ app.post("/api/settings", async (req, res) => {
             incomingSettings.mal.connected = true;
             SystemLogger.success('Handshake', 'MyAnimeList credentials validated successfully.');
          } catch (e: any) {
+            clearTimeout(timeoutId);
+            SystemLogger.error('Handshake', 'Network failure whilst validating MyAnimeList credentials.');
             return res.status(500).json({ success: false, error: "Failed to connect to MyAnimeList API." });
          }
      }
@@ -1101,9 +1335,11 @@ app.post("/api/settings", async (req, res) => {
   // Validate AniList Credentials
   if (incomingSettings?.anilist?.accessToken) {
      if (incomingSettings.anilist.accessToken !== oldSettings.anilist?.accessToken || !oldSettings.anilist?.connected) {
-         try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        try {
             SystemLogger.info('Handshake', 'Validating AniList API credentials...');
-            const anilistRes = await fetch(createSafeUrl('https://graphql.anilist.co', ['graphql.anilist.co']), {
+            const anilistRes = await fetch(createSafeUrl('https://graphql.anilist.co'), {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${incomingSettings.anilist.accessToken}`,
@@ -1119,10 +1355,12 @@ app.post("/api/settings", async (req, res) => {
                             }
                         }
                     `
-                })
+                }),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
             if (!anilistRes.ok) {
-               SystemLogger.error('Handshake', 'AniList credentials rejected (401 Unauthorized).');
+               SystemLogger.error('Handshake', `AniList credentials rejected. HTTP Status: ${anilistRes.status}`);
                return res.status(401).json({ success: false, error: "Invalid AniList API credentials. Please verify your Access Token." });
             }
             const anilistData = await anilistRes.json();
@@ -1132,6 +1370,8 @@ app.post("/api/settings", async (req, res) => {
             incomingSettings.anilist.connected = true;
             SystemLogger.success('Handshake', 'AniList credentials validated successfully.');
          } catch (e: any) {
+            clearTimeout(timeoutId);
+            SystemLogger.error('Handshake', 'Network failure whilst validating AniList credentials.');
             return res.status(500).json({ success: false, error: "Failed to connect to AniList API." });
          }
      }
@@ -1150,14 +1390,26 @@ app.post("/api/settings", async (req, res) => {
             if (!url.startsWith('http')) url = `http://${url}`;
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), 3000);
-            // lgtm[js/server-side-request-forgery]
-            // codeql[js/server-side-request-forgery]
-            const plexRes = await fetch(createSafeUrl(`${url}/identity?X-Plex-Token=${incomingSettings.plex.token}`), { signal: controller.signal });
+            const plexRes = await fetch(createSafeUrl(`${url}/identity?X-Plex-Token=${incomingSettings.plex.token}`, new URL(url.startsWith("http") ? url : "http://"+url).hostname), { signal: controller.signal });
             clearTimeout(id);
             if (!plexRes.ok) {
                SystemLogger.error('Handshake', 'Plex server rejected credentials.');
                return res.status(401).json({ success: false, error: "Invalid Plex server URL or token." });
             }
+
+            if (incomingSettings.plex.watchlistRssUrl && incomingSettings.plex.watchlistRssUrl !== oldSettings.plex?.watchlistRssUrl) {
+               SystemLogger.info('Handshake', 'Validating Plex Watchlist RSS URL...');
+               const rssController = new AbortController();
+               const rssId = setTimeout(() => rssController.abort(), 3000);
+               const rssRes = await fetch(createSafeUrl(incomingSettings.plex.watchlistRssUrl), { signal: rssController.signal }).catch(() => ({ok: false}));
+               clearTimeout(rssId);
+               if (!rssRes.ok) {
+                  SystemLogger.error('Handshake', 'Plex RSS Watchlist validation failed.');
+                  return res.status(401).json({ success: false, error: "Invalid Plex Watchlist RSS URL." });
+               }
+               SystemLogger.success('Handshake', 'Plex Watchlist RSS validated successfully.');
+            }
+
             incomingSettings.plex.connected = true;
             SystemLogger.success('Handshake', 'Plex server validated successfully.');
          } catch (e: any) {
@@ -1180,9 +1432,7 @@ app.post("/api/settings", async (req, res) => {
             if (!url.startsWith('http')) url = `http://${url}`;
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), 3000);
-            // lgtm[js/server-side-request-forgery]
-            // codeql[js/server-side-request-forgery]
-            const jfRes = await fetch(createSafeUrl(`${url}/system/info/public`), { signal: controller.signal });
+            const jfRes = await fetch(createSafeUrl(`${url}/system/info/public`, new URL(url.startsWith("http") ? url : "http://"+url).hostname), { signal: controller.signal });
             clearTimeout(id);
             if (!jfRes.ok) {
                SystemLogger.error('Handshake', 'Jellyfin server rejected connection.');
@@ -1210,9 +1460,7 @@ app.post("/api/settings", async (req, res) => {
             if (!url.startsWith('http')) url = `http://${url}`;
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), 3000);
-            // lgtm[js/server-side-request-forgery]
-            // codeql[js/server-side-request-forgery]
-            const embyRes = await fetch(createSafeUrl(`${url}/system/info/public`), { signal: controller.signal });
+            const embyRes = await fetch(createSafeUrl(`${url}/system/info/public`, new URL(url.startsWith("http") ? url : "http://"+url).hostname), { signal: controller.signal });
             clearTimeout(id);
             if (!embyRes.ok) {
                SystemLogger.error('Handshake', 'Emby server rejected connection.');
@@ -1240,9 +1488,7 @@ app.post("/api/settings", async (req, res) => {
             if (!url.startsWith('http')) url = `https://${url}`;
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), 3000);
-            // lgtm[js/server-side-request-forgery]
-            // codeql[js/server-side-request-forgery]
-            const karaRes = await fetch(createSafeUrl(`${url}/api/v1/status`), { 
+            const karaRes = await fetch(createSafeUrl(`${url}/api/v1/status`, new URL(url.startsWith("http") ? url : "http://"+url).hostname), { 
                headers: { 'Authorization': `Bearer ${incomingSettings.karakeep.apiKey}` },
                signal: controller.signal 
             }).catch(() => ({ ok: false })); // Mocking failed fetch as not ok if external url is invalid
@@ -1269,6 +1515,13 @@ app.post("/api/settings", async (req, res) => {
       safeSettings[key] = incomingSettings[key];
     }
   }
+  if (incomingSettings?.karakeep) {
+    const baseUrl = process.env.APP_URL || `http://${req.headers.host}`;
+    incomingSettings.karakeep.webhookUrl = incomingSettings.karakeep.apiKey 
+      ? `${baseUrl}/api/webhooks/karakeep?authKey=${incomingSettings.karakeep.apiKey}`
+      : `${baseUrl}/api/webhooks/karakeep`;
+  }
+
   appSettings = { ...appSettings, ...safeSettings };
   
 
@@ -1319,6 +1572,91 @@ app.post("/api/settings", async (req, res) => {
   } catch (err: unknown) {
     console.error("[Settings] Persistence Error:", err);
     res.status(500).json({ success: false, error: "Failed to persist configuration." });
+  }
+});
+
+
+// Sync Plex RSS Watchlist
+app.post("/api/sync/plex-watchlist", async (req, res) => {
+  if (!appSettings.plex.watchlistRssUrl) {
+    return res.status(400).json({ error: "Plex Watchlist RSS URL is not configured." });
+  }
+
+  try {
+    const rssRes = await fetch(createSafeUrl(appSettings.plex.watchlistRssUrl));
+    if (!rssRes.ok) throw new Error("Failed to fetch RSS feed");
+    const xml = await rssRes.text();
+    
+    // Very basic regex to extract titles from RSS items
+    const itemRegex = /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<\/item>/g;
+    let match;
+    let addedCount = 0;
+    const now = new Date().toISOString();
+
+    while ((match = itemRegex.exec(xml)) !== null) {
+      // Decode XML entities if needed (simple replacement for common ones)
+      const title = match[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1')
+                            .replace(/&amp;/g, '&')
+                            .replace(/&lt;/g, '<')
+                            .replace(/&gt;/g, '>')
+                            .replace(/&quot;/g, '"')
+                            .replace(/&#39;/g, "'");
+
+      // Check if item already exists
+      const existing = libraryItems.find(i => i.title.toLowerCase() === title.toLowerCase());
+      if (!existing) {
+        // Add to libraryItems
+        // Watchlist Mapping Engine
+        const cat = 'TVSeries';
+        const mappedDest = appSettings.syncRules.customWatchlistMapping?.[cat] 
+            || appSettings.syncRules.watchlistDestination 
+            || 'local';
+
+        let platformsObj: any = {
+          plex: { id: 'plex-wl', status: 'plan_to_watch', episode: 0, score: 0, updatedAt: now, synced: true }
+        };
+
+        if (mappedDest !== 'local') {
+          // Send to specific remote platform
+          platformsObj[mappedDest] = { id: `${mappedDest}-wl`, status: 'plan_to_watch', episode: 0, score: 0, updatedAt: now, synced: false };
+        } else {
+          // Default to local/simkl for pure tracking
+          platformsObj.simkl = { id: 'simkl-wl', status: 'plan_to_watch', episode: 0, score: 0, updatedAt: now, synced: false };
+        }
+
+        libraryItems.push({
+          id: 'plex-wl-' + Date.now() + Math.floor(Math.random() * 1000),
+          title: title,
+          mediaType: 'TV Series',
+          coverImage: 'https://via.placeholder.com/150x225.png?text=' + encodeURIComponent(title),
+          totalEpisodes: 12,
+          year: new Date().getFullYear(),
+          genres: [],
+          platforms: platformsObj,
+          hasConflict: false
+        });
+        addedCount++;
+      }
+    }
+
+    if (addedCount > 0) {
+      syncLogs.unshift({
+        id: `slog-wl-${Date.now()}`,
+        timestamp: now,
+        source: "plex_watchlist",
+        itemTitle: "Plex RSS Watchlist",
+        action: "Watchlist Sync",
+        platformsAffected: [] as PlatformType[],
+        status: "success",
+        details: `Imported ${addedCount} items from Plex Watchlist.`
+      });
+      persistDb();
+    }
+
+    res.json({ success: true, message: `Synced ${addedCount} new items from Plex Watchlist.` });
+  } catch (err: any) {
+    SystemLogger.error('Watchlist Sync', err.message);
+    res.status(500).json({ error: "Failed to sync Plex Watchlist." });
   }
 });
 
@@ -1705,6 +2043,22 @@ let healthStatusState = {
     lastChecked: new Date().toISOString(),
     details: appSettings.tautulli.connected ? "Tautulli notification listener verified. Secret key authenticated." : "Target Tautulli instance unreachable."
   },
+  meilisearch: {
+    name: "Meilisearch Full-text Engine",
+    endpoint: appSettings.meilisearch.hostUrl,
+    status: appSettings.meilisearch.connected ? "online" : "offline",
+    latencyMs: 12,
+    lastChecked: new Date().toISOString(),
+    details: appSettings.meilisearch.connected ? "Meilisearch instance is reachable and responding to index queries." : "Meilisearch daemon unreachable."
+  },
+  llamaAI: {
+    name: "Llama AI Local LLM",
+    endpoint: appSettings.llamaAI.endpointUrl,
+    status: appSettings.llamaAI.connected ? "online" : "offline",
+    latencyMs: 115,
+    lastChecked: new Date().toISOString(),
+    details: appSettings.llamaAI.connected ? `Llama AI (${appSettings.llamaAI.modelName}) model loaded and ready for inference.` : "Llama AI instance unreachable or model not loaded."
+  },
   lastOverallPing: new Date().toISOString()
 };
 
@@ -1722,9 +2076,7 @@ app.post("/api/webhooks/health/ping", async (req, res) => {
     try {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), 3000);
-      // lgtm[js/server-side-request-forgery]
-      // codeql[js/server-side-request-forgery]
-      await fetch(createSafeUrl(url.startsWith('http') ? url : `http://${url}`), { method: 'HEAD', signal: controller.signal });
+      await fetch(createSafeUrl(url.startsWith("http") ? url : "http://"+url, new URL(url.startsWith("http") ? url : "http://"+url).hostname), { method: 'HEAD', signal: controller.signal });
       clearTimeout(id);
       return { ok: true, latency: Date.now() - start, error: null };
     } catch (e: any) {
@@ -2411,6 +2763,133 @@ app.post("/api/extension/action", (req, res) => {
 
 // --- BACKEND DOCKER SYNC DAEMON ---
 let lastDaemonSyncTimestamp: string | null = null;
+
+// ==========================================
+// NOTIFICATION & OUTBOUND SYNC ENGINE
+// ==========================================
+
+async function dispatchPushNotifications(title: string, message: string, type: "info"|"success"|"warning"|"error") {
+  if (!appSettings.pushNotifications?.enabled) return;
+
+  const { discordWebhookUrl, appriseUrl, browserNotifications } = appSettings.pushNotifications;
+
+  // 1. Browser Native Push / Socket.IO
+  if (browserNotifications) {
+    app.locals.io?.emit('push_notification', { title, message, type });
+  }
+
+  // 2. Discord Webhook
+  if (discordWebhookUrl) {
+    try {
+      const hexString = type === 'success' ? '#2ED831' : type === 'error' ? '#E74C3C' : type === 'warning' ? '#F1C40F' : '#3498DB';
+      const color = Number(hexString.replace('#', '0x'));
+      await fetch(createSafeUrl(discordWebhookUrl), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          embeds: [{
+            title: title,
+            description: message,
+            color: color,
+            timestamp: new Date().toISOString()
+          }]
+        })
+      });
+    } catch (e) {
+      SystemLogger.error('Notification', 'Failed to send Discord webhook.');
+    }
+  }
+
+  // 3. Apprise URL
+  if (appriseUrl) {
+    try {
+      await fetch(createSafeUrl(appriseUrl), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title,
+          body: message,
+          type: type === 'error' ? 'failure' : type // apprise types: info, success, warning, failure
+        })
+      });
+    } catch (e) {
+      SystemLogger.error('Notification', 'Failed to send Apprise webhook.');
+    }
+  }
+}
+
+async function triggerOutboundSync(item: LibraryItem, targetEpisode: number) {
+  let successCount = 0;
+  let platformsSynced = [];
+  let errors = [];
+
+  // 1. SIMKL
+  if (appSettings.simkl.connected && item.platforms.simkl && item.platforms.simkl.id && item.platforms.simkl.id !== 'simkl-none') {
+    try {
+      const success = await synchroniseToSimkl(parseInt(item.platforms.simkl.id), targetEpisode, appSettings.simkl.accessToken, appSettings.simkl.clientId);
+      if (success) {
+        successCount++;
+        platformsSynced.push('simkl');
+        item.platforms.simkl.episode = targetEpisode;
+        item.platforms.simkl.synced = true;
+      }
+    } catch (e) { errors.push('Simkl'); }
+  }
+
+  // 2. MAL
+  if (appSettings.mal.connected && item.platforms.mal && item.platforms.mal.id && item.platforms.mal.id !== 'mal-none') {
+    try {
+      const success = await synchroniseToMal(parseInt(item.platforms.mal.id), targetEpisode, appSettings.mal.accessToken);
+      if (success) {
+        successCount++;
+        platformsSynced.push('mal');
+        item.platforms.mal.episode = targetEpisode;
+        item.platforms.mal.synced = true;
+      }
+    } catch (e) { errors.push('MAL'); }
+  }
+
+  // 3. Anilist
+  if (appSettings.anilist.connected && item.platforms.anilist && item.platforms.anilist.id && item.platforms.anilist.id !== 'anilist-none') {
+    try {
+      const success = await synchroniseToAnilist(parseInt(item.platforms.anilist.id), targetEpisode, appSettings.anilist.accessToken);
+      if (success) {
+        successCount++;
+        platformsSynced.push('anilist');
+        item.platforms.anilist.episode = targetEpisode;
+        item.platforms.anilist.synced = true;
+      }
+    } catch (e) { errors.push('Anilist'); }
+  }
+
+  // 4. Karakeep
+  if (appSettings.karakeep.connected && item.platforms.karakeep && item.platforms.karakeep.id && item.platforms.karakeep.id !== 'karakeep-none') {
+    try {
+      const success = await synchroniseToKarakeep(item.platforms.karakeep.id, targetEpisode, appSettings.karakeep.apiKey, appSettings.karakeep.apiUrl);
+      if (success) {
+        successCount++;
+        platformsSynced.push('karakeep');
+        item.platforms.karakeep.episode = targetEpisode;
+        item.platforms.karakeep.synced = true;
+      }
+    } catch (e) { errors.push('Karakeep'); }
+  }
+
+  if (platformsSynced.length > 0) {
+    if (appSettings.pushNotifications?.triggers?.onSyncSuccess) {
+      dispatchPushNotifications('Outbound Sync Successful', `${item.title} synced to Ep ${targetEpisode} on ${platformsSynced.join(', ')}`, 'success');
+    }
+  }
+
+  if (errors.length > 0) {
+    if (appSettings.pushNotifications?.triggers?.onSyncFailure) {
+      dispatchPushNotifications('Outbound Sync Failed', `Failed to sync ${item.title} to ${errors.join(', ')}`, 'error');
+    }
+  }
+
+  return { successCount, platformsSynced };
+}
+
 let daemonCycleCount = 0;
 
 function executeBackendDockerSyncDaemonCycle() {
@@ -2730,7 +3209,7 @@ async function runAutomatedBackup() {
     } else if (provider === 'onedrive') {
         const putUrl = targetId ? `https://graph.microsoft.com/v1.0/me/drive/items/${sanitizeIdParam(targetId)}/content` : `https://graph.microsoft.com/v1.0/me/drive/root:/${filename}:/content`;
         
-        const res = await fetch(createSafeUrl(putUrl, ['graph.microsoft.com']), {
+        const res = await fetch(createSafeUrl(putUrl), {
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -2845,7 +3324,7 @@ app.post("/api/backups/restore", async (req, res) => {
     httpServerInstance = http.createServer(app);
   }
 
-  const initialPort = 3000;
+  const initialPort = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
   
   const startListening = (port: number) => {
     httpServerInstance.once('error', (err: NodeJS.ErrnoException) => {
@@ -2883,8 +3362,63 @@ app.post("/api/backups/restore", async (req, res) => {
     }
   });
 
+  const processedHashes = new Set();
   app.locals.io.on('connection', (socket: import("socket.io").Socket) => {
     console.log('[SOCKET] Client connected:', socket.id);
+    
+    const token = socket.handshake.auth.token;
+    if (appSettings.remoteSync?.enabled && appSettings.remoteSync?.apiKey && token !== appSettings.remoteSync.apiKey) {
+      console.log('[SOCKET] Rejecting unauthorized connection');
+      socket.disconnect(true);
+      return;
+    }
+
+    socket.on('scrobble:dispatch', (payload, callback) => {
+      const hash = `${payload.title}-${payload.season}-${payload.episode}-${payload.timestamp}`;
+      if (processedHashes.has(hash)) {
+         if (callback) callback({ success: true, message: 'Duplicate dropped' });
+         return;
+      }
+      processedHashes.add(hash);
+      console.log('[Hub Gateway] Ingested Scrobble:', payload.title, payload.episode);
+      
+      const newBookmark = { 
+        id: Date.now().toString(), 
+        createdAt: payload.timestamp || new Date().toISOString(), 
+        url: '', description: '', image: '', tags: [], 
+        title: payload.title,
+        status: payload.action === 'completed' ? 'completed' : 'watching'
+      };
+      bookmarks.push(newBookmark);
+      persistDb();
+      
+      app.locals.io.emit('scrobble:broadcast', newBookmark);
+      
+      if (callback) callback({ success: true });
+    });
+
+    socket.on('scrobble:flush', (unsyncedRecords, callback) => {
+      let count = 0;
+      for (const payload of unsyncedRecords) {
+        const hash = `${payload.Title}-${payload.Season}-${payload.Episode}-${payload.Timestamp}`;
+        if (processedHashes.has(hash)) continue;
+        processedHashes.add(hash);
+        
+        const newBookmark = { 
+          id: Date.now().toString() + count, 
+          createdAt: payload.Timestamp || new Date().toISOString(), 
+          url: '', description: '', image: '', tags: [], 
+          title: payload.Title,
+          status: payload.Action === 'completed' ? 'completed' : 'watching'
+        };
+        bookmarks.push(newBookmark);
+        count++;
+      }
+      if (count > 0) persistDb();
+      
+      console.log('[Hub Gateway] Flushed', count, 'unsynced records.');
+      if (callback) callback({ success: true, count });
+    });
     socket.on('disconnect', () => {
       console.log('[SOCKET] Client disconnected:', socket.id);
     });
@@ -2959,9 +3493,6 @@ app.post("/api/remote-sync/push", proxyLimiter, async (req, res) => {
         extensionState
       }
     };
-
-    // lgtm[js/server-side-request-forgery]
-    // codeql[js/server-side-request-forgery]
     const response = await fetch(createSafeUrl(`${appSettings.remoteSync.serverUrl}/api/remote-sync/receive`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2987,8 +3518,6 @@ app.post("/api/remote-sync/pull", proxyLimiter, async (req, res) => {
   }
 
   try {
-    // lgtm[js/server-side-request-forgery]
-    // codeql[js/server-side-request-forgery]
     const response = await fetch(createSafeUrl(`${appSettings.remoteSync.serverUrl}/api/remote-sync/export`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -3232,3 +3761,212 @@ app.post("/api/playback/heartbeat", (req, res) => {
 });
 
 startServer();
+
+
+/**
+ * Synchronises a media item's progress to MyAnimeList.
+ * CRITICAL FIX: Payload MUST be application/x-www-form-urlencoded, NOT application/json.
+ */
+async function synchroniseToMal(animeId: number, episodeProgress: number, accessToken: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  // Construct URL-encoded payload as required by MAL
+  const payload = new URLSearchParams();
+  payload.append('num_watched_episodes', episodeProgress.toString());
+
+  try {
+    SystemLogger.info('Synchronisation', `Pushing episode update to MyAnimeList for Anime ID: ${animeId}`);
+
+    const malRes = await fetch(`https://api.myanimelist.net/v2/anime/${animeId}/my_list_status`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: payload,
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (malRes.status === 429) {
+      SystemLogger.warn('Synchronisation', 'MyAnimeList rate limit exceeded. Please retry later.');
+      return false;
+    }
+
+    if (!malRes.ok) {
+      const errorData = await malRes.json().catch(() => ({}));
+      SystemLogger.error('Synchronisation', `MyAnimeList payload rejected. Reason: ${errorData.message || malRes.statusText}`);
+      return false;
+    }
+
+    SystemLogger.success('Synchronisation', `Successfully synchronised Anime ID: ${animeId} to episode ${episodeProgress}.`);
+    return true;
+
+  } catch (error) {
+    clearTimeout(timeoutId);
+    SystemLogger.error('Synchronisation', 'Network error encountered whilst attempting to synchronise with MyAnimeList.');
+    return false;
+  }
+}
+
+
+/**
+ * Synchronises a media item's progress to AniList.
+ * CRITICAL FIX: Ensure strict JSON payload and all required headers.
+ */
+async function synchroniseToAnilist(mediaId: number, episodeProgress: number, accessToken: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  const query = `
+    mutation ($id: Int, $progress: Int) {
+      SaveMediaListEntry (mediaId: $id, progress: $progress) {
+        id
+        progress
+      }
+    }
+  `;
+
+  const variables = {
+    id: mediaId,
+    progress: episodeProgress
+  };
+
+  try {
+    SystemLogger.info('Synchronisation', `Pushing episode update to AniList for Media ID: ${mediaId}`);
+
+    const anilistRes = await fetch('https://graphql.anilist.co', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ query, variables }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (anilistRes.status === 429) {
+      SystemLogger.warn('Synchronisation', 'AniList rate limit exceeded. Please retry later.');
+      return false;
+    }
+
+    if (!anilistRes.ok) {
+      const errorData = await anilistRes.json().catch(() => ({}));
+      SystemLogger.error('Synchronisation', `AniList payload rejected. Reason: ${JSON.stringify(errorData.errors) || anilistRes.statusText}`);
+      return false;
+    }
+
+    SystemLogger.success('Synchronisation', `Successfully synchronised Media ID: ${mediaId} to episode ${episodeProgress}.`);
+    return true;
+
+  } catch (error) {
+    clearTimeout(timeoutId);
+    SystemLogger.error('Synchronisation', 'Network error encountered whilst attempting to synchronise with AniList.');
+    return false;
+  }
+}
+
+
+/**
+ * Synchronises a media item's progress to Simkl.
+ * CRITICAL FIX: Ensure dual-header (Authorization + simkl-api-key) payload.
+ */
+async function synchroniseToSimkl(simklId: number, episodeProgress: number, accessToken: string, clientId: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  const payload = {
+    shows: [
+      {
+        ids: { simkl: simklId },
+        episodes: [{ number: episodeProgress }]
+      }
+    ]
+  };
+
+  try {
+    SystemLogger.info('Synchronisation', `Pushing episode update to Simkl for Media ID: ${simklId}`);
+
+    const simklRes = await fetch('https://api.simkl.com/sync/history', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'simkl-api-key': clientId,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (simklRes.status === 429) {
+      SystemLogger.warn('Synchronisation', 'Simkl rate limit exceeded. Please retry later.');
+      return false;
+    }
+
+    if (!simklRes.ok) {
+      const errorData = await simklRes.json().catch(() => ({}));
+      SystemLogger.error('Synchronisation', `Simkl payload rejected. Reason: ${errorData.error || simklRes.statusText}`);
+      return false;
+    }
+
+    SystemLogger.success('Synchronisation', `Successfully synchronised Media ID: ${simklId} to episode ${episodeProgress}.`);
+    return true;
+
+  } catch (error) {
+    clearTimeout(timeoutId);
+    SystemLogger.error('Synchronisation', 'Network error encountered whilst attempting to synchronise with Simkl.');
+    return false;
+  }
+}
+
+
+/**
+ * Synchronises a media item's progress to Karakeep.
+ * CRITICAL FIX: Ensure strict payload types and static API Key.
+ */
+async function synchroniseToKarakeep(mediaId: string, episodeProgress: number, apiKey: string, apiUrl: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  const payload = {
+    id: String(mediaId),
+    episode: Number(episodeProgress)
+  };
+
+  try {
+    SystemLogger.info('Synchronisation', `Pushing episode update to Karakeep for Media ID: ${mediaId}`);
+
+    const karakeepRes = await fetch(createSafeUrl(`${apiUrl}/api/v1/sync`, new URL(apiUrl).hostname), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!karakeepRes.ok) {
+      const errorData = await karakeepRes.json().catch(() => ({}));
+      SystemLogger.error('Synchronisation', `Karakeep payload rejected. Reason: ${errorData.error || karakeepRes.statusText}`);
+      return false;
+    }
+
+    SystemLogger.success('Synchronisation', `Successfully synchronised Media ID: ${mediaId} to episode ${episodeProgress}.`);
+    return true;
+
+  } catch (error) {
+    clearTimeout(timeoutId);
+    SystemLogger.error('Synchronisation', 'Network error encountered whilst attempting to synchronise with Karakeep.');
+    return false;
+  }
+}

@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './apiFetch';
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 export interface User {

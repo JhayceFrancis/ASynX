@@ -1,13 +1,23 @@
 const fs = require('fs');
-let content = fs.readFileSync('README.md', 'utf8');
+let readme = fs.readFileSync('README.md', 'utf8');
 
-const newFeatures = `
-### ⚡ Intelligent Workflow & Notifications
-- **Smart Resolve (AI)**: Leverage Gemini/OpenAI models to automatically analyze metadata, watch history, and episode discrepancies, presenting a one-click optimal resolution.
-- **Floating Bulk Actions Toolbar**: Check multiple items in the Sync Matrix and quickly apply mass actions (Force Sync, Mark as Watched, Ignore Conflicts) from a non-intrusive floating command bar.
-- **Drag-and-Drop Sync Scheduler**: A dedicated calendar timeline view allowing users to visually adjust background automation tasks, frequencies, and execution times using a seamless drag-and-drop interface.
-- **Push Notifications & Webhooks**: Integrated real-time notifications for sync successes, errors, and conflicts. Supports Desktop/Browser Native notifications, Discord Webhooks, Apprise, and Pushbullet.`;
+const ciCdSection = `
+## 🤖 GitHub Actions CI/CD Pipeline
 
-content = content.replace("### 🔄 Multi-Platform Sync & Automation", newFeatures + "\\n\\n### 🔄 Multi-Platform Sync & Automation");
+ASynX is equipped with robust GitHub Actions workflows for automated releases:
 
-fs.writeFileSync('README.md', content);
+- **Auto-Versioning**: Pushing to \`main\` automatically increments the patch version in \`package.json\` and \`public/manifest.json\`.
+- **Windows Executable (Electron)**: Builds the Windows installer \`.exe\` and uploads it to GitHub Releases.
+- **Docker GHCR (Linux)**: Builds the Docker image and publishes it to GitHub Container Registry (\`ghcr.io\`).
+- **Browser Extension**: Packages the extension \`asynx-browser-extension.zip\` and attaches it to tags.
+- **CodeQL**: Automated security analysis running on PRs and a weekly cron schedule.
+
+**Configuration:**
+Ensure Actions have Read/Write permissions: \`Settings > Actions > General > Workflow permissions > Read and write permissions\`.
+
+`;
+
+// Insert it before the License section
+readme = readme.replace('## 📄 License', ciCdSection + '## 📄 License');
+fs.writeFileSync('README.md', readme);
+console.log("Patched README.md");

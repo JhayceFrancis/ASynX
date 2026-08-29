@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../apiFetch';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
 import { Hexagon } from 'lucide-react';
@@ -29,6 +30,12 @@ export default function LoginView() {
   const [loading, setLoading] = useState(false);
 
   const [theme, setTheme] = useState<any>(null);
+  const [configureProvider, setConfigureProvider] = useState<string | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [oauthClientId, setOauthClientId] = useState('');
+  const [oauthClientSecret, setOauthClientSecret] = useState('');
+  const [oauthConfigSaving, setOauthConfigSaving] = useState(false);
 
   useEffect(() => {
     fetch('/api/theme')
@@ -100,7 +107,13 @@ export default function LoginView() {
     try {
       const res = await fetch(`/api/account/oauth/${provider}/url`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to get OAuth URL');
+      if (!res.ok) {
+        if (data.error && data.error.includes('missing Client ID')) {
+          setConfigureProvider(provider);
+          return;
+        }
+        throw new Error(data.error || 'Failed to get OAuth URL');
+      }
 
       const authWindow = window.open(data.url, 'oauth_popup', 'width=600,height=700');
       if (!authWindow) alert('Please allow popups for this site to connect your account.');
@@ -109,11 +122,88 @@ export default function LoginView() {
     }
   };
 
+  const handleSaveOAuthConfig = async () => {
+    if (!configureProvider || !oauthClientId || !oauthClientSecret) return;
+    setOauthConfigSaving(true);
+    try {
+      const res = await fetch(`/api/account/oauth/${configureProvider}/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: oauthClientId, clientSecret: oauthClientSecret })
+      });
+      if (!res.ok) throw new Error('Failed to save configuration');
+      
+      const p = configureProvider;
+      setConfigureProvider(null);
+      setOauthClientId('');
+      setOauthClientSecret('');
+      
+      // Retry
+      handleOAuth(p);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setOauthConfigSaving(false);
+    }
+  };
 
   return (
     <div 
-      className="min-h-screen relative flex flex-col items-center justify-center p-4 bg-[#121212]"
+      className="dark min-h-screen relative flex flex-col items-center justify-center p-4 text-gray-100 overflow-hidden"
     >
+      
+      {/* Animated Background Layers */}
+      <div className="absolute inset-0 z-0 bg-slide-1 pointer-events-none"></div>
+      <div className="absolute inset-0 z-0 bg-slide-2 pointer-events-none"></div>
+
+      {configureProvider && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[#1a1a1a] border border-white/10 p-6 rounded-2xl w-full max-w-sm shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-white text-lg font-bold mb-2 capitalize">Configure {configureProvider}</h3>
+            <p className="text-xs text-gray-400 mb-5">
+              The Client ID and Secret for this provider are missing. Please provide them to enable {configureProvider} login for this instance.
+            </p>
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Client ID</label>
+                <input
+                  type="text"
+                  value={oauthClientId}
+                  onChange={(e) => setOauthClientId(e.target.value)}
+                  className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  placeholder="Enter Client ID"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Client Secret</label>
+                <input
+                  type="password"
+                  value={oauthClientSecret}
+                  onChange={(e) => setOauthClientSecret(e.target.value)}
+                  className="w-full bg-[#111] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  placeholder="Enter Client Secret"
+                />
+              </div>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => { setConfigureProvider(null); setOauthClientId(''); setOauthClientSecret(''); }}
+                className="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm text-gray-300 transition-colors"
+                disabled={oauthConfigSaving}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveOAuthConfig}
+                disabled={!oauthClientId || !oauthClientSecret || oauthConfigSaving}
+                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                {oauthConfigSaving ? 'Saving...' : 'Save & Login'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div 
         className="absolute inset-0 pointer-events-none z-0" 
         style={{
@@ -123,6 +213,32 @@ export default function LoginView() {
       />
       
       <style>{`
+        
+        @keyframes bgDrift1 {
+          0%, 100% { opacity: 1; transform: scale(1) translate(0px, 0px); filter: blur(0px); }
+          25% { opacity: 0.8; transform: scale(1.05) translate(-15px, -15px); filter: blur(2px); }
+          50% { opacity: 0; transform: scale(1.1) translate(-30px, -30px); filter: blur(6px); }
+          75% { opacity: 0.8; transform: scale(1.05) translate(-15px, -15px); filter: blur(2px); }
+        }
+        @keyframes bgDrift2 {
+          0%, 100% { opacity: 0; transform: scale(1.1) translate(30px, 30px); filter: blur(6px); }
+          25% { opacity: 0.8; transform: scale(1.05) translate(15px, 15px); filter: blur(2px); }
+          50% { opacity: 1; transform: scale(1) translate(0px, 0px); filter: blur(0px); }
+          75% { opacity: 0.8; transform: scale(1.05) translate(15px, 15px); filter: blur(2px); }
+        }
+        .bg-slide-1 {
+          background-color: #1c2130;
+          background-image: radial-gradient(circle, #028f76 0.84px, transparent 0.84px);
+          background-size: 10.5px 10.5px;
+          animation: bgDrift1 16s ease-in-out infinite;
+        }
+        .bg-slide-2 {
+          background-color: #000000;
+          background-image: radial-gradient(#8500be 0.7000000000000001px, #000000 0.7000000000000001px);
+          background-size: 7px 7px;
+          animation: bgDrift2 16s ease-in-out infinite;
+        }
+
         :root {
           --login-btn-bg: ${buttonStyle};
           --login-btn-text: ${btnText};
@@ -135,29 +251,36 @@ export default function LoginView() {
         }
         .login-card {
           border-radius: var(--login-radius) !important;
-          background-image: url("${asynxLoopBg}");
-          background-size: cover;
-          background-position: center;
-          background-repeat: no-repeat;
+          background-color: var(--card-bg, #0a0a0a);
           position: relative;
-        }
-        .login-card::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background: rgba(26, 26, 26, 0.85);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          z-index: -1;
         }
         .login-input:focus {
           border-color: ${theme?.accentColor || '#4f46e5'} !important;
           box-shadow: 0 0 0 1px ${theme?.accentColor || '#4f46e5'} !important;
         }
+        @keyframes svgSpinSlow {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes svgSpinFastExpand {
+          0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+          100% { transform: translate(150px, -200px) scale(30) rotate(1080deg); opacity: 1; }
+        }
+        .svg-spin-slow {
+          animation: svgSpinSlow 15s linear infinite;
+        }
+        .svg-spin-fast {
+          animation: svgSpinFastExpand 1.5s cubic-bezier(0.7, 0, 0.3, 1) forwards;
+        }
       `}</style>
 
-      <div className="w-full max-w-md bg-transparent login-card border border-white/10 shadow-2xl overflow-hidden relative z-10">
-        <div className="p-8">
+      <div className={`w-full max-w-md bg-[#000000] dark:bg-[#000000] login-card border border-gray-200 dark:border-neutral-900 shadow-2xl relative z-10 ${isTransitioning ? '' : 'overflow-hidden'}`}>
+        <div className={`absolute -left-10 -bottom-10 pointer-events-none transition-opacity duration-500 ${isTransitioning ? 'opacity-100 z-50' : 'opacity-80 z-0'}`}>
+          <div className={`origin-center ${isFocused && !isTransitioning ? 'svg-spin-slow' : ''} ${isTransitioning ? 'svg-spin-fast' : ''}`}>
+            <object data={asynxLoopBg} type="image/svg+xml" style={{ width: 256, height: 256 }} className="text-indigo-500 opacity-50 pointer-events-none" aria-label="ASynX Loop Logo" />
+          </div>
+        </div>
+        <div className="p-8 relative z-10">
           <div className="flex items-center justify-center space-x-2 mb-6">
             <ASynXLogo size={64} isSyncing={loading} />
             <LogoBanner
@@ -169,7 +292,7 @@ export default function LoginView() {
           </div>
           
           <p className="text-sm text-gray-400 text-center mb-8">
-            {isRegister ? 'Create a local account' : 'Sign in to access your data'}
+            {isRegister ? 'Create a local account' : '\u00A0'}
           </p>
 
           {error && (
@@ -180,11 +303,13 @@ export default function LoginView() {
 
           <form onSubmit={handleSubmit} className="space-y-4 mb-6">
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Username</label>
+              <label className="block text-xs font-medium text-gray-400 mb-1">Username or Email</label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
                 className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none transition-all login-input"
                 required
               />
@@ -208,6 +333,8 @@ export default function LoginView() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
                 className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none transition-all login-input"
                 required
               />

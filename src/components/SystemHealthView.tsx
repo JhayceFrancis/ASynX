@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../apiFetch';
 import React, { useState, useEffect } from 'react';
 import {  Server, Clock, Cpu, Database, RefreshCw, CheckCircle2, WifiOff, Box, Activity } from 'lucide-react';
 

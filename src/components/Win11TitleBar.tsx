@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../apiFetch';
 import React, { useState, useEffect } from 'react';
 import { Minus, Square, X, Wifi } from 'lucide-react';
 import { ASynXLogo } from './ASynXLogo';

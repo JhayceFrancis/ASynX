@@ -1,0 +1,21 @@
+{
+  "name": "ASynX Studio",
+  "short_name": "ASynX",
+  "description": "ASynX Sync Matrix",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "/asynx-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/ASynX-split/ASynX_000.png",
+      "sizes": "200x200",
+      "type": "image/png"
+    }
+  ]
+}

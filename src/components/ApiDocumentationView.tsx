@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../apiFetch';
 import { useState } from "react";
 import { Terminal, Copy, Check, Activity, FileText, BookOpen, Settings, Zap, Database, Download, Monitor, Box, Puzzle } from 'lucide-react';
 
@@ -112,7 +113,7 @@ services:
     image: asynx/backend:latest
     container_name: asynx-backend
     ports:
-      - "3000:3000"
+      - "3000:${import.meta.env.VITE_PORT || 3000}"
     environment:
       - NODE_ENV=production
       - JWT_SECRET=your_secure_secret_here
@@ -183,7 +184,7 @@ services:
                     </button>
                   </div>
                   <pre className="text-xs font-mono text-emerald-600 dark:text-emerald-400 bg-white dark:bg-[#111] p-3 rounded-lg border border-gray-200 dark:border-neutral-800">
-{`fetch('http://localhost:3000/api/logs', {
+{`fetch('http://localhost:${import.meta.env.VITE_PORT || 3000}/api/logs', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({

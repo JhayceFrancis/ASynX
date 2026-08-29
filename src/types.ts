@@ -147,6 +147,8 @@ export interface AppSettings {
     gradientColors?: string[];
     gradientDirection?: string;
     appBackgroundGradient?: string;
+    appBgGradStart?: string;
+    appBgGradEnd?: string;
     subheaderColor?: string;
     subheadingText?: string;
     borderRadius?: string;
@@ -183,7 +185,8 @@ export interface AppSettings {
     connected: boolean;
     serverName: string;
     webhookUrl: string;
-    autoScrobbleThreshold: number; // e.g. 80%
+    autoScrobbleThreshold: number;
+    watchlistRssUrl?: string; // e.g. 80%
   };
   jellyfin: {
     serverUrl: string;
@@ -192,6 +195,7 @@ export interface AppSettings {
     serverName: string;
     webhookUrl: string;
     autoScrobbleThreshold: number;
+    watchlistRssUrl?: string;
   };
   emby: {
     serverUrl: string;
@@ -200,6 +204,7 @@ export interface AppSettings {
     serverName: string;
     webhookUrl: string;
     autoScrobbleThreshold: number;
+    watchlistRssUrl?: string;
   };
   karakeep: {
     apiUrl: string;
@@ -212,6 +217,17 @@ export interface AppSettings {
     secretKey: string;
     connected: boolean;
   };
+  meilisearch: {
+    hostUrl: string;
+    apiKey: string;
+    connected: boolean;
+  };
+  llamaAI: {
+    endpointUrl: string;
+    apiKey: string;
+    modelName: string;
+    connected: boolean;
+  };
   remoteSync?: {
     enabled: boolean;
     serverUrl: string;
@@ -221,7 +237,14 @@ export interface AppSettings {
   daemonSettings?: {
     runOnStartup: boolean;
     enableLocalMediaDetection: boolean;
-    autoScrobbleLocal: boolean; // if true, don't prompt, just scrobble
+    autoScrobbleLocal: boolean;
+    scrobbleRules?: {
+      [playerName: string]: {
+        enabled: boolean;
+        ignorePaths: string[];
+        completionThreshold: number;
+      }
+    };
   };
   databaseManagement?: {
     autoPurgeSyncLogs: boolean;
@@ -251,6 +274,8 @@ export interface AppSettings {
     platformPriority?: PlatformType[];
     autoResolveWithAI: boolean;
     syncDramasFromSimklToMAL: boolean;
+    minProgressToSync?: number;
+    excludedTitles?: string[];
     scheduledRules?: Array<{
       id: string;
       source: string;
@@ -258,6 +283,17 @@ export interface AppSettings {
       time: string;
       enabled: boolean;
     }>;
+    watchlistDestination?: PlatformType | 'local' | 'custom';
+    customWatchlistMapping?: {
+      anime?: PlatformType | 'local';
+      animeTV?: PlatformType | 'local';
+      animeFilms?: PlatformType | 'local';
+      drama?: PlatformType | 'local';
+      TVSeries?: PlatformType | 'local';
+      films?: PlatformType | 'local';
+      Bookmarks?: PlatformType | 'local';
+      localMedia?: PlatformType | 'local';
+    };
   };
 }
 
@@ -298,6 +334,8 @@ export interface HealthCheckStatus {
   jellyfin: HealthCheckService;
   emby: HealthCheckService;
   karakeep: HealthCheckService;
+  meilisearch: HealthCheckService;
+  llamaAI: HealthCheckService;
   lastOverallPing: string;
 }
 

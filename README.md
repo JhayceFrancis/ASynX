@@ -82,6 +82,20 @@ git clone [https://github.com/JhayceFrancis/ASynX.wiki.git](https://github.com/J
 
 ---
 
+
+## 🤖 GitHub Actions CI/CD Pipeline
+
+ASynX is equipped with robust GitHub Actions workflows for automated releases:
+
+- **Auto-Versioning**: Pushing to `main` automatically increments the patch version in `package.json` and `public/manifest.json`.
+- **Windows Executable (Electron)**: Builds the Windows installer `.exe` and uploads it to GitHub Releases.
+- **Docker GHCR (Linux)**: Builds the Docker image and publishes it to GitHub Container Registry (`ghcr.io`).
+- **Browser Extension**: Packages the extension `asynx-browser-extension.zip` and attaches it to tags.
+- **CodeQL**: Automated security analysis running on PRs and a weekly cron schedule.
+
+**Configuration:**
+Ensure Actions have Read/Write permissions: `Settings > Actions > General > Workflow permissions > Read and write permissions`.
+
 ## 📄 License
 
 Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for full details.

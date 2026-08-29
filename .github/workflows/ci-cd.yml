@@ -43,7 +43,7 @@ jobs:
       - name: Bump Version and Push
         run: |
           npm version patch --no-git-tag-version
-          git add package.json package-lock.json
+          git add package.json package-lock.json public/manifest.json
           git commit -m "chore(release): bump version [skip ci]"
           git pull --rebase origin main
           git push origin HEAD:refs/heads/main

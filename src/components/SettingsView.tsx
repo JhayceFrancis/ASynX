@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../apiFetch';
 import React, { useState } from 'react';
 import { PreImportModal } from './PreImportModal';
 import { BackupSettingsView } from './BackupSettingsView';
@@ -466,7 +467,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <input
                   type="text"
                   readOnly
-                  value={formState.karakeep.webhookUrl || `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/api/webhooks/karakeep?authKey=${formState.karakeep.apiKey || ''}`}
+                  value={(() => {
+                    let base = typeof window !== 'undefined' ? window.location.origin : `http://localhost:${import.meta.env.VITE_PORT || 3000}`;
+                    if (base === 'file://' || base.startsWith('chrome-extension://')) base = `http://localhost:${import.meta.env.VITE_PORT || 3000}`;
+                    if (formState.karakeep.webhookUrl && !formState.karakeep.webhookUrl.includes(`localhost:${import.meta.env.VITE_PORT || 3000}`)) return formState.karakeep.webhookUrl;
+                    return `${base}/api/webhooks/karakeep?authKey=${formState.karakeep.apiKey || ''}`;
+                  })()}
                   className="w-full mt-1 bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-500 dark:text-gray-400 cursor-not-allowed font-mono text-[10px]"
                 />
                 <p className="text-[10px] text-gray-400 mt-1">Provide this URL in your KaraKeep settings so ASynX can receive watch updates.</p></div>
@@ -1034,8 +1040,110 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           <div className="bg-blue-50/50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 p-3 rounded-lg border border-blue-200/50 dark:border-blue-900/30">
             <span className="font-semibold block mb-1">Developer API</span>
-            <span className="text-xs">Third-party plugins can POST playback data to <code className="bg-white dark:bg-black px-1 py-0.5 rounded text-blue-700 dark:text-blue-300">http://127.0.0.1:3000/api/daemon/report</code> with payload <code>{'{'} title, player, currentEpisode, totalEpisodes {'}'}</code> to trigger the prompt.</span>
+            <span className="text-xs">Third-party plugins can POST playback data to <code className="bg-white dark:bg-black px-1 py-0.5 rounded text-blue-700 dark:text-blue-300">http://127.0.0.1:${import.meta.env.VITE_PORT || 3000}/api/daemon/report</code> with payload <code>{'{'} title, player, currentEpisode, totalEpisodes {'}'}</code> to trigger the prompt.</span>
           </div>
+
+          {/* Scrobbler Player Rules */}
+          {formState.daemonSettings?.enableLocalMediaDetection && (
+            <div className="mt-6 pt-6 border-t border-gray-100 dark:border-neutral-800">
+              <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">Detected Media Players</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                Enable or disable scrobbling for specific players, and configure rule overrides.
+              </p>
+              
+              <div className="bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 space-y-4">
+                {/* Example MPC-BE Instance */}
+                <div className="flex flex-col space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
+                        <Tv className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      <div>
+                        <span className="block text-gray-800 dark:text-gray-200 font-semibold text-sm">MPC-BE (Local Player)</span>
+                        <span className="text-[10px] text-emerald-500 font-medium">Poller Active • Port 13579</span>
+                      </div>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        const currentRules = formState.daemonSettings?.scrobbleRules || {};
+                        const playerRule = currentRules['MPC-BE'] || { enabled: true, ignorePaths: [], completionThreshold: 0.8 };
+                        setFormState(prev => ({
+                          ...prev,
+                          daemonSettings: {
+                            ...prev.daemonSettings!,
+                            scrobbleRules: {
+                              ...currentRules,
+                              'MPC-BE': { ...playerRule, enabled: !playerRule.enabled }
+                            }
+                          }
+                        }));
+                      }}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${(formState.daemonSettings?.scrobbleRules?.['MPC-BE']?.enabled ?? true) ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+                    >
+                      <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${(formState.daemonSettings?.scrobbleRules?.['MPC-BE']?.enabled ?? true) ? 'translate-x-7' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                  
+                  {(formState.daemonSettings?.scrobbleRules?.['MPC-BE']?.enabled ?? true) && (
+                    <div className="pl-10 space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Ignore Paths (Comma separated)</label>
+                        <input 
+                          type="text"
+                          placeholder="e.g. C:\Downloads, D:\Private"
+                          value={(formState.daemonSettings?.scrobbleRules?.['MPC-BE']?.ignorePaths || []).join(', ')}
+                          onChange={(e) => {
+                            const paths = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                            const currentRules = formState.daemonSettings?.scrobbleRules || {};
+                            const playerRule = currentRules['MPC-BE'] || { enabled: true, ignorePaths: [], completionThreshold: 0.8 };
+                            setFormState(prev => ({
+                              ...prev,
+                              daemonSettings: {
+                                ...prev.daemonSettings!,
+                                scrobbleRules: {
+                                  ...currentRules,
+                                  'MPC-BE': { ...playerRule, ignorePaths: paths }
+                                }
+                              }
+                            }));
+                          }}
+                          className="w-full text-xs bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Completion Threshold (0.0 to 1.0)</label>
+                        <input 
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          max="1.0"
+                          value={formState.daemonSettings?.scrobbleRules?.['MPC-BE']?.completionThreshold ?? 0.8}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0.8;
+                            const currentRules = formState.daemonSettings?.scrobbleRules || {};
+                            const playerRule = currentRules['MPC-BE'] || { enabled: true, ignorePaths: [], completionThreshold: 0.8 };
+                            setFormState(prev => ({
+                              ...prev,
+                              daemonSettings: {
+                                ...prev.daemonSettings!,
+                                scrobbleRules: {
+                                  ...currentRules,
+                                  'MPC-BE': { ...playerRule, completionThreshold: val }
+                                }
+                              }
+                            }));
+                          }}
+                          className="w-24 text-xs bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1459,6 +1567,145 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </select>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-6 border-t border-gray-200 dark:border-neutral-900 mt-6">
+            <div className="flex items-center space-x-2">
+              <Sliders className="w-5 h-5 text-indigo-500" />
+              <h4 className="font-semibold text-gray-800 dark:text-gray-200">Advanced Sync Rules</h4>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Watchlist Destination Section */}
+              <div className="col-span-1 md:col-span-2 bg-gray-50 dark:bg-black/20 p-4 rounded-xl border border-gray-100 dark:border-neutral-900">
+                <label className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2 block">Watchlist Destination Defaults</label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                  Define where your watchlists (e.g. from Plex RSS) are pushed when imported. "Local Only" keeps them in the ASynX database.
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Global Default Destination</label>
+                    <select
+                      value={formState.syncRules?.watchlistDestination || 'local'}
+                      onChange={(e) => setFormState({ ...formState, syncRules: { ...formState.syncRules, watchlistDestination: e.target.value } as any })}
+                      className="w-full mt-1 bg-white dark:bg-[#111] border border-gray-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm focus:border-indigo-500"
+                    >
+                      <option value="local">Local Only</option>
+                      <option value="simkl">Simkl</option>
+                      <option value="mal">MyAnimeList</option>
+                      <option value="anilist">AniList</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Custom Anime Destination (Optional)</label>
+                    <select
+                      value={formState.syncRules?.customWatchlistMapping?.anime || ''}
+                      onChange={(e) => setFormState({ 
+                         ...formState, 
+                         syncRules: { 
+                           ...formState.syncRules, 
+                           customWatchlistMapping: { 
+                             ...(formState.syncRules?.customWatchlistMapping || {}), 
+                             anime: e.target.value 
+                           } 
+                         } as any 
+                      })}
+                      className="w-full mt-1 bg-white dark:bg-[#111] border border-gray-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm focus:border-indigo-500"
+                    >
+                      <option value="">Use Global Default</option>
+                      <option value="local">Local Only</option>
+                      <option value="simkl">Simkl</option>
+                      <option value="mal">MyAnimeList</option>
+                      <option value="anilist">AniList</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Custom TV Series Destination (Optional)</label>
+                    <select
+                      value={formState.syncRules?.customWatchlistMapping?.TVSeries || ''}
+                      onChange={(e) => setFormState({ 
+                         ...formState, 
+                         syncRules: { 
+                           ...formState.syncRules, 
+                           customWatchlistMapping: { 
+                             ...(formState.syncRules?.customWatchlistMapping || {}), 
+                             TVSeries: e.target.value 
+                           } 
+                         } as any 
+                      })}
+                      className="w-full mt-1 bg-white dark:bg-[#111] border border-gray-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm focus:border-indigo-500"
+                    >
+                      <option value="">Use Global Default</option>
+                      <option value="local">Local Only</option>
+                      <option value="simkl">Simkl</option>
+                      <option value="mal">MyAnimeList</option>
+                      <option value="anilist">AniList</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Custom Films Destination (Optional)</label>
+                    <select
+                      value={formState.syncRules?.customWatchlistMapping?.films || ''}
+                      onChange={(e) => setFormState({ 
+                         ...formState, 
+                         syncRules: { 
+                           ...formState.syncRules, 
+                           customWatchlistMapping: { 
+                             ...(formState.syncRules?.customWatchlistMapping || {}), 
+                             films: e.target.value 
+                           } 
+                         } as any 
+                      })}
+                      className="w-full mt-1 bg-white dark:bg-[#111] border border-gray-200 dark:border-neutral-800 rounded-lg px-3 py-2 text-sm focus:border-indigo-500"
+                    >
+                      <option value="">Use Global Default</option>
+                      <option value="local">Local Only</option>
+                      <option value="simkl">Simkl</option>
+                      <option value="mal">MyAnimeList</option>
+                      <option value="anilist">AniList</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center justify-between">
+                  Minimum Progress to Sync
+                  <span className="text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded text-xs">
+                    {formState.syncRules?.minProgressToSync || 80}%
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-3">
+                  Only trigger automatic updates if the video progress exceeds this percentage.
+                </p>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={formState.syncRules?.minProgressToSync || 80}
+                  onChange={(e) => setFormState(prev => ({ ...prev, syncRules: { ...prev.syncRules, minProgressToSync: parseInt(e.target.value) } as any }))}
+                  className="w-full accent-indigo-600 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-gray-900 dark:text-gray-100">Excluded Titles</label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">
+                  Comma-separated list of titles to completely ignore during auto-sync.
+                </p>
+                <textarea
+                  value={formState.syncRules?.excludedTitles?.join(', ') || ''}
+                  onChange={(e) => {
+                    const titles = e.target.value.split(',').map(t => t.trim());
+                    setFormState(prev => ({ ...prev, syncRules: { ...prev.syncRules, excludedTitles: titles } as any }));
+                  }}
+                  placeholder="e.g. One Piece, Naruto"
+                  rows={2}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
             </div>
           </div>
         </div>

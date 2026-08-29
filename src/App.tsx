@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from './apiFetch';
 import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
@@ -74,6 +75,8 @@ export default function App() {
     emby: { connected: false, serverUrl: '', apiKey: '', serverName: '', webhookUrl: '', autoScrobbleThreshold: 85 },
     karakeep: { connected: false, apiUrl: '', apiKey: '', webhookUrl: '' },
     tautulli: { connected: false, webhookUrl: '', secretKey: '' },
+    meilisearch: { connected: false, hostUrl: '', apiKey: '' },
+    llamaAI: { connected: false, endpointUrl: '', apiKey: '', modelName: '' },
     remoteSync: { enabled: false, serverUrl: '', apiKey: '' },
     daemonSettings: { runOnStartup: false, enableLocalMediaDetection: false, autoScrobbleLocal: false },
     automatedBackups: { enabled: false, provider: 'github_gist', frequency: 'daily', token: '', targetId: '' },
@@ -82,7 +85,9 @@ export default function App() {
       conflictPolicy: 'ask_user',
       defaultSourceOfTruth: 'anilist',
       autoResolveWithAI: false,
-      syncDramasFromSimklToMAL: false
+      syncDramasFromSimklToMAL: false,
+      minProgressToSync: 80,
+      excludedTitles: []
     }
   });
 
@@ -106,6 +111,7 @@ export default function App() {
     }
   }, [isSyncing]);
   const [isOffline, setIsOffline] = useState(false);
+  const [queuedActionsCount, setQueuedActionsCount] = useState(5); // Simulated queued actions
   const [overrideItem, setOverrideItem] = useState<LibraryItem | null>(null);
   const [showSyncValidation, setShowSyncValidation] = useState(false);
   const [showSyncPreview, setShowSyncPreview] = useState(false);
@@ -275,6 +281,15 @@ export default function App() {
       });
     });
 
+    socket.on('push_notification', (data) => {
+      // Browser Native Push if permitted
+      if (Notification.permission === 'granted') {
+        new Notification(data.title, {
+          body: data.message,
+          icon: '/krainstream.svg'
+        });
+      }
+    });
     socket.on('state_change', (data) => {
       console.log('Real-time state change received:', data);
       if (data.type === 'scrobble_committed' || data.type === 'playback_active' || data.type === 'sync_complete') {
@@ -415,6 +430,15 @@ export default function App() {
     } catch (err) {
       console.error('Failed manual override:', err);
     }
+  };
+
+  
+  const handleTogglePause = async () => {
+    const newSettings = {
+      ...settings,
+      maintenanceMode: !settings.maintenanceMode
+    };
+    await handleSaveSettings(newSettings);
   };
 
   const handleSaveSettings = async (newSettings: AppSettings) => {
@@ -781,11 +805,12 @@ export default function App() {
               onRefreshData={fetchData}
               settings={settings}
               onNavigateSettings={() => setActiveTab('settings')}
+              systemLogs={systemLogs}
             />
           )}
 
           
-          {activeTab === 'health' && <div className="space-y-6"><SystemHealthView isEditMode={isEditMode} logs={syncLogs} /><SyncPerformanceView isEditMode={isEditMode} /></div>}
+          {activeTab === 'health' && <div className="space-y-6"><SystemHealthView isEditMode={isEditMode} logs={syncLogs} /><SyncPerformanceView isEditMode={isEditMode} logs={syncLogs} /></div>}
           {activeTab === 'docker-backend' && <DockerBackendView />}
           {activeTab === 'database' && <DatabaseView />}
           {activeTab === 'plex' && <PlexWebhookView settings={settings} webhookLogs={webhookLogs} libraryItems={items} onTriggerSimulatedWebhook={handleTriggerSimulatedWebhook} />}
@@ -824,8 +849,10 @@ export default function App() {
         conflictCount={conflictItems.length}
         isSyncing={isSyncing}
         isOffline={isOffline}
+        queuedActionsCount={queuedActionsCount}
         onToggleTerminal={() => setIsSystemLogOpen(!isSystemLogOpen)}
         maintenanceMode={settings.maintenanceMode}
+        onTogglePause={handleTogglePause}
         onRefresh={fetchData}
       />
 

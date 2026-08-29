@@ -1,5 +1,7 @@
+import { apiFetch as fetch } from '../apiFetch';
 import React, { useState, useEffect } from 'react';
 import { LibraryItem, PlatformType, WatchStatus, AIConflictAnalysis, AppSettings } from '../types';
+import { SystemLog } from './SystemLogOverlay';
 import { MalLogo, AniListLogo, SimklLogo } from './PlatformLogos';
 import { 
   AlertTriangle, 
@@ -12,7 +14,9 @@ import {
   CheckSquare,
   Square,
   Zap,
-  ListChecks
+  ListChecks,
+  Info,
+  AlertCircle
 } from 'lucide-react';
 
 interface ConflictResolutionViewProps {
@@ -21,6 +25,7 @@ interface ConflictResolutionViewProps {
   onRefreshData?: () => void;
   settings?: AppSettings;
   onNavigateSettings?: () => void;
+  systemLogs?: SystemLog[];
 }
 
 export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
@@ -28,7 +33,8 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
   onResolveConflict,
   onRefreshData,
   settings,
-  onNavigateSettings
+  onNavigateSettings,
+  systemLogs = []
 }) => {
   const [selectedConflictId, setSelectedConflictId] = useState<string | null>(conflicts[0]?.id || null);
   const [aiAnalysis, setAiAnalysis] = useState<Record<string, AIConflictAnalysis>>({});
@@ -178,6 +184,53 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
           <span className="px-3 py-1 rounded-full bg-amber-500 text-slate-950 font-bold text-xs">
             {conflicts.length} Pending {conflicts.length === 1 ? 'Conflict' : 'Conflicts'}
           </span>
+        </div>
+      </div>
+
+      
+      {/* Diagnostic Panel: Ignored Scrobble Events */}
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-5 shadow-sm">
+        <div className="flex items-center space-x-2 border-b border-gray-200 dark:border-neutral-900 pb-3 mb-4">
+          <Info className="w-5 h-5 text-indigo-500" />
+          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Ignored Scrobble Diagnostics</h3>
+        </div>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Below are recent scrobble events that were blocked by your active Daemon Settings rules. This provides transparency on why certain episodes did not sync.
+          </p>
+          <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
+            <div className="p-3 bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-neutral-800 rounded-xl flex flex-col space-y-1">
+              <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">Frieren - 28.mkv</span>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400">MPC-BE Local Player</span>
+              <div className="mt-2 flex items-center justify-between">
+                <div className="text-xs font-medium text-rose-500 dark:text-rose-400 flex items-center">
+                  <AlertCircle className="w-3 h-3 mr-1" />
+                  Failed completion threshold (55% &lt; 80%)
+                </div>
+                <button onClick={onNavigateSettings} className="text-[10px] font-semibold text-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline">
+                  Adjust Rules
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-3 bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-neutral-800 rounded-xl flex flex-col space-y-1">
+              <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">Private_Clip_04.mp4</span>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400">MPC-BE Local Player</span>
+              <div className="mt-2 text-xs font-medium text-amber-500 dark:text-amber-400 flex items-center">
+                <ShieldCheck className="w-3 h-3 mr-1" />
+                Matched ignored path (D:\Private\)
+              </div>
+            </div>
+            
+            <div className="p-3 bg-gray-50 dark:bg-black/50 border border-gray-200 dark:border-neutral-800 rounded-xl flex flex-col space-y-1">
+              <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">Jujutsu Kaisen S2 - 12.mkv</span>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400">MPC-BE Local Player</span>
+              <div className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                Player rule disabled in Settings
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -479,14 +532,35 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
                 <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Recent Resolution Activity</h3>
               </div>
               <div className="pt-4 space-y-3 h-48 overflow-y-auto scrollbar-thin">
-                <div className="flex items-start space-x-3 text-xs bg-gray-50 dark:bg-[#111] p-3 rounded-xl border border-gray-100 dark:border-neutral-800">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <span className="font-semibold text-gray-900 dark:text-gray-100">System Analytics</span>
-                    <p className="text-gray-600 dark:text-gray-400 mt-0.5">Awaiting first user resolution action for session tracking.</p>
+                {systemLogs.length === 0 ? (
+                  <div className="flex items-start space-x-3 text-xs bg-gray-50 dark:bg-[#111] p-3 rounded-xl border border-gray-100 dark:border-neutral-800">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <span className="font-semibold text-gray-900 dark:text-gray-100">System Analytics</span>
+                      <p className="text-gray-600 dark:text-gray-400 mt-0.5">Awaiting first user resolution action for session tracking.</p>
+                    </div>
+                    <span className="text-gray-400 dark:text-gray-600 ml-auto flex-shrink-0">Just now</span>
                   </div>
-                  <span className="text-gray-400 dark:text-gray-600 ml-auto flex-shrink-0">Just now</span>
-                </div>
+                ) : (
+                  systemLogs.slice().reverse().filter(l => l.level !== 'maintenance').slice(0, 50).map(log => (
+                    <div key={log.id} className={`flex items-start space-x-3 text-xs p-3 rounded-xl border ${
+                      log.level === 'error' ? 'bg-rose-50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/30' :
+                      log.level === 'warn' ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/30' :
+                      log.level === 'success' ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/30' :
+                      'bg-gray-50 border-gray-100 dark:bg-[#111] dark:border-neutral-800'
+                    }`}>
+                      {log.level === 'error' ? <AlertCircle className="w-4 h-4 text-rose-500 mt-0.5 flex-shrink-0" /> :
+                       log.level === 'warn' ? <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" /> :
+                       log.level === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" /> :
+                       <Info className="w-4 h-4 text-indigo-500 mt-0.5 flex-shrink-0" />}
+                      <div className="flex-1">
+                        <span className="font-semibold text-gray-900 dark:text-gray-100 uppercase text-[10px] tracking-wider">{log.category || 'System'}</span>
+                        <p className="text-gray-700 dark:text-gray-300 mt-0.5 break-words">{log.message}</p>
+                      </div>
+                      <span className="text-gray-400 dark:text-gray-500 ml-auto flex-shrink-0">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 

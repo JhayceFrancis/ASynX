@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../apiFetch';
 import React, { useState } from 'react';
 import { Cloud, AlertTriangle, X } from 'lucide-react';
 import { AppSettings } from '../types';

@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../apiFetch';
 import React, { useState, useEffect } from 'react';
 import { WebhookLog, AppSettings, LibraryItem, HealthCheckStatus } from '../types';
 import { PlexLogo } from './PlatformLogos';
@@ -53,11 +54,22 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
   const [matchResult, setMatchResult] = useState<any>(null);
   const [isMatching, setIsMatching] = useState(false);
 
-  const plexUrl = settings.plex?.webhookUrl || window.location.origin + '/api/webhooks/plex';
-  const tautulliUrl = settings.tautulli?.webhookUrl || window.location.origin + '/api/webhooks/tautulli';
-  const jellyfinUrl = settings.jellyfin?.webhookUrl || window.location.origin + '/api/webhooks/jellyfin';
-  const embyUrl = settings.emby?.webhookUrl || window.location.origin + '/api/webhooks/emby';
-  const karakeepUrl = settings.karakeep?.webhookUrl || window.location.origin + '/api/webhooks/karakeep';
+  const getWebhookUrl = (provider: string, configUrl?: string) => {
+    let base = typeof window !== 'undefined' ? window.location.origin : `http://localhost:${import.meta.env.VITE_PORT || 3000}`;
+    if (base === 'file://' || base.startsWith('chrome-extension://')) {
+      base = `http://localhost:${import.meta.env.VITE_PORT || 3000}`;
+    }
+    if (configUrl && !configUrl.includes(`localhost:${import.meta.env.VITE_PORT || 3000}`)) {
+      return configUrl;
+    }
+    return `${base}/api/webhooks/${provider}`;
+  };
+
+  const plexUrl = getWebhookUrl('plex', settings.plex?.webhookUrl);
+  const tautulliUrl = getWebhookUrl('tautulli', settings.tautulli?.webhookUrl);
+  const jellyfinUrl = getWebhookUrl('jellyfin', settings.jellyfin?.webhookUrl);
+  const embyUrl = getWebhookUrl('emby', settings.emby?.webhookUrl);
+  const karakeepUrl = getWebhookUrl('karakeep', settings.karakeep?.webhookUrl) + (settings.karakeep?.apiKey ? `?authKey=${settings.karakeep.apiKey}` : '');
 
   // Fetch initial health check
   const fetchHealth = async () => {
@@ -184,7 +196,13 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
   const tautulliStatus = healthData?.tautulli.status || 'online';
   const jellyfinStatus = healthData?.jellyfin?.status || 'offline';
   const embyStatus = healthData?.emby?.status || 'offline';
-  const hasOffline = plexStatus === 'offline' || tautulliStatus === 'offline' || jellyfinStatus === 'offline' || embyStatus === 'offline';
+
+  const isPlexOffline = settings.plex.connected && (plexStatus === 'offline');
+  const isTautulliOffline = settings.tautulli.connected && (tautulliStatus === 'offline');
+  const isJellyfinOffline = settings.jellyfin?.connected && (jellyfinStatus === 'offline');
+  const isEmbyOffline = settings.emby?.connected && (embyStatus === 'offline');
+  
+  const hasOffline = isPlexOffline || isTautulliOffline || isJellyfinOffline || isEmbyOffline;
 
   return (
     <div className="space-y-6">
@@ -471,10 +489,17 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
           </div>
 
           <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-            Copy these URL endpoints into your Plex Media Server (Settings → Webhooks) or Tautulli Webhook Notification settings.
+            Copy these URL endpoints into your configured Media Server's webhook notification settings.
           </p>
 
+          {!(settings.plex?.connected || settings.tautulli?.connected || settings.jellyfin?.connected || settings.emby?.connected || settings.karakeep?.connected) && (
+            <div className="text-center py-6 border border-dashed border-gray-300 dark:border-neutral-800 rounded-xl">
+              <p className="text-xs text-gray-500 dark:text-gray-400">No media server integrations configured. Please connect a server in Settings.</p>
+            </div>
+          )}
+
           {/* Plex URL */}
+          {settings.plex?.connected && (
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
               <span>Plex Webhook Target URL</span>
@@ -496,8 +521,10 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
               </button>
             </div>
           </div>
+          )}
 
           {/* Tautulli URL */}
+          {settings.tautulli?.connected && (
           <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-neutral-900">
             <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Tautulli Webhook Target URL</label>
             <div className="flex items-center space-x-2">
@@ -516,8 +543,10 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
               </button>
             </div>
           </div>
+          )}
 
           {/* Jellyfin URL */}
+          {settings.jellyfin?.connected && (
           <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-neutral-900">
             <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Jellyfin Webhook Target URL</label>
             <div className="flex items-center space-x-2">
@@ -536,8 +565,10 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
               </button>
             </div>
           </div>
+          )}
 
           {/* Emby URL */}
+          {settings.emby?.connected && (
           <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-neutral-900">
             <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Emby Webhook Target URL</label>
             <div className="flex items-center space-x-2">
@@ -556,8 +587,10 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
               </button>
             </div>
           </div>
+          )}
 
           {/* Karakeep URL */}
+          {settings.karakeep?.connected && (
           <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-neutral-900">
             <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Karakeep Webhook Target URL</label>
             <div className="flex items-center space-x-2">
@@ -576,6 +609,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
               </button>
             </div>
           </div>
+          )}
 
           <div className="p-3 bg-purple-950/30 rounded-2xl border border-purple-800/30 text-xs text-purple-200 space-y-1">
             <p className="font-bold flex items-center space-x-1">

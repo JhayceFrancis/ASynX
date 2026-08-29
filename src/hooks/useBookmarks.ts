@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from '../apiFetch';
 import { useState, useEffect, useCallback } from 'react';
 
 export interface Bookmark {
