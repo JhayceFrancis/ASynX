@@ -23,6 +23,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV DATA_DIR=/app/data
 
+# Inject the glibc compatibility layer for native C++ execution
+RUN apk add --no-cache libc6-compat
+
 # Copy only dependency definitions
 COPY package.json package-lock.json* ./
 

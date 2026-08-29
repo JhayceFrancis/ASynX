@@ -28,7 +28,6 @@ let tray;
 
 function createWindow(port) {
   mainWindow = new BrowserWindow({
-    icon: path.join(__dirname, 'build', 'icon.png'),
     width: 1280,
     height: 800,
     titleBarStyle: 'hidden',
@@ -67,7 +66,7 @@ app.whenReady().then(async () => {
   dbUpdater = new AnimeRelationsUpdater();
   await dbUpdater.init();
   relationsDb = await dbUpdater.loadCache();
-  const iconPath = path.join(__dirname, 'build', 'icon.png');
+  const iconPath = path.join(__dirname, 'dist', 'icon.png');
   tray = new Tray(iconPath);
   const contextMenu = Menu.buildFromTemplate([
     { label: 'Show ASynX', click: () => { if (mainWindow) mainWindow.show(); } },
