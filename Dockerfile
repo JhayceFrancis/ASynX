@@ -3,6 +3,9 @@ FROM node:24-alpine AS builder
 
 WORKDIR /app
 
+# Install build tools for native addons (like anitomy-js)
+RUN apk add --no-cache python3 make g++
+
 # Copy dependency definitions and install all dependencies (including dev)
 COPY package.json package-lock.json* ./
 RUN npm ci
@@ -23,8 +26,11 @@ ENV DATA_DIR=/app/data
 # Copy only dependency definitions
 COPY package.json package-lock.json* ./
 
-# Install only production dependencies for smaller image size
-RUN npm ci --omit=dev && npm cache clean --force
+# Install build tools, install prod dependencies, then clean up build tools to keep image small
+RUN apk add --no-cache python3 make g++ \
+    && npm ci --omit=dev \
+    && npm cache clean --force \
+    && apk del python3 make g++
 
 # Copy only the compiled artifacts from the builder
 COPY --from=builder /app/dist ./dist
