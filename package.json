@@ -103,7 +103,7 @@
     "@types/supertest": "^7.2.1",
     "autoprefixer": "^10.4.21",
     "concurrently": "^10.0.5",
-    "electron": "^43.4.1",
+    "electron": "^43.6.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
     "jsdom": "^30.0.1",
