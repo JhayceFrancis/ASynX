@@ -1,3 +1,4 @@
+const SyncEngine = require('./sync-engine.cjs');
 const PlayerDetector = require('./player-detector.cjs');
 const MpcBeScrobbler = require('./mpc-be-service.cjs');
 const VlcScrobbler = require('./vlc-service.cjs'); 
@@ -8,15 +9,19 @@ const { io } = require('socket.io-client');
 const BookmarkManager = require('./bookmark-manager.cjs');
 
 class ScrobbleManager {
-  constructor(syncApiEndpoint, relationsDb) {
+  constructor(syncApiEndpoint, relationsDb = {}) {
     this.syncApiEndpoint = syncApiEndpoint;
+    this.relationsDb = relationsDb;
     this.isEnabled = true; 
     
     this.activePlayerType = null;
     this.activeService = null; 
     this.processCheckInterval = null;
     
-    this.ruleEngine = new ScrobbleRuleEngine(relationsDb);
+    // Initialise both the local rule engine and the cross-platform synchronisation engine
+    this.ruleEngine = new ScrobbleRuleEngine(this.relationsDb);
+    this.syncEngine = new SyncEngine(this.relationsDb);
+
     this.lastProcessedFile = null;
     this.lastState = null;
     this.bookmarkManager = new BookmarkManager();
@@ -105,13 +110,28 @@ class ScrobbleManager {
     }
   }
 
-  
   updateHubSettings(remoteSync) {
     if (!remoteSync) return;
+
+    // 1. Update Docker Hub WebSocket connection if serverUrl or apiKey changed
     if (this.hubUrl !== remoteSync.serverUrl || this.hubApiKey !== remoteSync.apiKey) {
       this.hubUrl = remoteSync.serverUrl;
       this.hubApiKey = remoteSync.apiKey;
       this.connectHub();
+    }
+
+    // 2. Synchronise Client IDs and OAuth tokens with the external SyncEngine
+    if (this.syncEngine) {
+      if (remoteSync.simklClientId) this.syncEngine.config.simklClientId = remoteSync.simklClientId;
+      if (remoteSync.malClientId) this.syncEngine.config.malClientId = remoteSync.malClientId;
+      if (remoteSync.traktClientId) this.syncEngine.config.traktClientId = remoteSync.traktClientId;
+
+      this.syncEngine.updateTokens({
+        simkl: remoteSync.simklToken || remoteSync.tokens?.simkl || null,
+        anilist: remoteSync.anilistToken || remoteSync.tokens?.anilist || null,
+        mal: remoteSync.malToken || remoteSync.tokens?.mal || null,
+        trakt: remoteSync.traktToken || remoteSync.tokens?.trakt || null
+      });
     }
   }
 
@@ -164,10 +184,11 @@ class ScrobbleManager {
     const datasetPath = path.join(app.getPath('userData'), 'local_bookmarks.csv');
     const timestamp = new Date().toISOString();
     
-    const title = payload.meta.title || '';
-    const absoluteEpisode = payload.meta.episode !== null ? payload.meta.episode : '';
-    const season = payload.meta.season !== null ? payload.meta.season : '';
-    const episode = payload.meta.episode !== null ? payload.meta.episode : ''; 
+    const meta = payload.meta || {};
+    const title = meta.title || '';
+    const absoluteEpisode = meta.episode !== null && meta.episode !== undefined ? meta.episode : '';
+    const season = meta.season !== null && meta.season !== undefined ? meta.season : '';
+    const episode = meta.episode !== null && meta.episode !== undefined ? meta.episode : ''; 
     const action = payload.action || 'playing';
     
     // Add Synced_To_Hub as false initially
@@ -178,28 +199,4 @@ class ScrobbleManager {
         await fsPromises.access(datasetPath);
       } catch {
         const headers = "Timestamp,Title,Absolute_Episode,Season,Episode,Action,Synced_To_Hub\n";
-        await fsPromises.writeFile(datasetPath, headers, 'utf-8');
-      }
-
-      await fsPromises.appendFile(datasetPath, bookmarkRecord, 'utf-8');
-      console.log('[Bookmark Saved Locally]:', bookmarkRecord.trim());
-
-      // Attempt immediate dispatch over WebSocket if connected
-      if (this.hubSocket && this.hubSocket.connected) {
-         this.hubSocket.emit('scrobble:dispatch', {
-           timestamp, title, absoluteEpisode, season, episode, action
-         }, async (response) => {
-            if (response && response.success) {
-               await this.bookmarkManager.updateSyncStatus(timestamp, true);
-               console.log('[Bookmark Synced to Hub]:', timestamp);
-            }
-         });
-      }
-    } catch (err) {
-      console.error('[Bookmark Write Failed]:', err.message);
-    }
-  }
-
-}
-
-module.exports = ScrobbleManager;
+        await fsPromises.
