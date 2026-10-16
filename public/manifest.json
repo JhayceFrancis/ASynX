@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ASynX Studio",
   "short_name": "ASynX",
-  "version": "2.5.35",
+  "version": "2.5.36",
   "description": "ASynX - Cross-Platform Anime & Drama Sync Studio",
   "action": {
     "default_popup": "index.html",
