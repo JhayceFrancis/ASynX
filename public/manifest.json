@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ASynX Studio",
   "short_name": "ASynX",
-  "version": "2.5.36",
+  "version": "2.5.37",
   "description": "ASynX - Cross-Platform Anime & Drama Sync Studio",
   "action": {
     "default_popup": "index.html",
@@ -34,7 +34,9 @@
         "*://*.trakt.tv/shows/*",
         "*://*.trakt.tv/movies/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
