@@ -21,5 +21,26 @@
   "host_permissions": [
     "http://localhost:*/*",
     "https://*/*"
-  ]
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.myanimelist.net/anime/*",
+        "*://*.anilist.co/anime/*",
+        "*://*.anidb.net/anime/*",
+        "*://*.trakt.tv/shows/*",
+        "*://*.trakt.tv/movies/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "safari": {
+      "strict_min_version": "16.4"
+    }
+  }
 }
