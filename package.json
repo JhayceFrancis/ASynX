@@ -34,7 +34,8 @@
     "asarUnpack": [],
     "win": {
       "target": [
-        "nsis"
+        "nsis",
+        "msix"
       ]
     },
     "appx": {
