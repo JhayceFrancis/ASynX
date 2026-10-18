@@ -1,7 +1,9 @@
 {
   "name": "asynx",
   "version": "2.5.47",
-  "author": "ASynX",
+  "author": {
+  "name": "JhayceFrancis"
+  },
   "description": "ASynX - Cross-Platform Anime and Drama Sync Studio",
   "license": "MIT",
   "type": "module",
@@ -44,7 +46,8 @@
       "publisher": "CN=33482D18-0B96-40AB-8B34-80CCD0733481",
       "publisherDisplayName": "JhayceFrancis",
       "displayName": "ASynX",
-      "backgroundColor": "#1A1A24"
+      "backgroundColor": "#1A1A24",
+      "windowsStore": true
     },
     "nsis": {
       "oneClick": false,
