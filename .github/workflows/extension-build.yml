@@ -1,4 +1,4 @@
-name: Build and Package Browser Extension (Chrome, Edge & Safari)
+name: Build and Package Extension (Chrome & Edge)
 
 on:
   push:
@@ -19,11 +19,8 @@ permissions:
   contents: write
 
 jobs:
-  # =========================================================================
-  # JOB 1: Build Web Assets & Package Chromium (Chrome & Edge)
-  # =========================================================================
-  build-web-extensions:
-    name: Build Chrome, Edge & Safari Web Bundles
+  build-chromium-extension:
+    name: Build & Package for Chrome & Edge
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -57,6 +54,18 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "release_tag=${RAW_TAG}" >> $GITHUB_OUTPUT
 
+      - name: Synchronise manifest.json Version
+        run: |
+          if [ -f "public/manifest.json" ]; then
+            node -e "
+              const fs = require('fs');
+              const manifestPath = 'public/manifest.json';
+              const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+              manifest.version = process.env.VERSION;
+              fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+            "
+          fi
+
       - name: Install dependencies
         run: npm ci --include=optional --no-audit --no-fund
 
@@ -68,143 +77,59 @@ jobs:
             npm run build
           fi
 
-          mkdir -p dist-extension-raw
-          if [ -d "dist-extension" ] && [ "$(ls -A dist-extension)" ]; then
-            cp -r dist-extension/* dist-extension-raw/
-            rm -rf dist-extension
-          elif [ -d "dist" ] && [ "$(ls -A dist)" ]; then
-            cp -r dist/* dist-extension-raw/
+          mkdir -p dist-extension
+          if [ -d "dist" ] && [ "$(ls -A dist)" ]; then
+            cp -r dist/* dist-extension/
+          elif [ -d "dist-extension-raw" ] && [ "$(ls -A dist-extension-raw)" ]; then
+            cp -r dist-extension-raw/* dist-extension/
           fi
 
-          # Ensure manifest.json is present in the raw bundle
-          if [ ! -f "dist-extension-raw/manifest.json" ] && [ -f "public/manifest.json" ]; then
-            cp public/manifest.json dist-extension-raw/manifest.json
+          if [ ! -f "dist-extension/manifest.json" ] && [ -f "public/manifest.json" ]; then
+            cp public/manifest.json dist-extension/manifest.json
           fi
 
-      - name: Generate Optimised Chrome/Edge & Safari Manifests
-        run: node scripts/prepare-manifests.cjs
-
-      - name: Package Chrome & Edge Archive
+      - name: Package Chromium Extension (.zip)
         run: |
-          cd dist-extension/chromium
-          zip -r ../../asynx-extension-chrome-edge-v${{ env.VERSION }}.zip ./*
-          cd ../..
+          cd dist-extension
+          # Ensure localhost permissions are included for the store-ready build
+          node -e "
+            const fs = require('fs');
+            if (fs.existsSync('manifest.json')) {
+              const m = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+              m.host_permissions = Array.from(new Set([...(m.host_permissions || []), 'http://localhost:14000/*', 'http://127.0.0.1:14000/*']));
+              fs.writeFileSync('manifest.json', JSON.stringify(m, null, 2));
+            }
+          "
+          zip -r ../asynx-browser-extension-chrome-edge-v${{ env.VERSION }}.zip ./*
+          cd ..
 
-      - name: Upload Chrome & Edge Zip Artifact
+      - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: chrome-edge-extension
-          path: asynx-extension-chrome-edge-v${{ env.VERSION }}.zip
+          name: asynx-browser-extension-chrome-edge-v${{ env.VERSION }}
+          path: asynx-browser-extension-chrome-edge-v${{ env.VERSION }}.zip
 
-      - name: Upload Raw Safari Web Bundle for macOS Runner
-        uses: actions/upload-artifact@v4
-        with:
-          name: safari-web-bundle
-          path: dist-extension/safari
-
-  # =========================================================================
-  # JOB 2: Convert & Compile Native Safari Extension (.app) on macOS
-  # =========================================================================
-  build-safari-macos:
-    name: Build Native Safari Extension (macOS Xcode)
-    needs: build-web-extensions
-    runs-on: macos-latest
-
-    steps:
-      - name: Download Safari Web Bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: safari-web-bundle
-          path: ./safari-web-bundle
-
-      - name: Convert Web Extension to Safari Xcode Project
-        run: |
-          xcrun safari-web-extension-converter ./safari-web-bundle \
-            --project-location ./safari-xcode \
-            --app-name "ASynX" \
-            --bundle-identifier "net.itsjc.asynx.extension" \
-            --macos-only \
-            --no-open \
-            --no-prompt
-
-      - name: Resolve Scheme and Compile Safari macOS App
-        run: |
-          PROJECT_PATH="./safari-xcode/ASynX/ASynX.xcodeproj"
-
-          # Query xcodebuild for available schemes in JSON format
-          SCHEME=$(xcodebuild -project "$PROJECT_PATH" -list -json | node -e '
-            const fs = require("fs");
-            const data = JSON.parse(fs.readFileSync(0, "utf-8"));
-            const schemes = data.project.schemes;
-            // Prefer base app scheme, fallback to macOS target or first available scheme
-            const target = schemes.find(s => s === "ASynX") ||
-                           schemes.find(s => s.includes("macOS")) ||
-                           schemes[0];
-            if (!target) process.exit(1);
-            console.log(target);
-          ')
-
-          echo "Selected Scheme: $SCHEME"
-
-          xcodebuild -project "$PROJECT_PATH" \
-            -scheme "$SCHEME" \
-            -configuration Release \
-            -derivedDataPath ./safari-build \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
-
-      - name: Package Safari .app into Release Zip
-        run: |
-          # 1. Dynamically search for the ASynX.app folder inside the Build directory
-          APP_PATH=$(find ./safari-build/Build/Products -name "ASynX.app" -type d | head -n 1)
-          
-          if [ -z "$APP_PATH" ]; then
-            echo "Error: ASynX.app not found in build products."
-            exit 1
-          fi
-
-          # 2. Extract the parent directory and the app name
-          APP_DIR=$(dirname "$APP_PATH")
-          APP_NAME=$(basename "$APP_PATH")
-          
-          echo "Packaging from $APP_DIR -> $APP_NAME"
-          
-          # 3. Navigate to the correct directory and zip the app
-          cd "$APP_DIR"
-          zip -r "$GITHUB_WORKSPACE/asynx-extension-safari-macos-v${{ needs.build-web-extensions.outputs.version }}.zip" "$APP_NAME"
-          cd "$GITHUB_WORKSPACE"
-      - name: Upload Compiled Safari Extension Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: safari-macos-extension
-          path: asynx-extension-safari-macos-v${{ needs.build-web-extensions.outputs.version }}.zip
-
-  # =========================================================================
-  # JOB 3: Tag Repository & Publish Unified GitHub Release
-  # =========================================================================
   publish-release:
-    name: Tag & Publish Multi-Browser Release
-    needs: [build-web-extensions, build-safari-macos]
+    name: Publish GitHub Release
+    needs: build-chromium-extension
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download All Browser Packages
+      - name: Download Build Artifact
         uses: actions/download-artifact@v4
         with:
-          path: ./release-assets
-          merge-multiple: true
+          name: asynx-browser-extension-chrome-edge-v${{ env.VERSION }}
 
       - name: Create Tag and Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.build-web-extensions.outputs.release_tag }}
+          tag_name: ${{ needs.build-chromium-extension.outputs.release_tag }}
           target_commitish: ${{ github.sha }}
-          name: ASynX Browser Plugin v${{ needs.build-web-extensions.outputs.version }} (Chrome, Edge & Safari)
+          name: ASynX Browser Plugin v${{ needs.build-chromium-extension.outputs.version }} (Chrome & Edge)
           draft: ${{ github.event.inputs.release_type == 'true' }}
           prerelease: false
           generate_release_notes: true
           files: |
-            ./release-assets/*.zip
+            asynx-browser-extension-chrome-edge-v*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
