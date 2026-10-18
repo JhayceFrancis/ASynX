@@ -1,12 +1,11 @@
 /**
- * Universal Browser API Namespace (Supports Chrome, Edge, and Safari WebKit)
+ * ASynX Extension Background Service Worker (public/background.js)
+ * Bridges cross-origin and private network access requests from webpage content scripts
+ * to the local ASynX desktop API (http://localhost:14000).
  */
+
 const runtimeAPI = typeof browser !== 'undefined' ? browser : chrome;
 
-/**
- * Privileged Background Proxy for ASynX Local API (Port 14000)
- * Bypasses Safari Mixed-Content blocks and Chrome/Edge Private Network Access (PNA) restrictions
- */
 runtimeAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.type === 'ASYNX_LOCAL_API_REQUEST') {
     const { endpoint, method = 'GET', body = null } = message.payload;
@@ -30,7 +29,7 @@ runtimeAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: false, error: err.message });
       });
 
-    // Return true to keep the message channel open for the asynchronous fetch response
+    // Required to enable asynchronous sendResponse handling in Chrome/Edge/Safari
     return true;
   }
 });
