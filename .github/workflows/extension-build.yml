@@ -127,10 +127,27 @@ jobs:
             --no-open \
             --no-prompt
 
-      - name: Compile Unsigned Safari macOS App Bundle
+      - name: Resolve Scheme and Compile Safari macOS App
         run: |
-          xcodebuild -project "./safari-xcode/ASynX/ASynX.xcodeproj" \
-            -scheme "ASynX (macOS)" \
+          PROJECT_PATH="./safari-xcode/ASynX/ASynX.xcodeproj"
+
+          # Query xcodebuild for available schemes in JSON format
+          SCHEME=$(xcodebuild -project "$PROJECT_PATH" -list -json | node -e '
+            const fs = require("fs");
+            const data = JSON.parse(fs.readFileSync(0, "utf-8"));
+            const schemes = data.project.schemes;
+            // Prefer base app scheme, fallback to macOS target or first available scheme
+            const target = schemes.find(s => s === "ASynX") ||
+                           schemes.find(s => s.includes("macOS")) ||
+                           schemes[0];
+            if (!target) process.exit(1);
+            console.log(target);
+          ')
+
+          echo "Selected Scheme: $SCHEME"
+
+          xcodebuild -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
             -configuration Release \
             -derivedDataPath ./safari-build \
             CODE_SIGN_IDENTITY="" \
@@ -139,9 +156,24 @@ jobs:
 
       - name: Package Safari .app into Release Zip
         run: |
-          cd ./safari-build/Build/Products/Release
-          zip -r ../../../../asynx-extension-safari-macos-v${{ needs.build-web-extensions.outputs.version }}.zip "ASynX.app"
+          # 1. Dynamically search for the ASynX.app folder inside the Build directory
+          APP_PATH=$(find ./safari-build/Build/Products -name "ASynX.app" -type d | head -n 1)
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: ASynX.app not found in build products."
+            exit 1
+          fi
 
+          # 2. Extract the parent directory and the app name
+          APP_DIR=$(dirname "$APP_PATH")
+          APP_NAME=$(basename "$APP_PATH")
+          
+          echo "Packaging from $APP_DIR -> $APP_NAME"
+          
+          # 3. Navigate to the correct directory and zip the app
+          cd "$APP_DIR"
+          zip -r "$GITHUB_WORKSPACE/asynx-extension-safari-macos-v${{ needs.build-web-extensions.outputs.version }}.zip" "$APP_NAME"
+          cd "$GITHUB_WORKSPACE"
       - name: Upload Compiled Safari Extension Artifact
         uses: actions/upload-artifact@v4
         with:
