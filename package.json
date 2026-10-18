@@ -30,7 +30,7 @@
       "dist/**/*",
       "electron-main.js",
       "package.json",
-      "build/icon.png",
+      "public/icon.png",
       "main/**/*"
     ],
     "asarUnpack": [],
@@ -38,7 +38,8 @@
       "target": [
         "nsis",
         "appx"
-      ]
+      ],
+      "icon": "public/icon.png"
     },
     "appx": {
       "applicationId": "ASynX",
@@ -46,8 +47,7 @@
       "publisher": "CN=33482D18-0B96-40AB-8B34-80CCD0733481",
       "publisherDisplayName": "JhayceFrancis",
       "displayName": "ASynX",
-      "backgroundColor": "#1A1A24",
-      "windowsStore": true
+      "backgroundColor": "#1A1A24"
     },
     "nsis": {
       "oneClick": false,
