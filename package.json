@@ -2,7 +2,7 @@
   "name": "asynx",
   "version": "2.5.46",
   "author": "ASynX",
-  "description": "ASynX - Cross-Platform Anime & Drama Sync Studio",
+  "description": "ASynX - Cross-Platform Anime and Drama Sync Studio",
   "license": "MIT",
   "type": "module",
   "main": "electron-main.js",
