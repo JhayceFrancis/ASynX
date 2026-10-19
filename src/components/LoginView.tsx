@@ -103,7 +103,7 @@ export default function LoginView() {
     }
   };
 
-  const handleOAuth = async (provider: string) => {
+    const handleOAuth = async (provider: string) => {
     try {
       const res = await fetch(`/api/account/oauth/${provider}/url`);
       const data = await res.json();
@@ -115,12 +115,37 @@ export default function LoginView() {
         throw new Error(data.error || 'Failed to get OAuth URL');
       }
 
-      const authWindow = window.open(data.url, 'oauth_popup', 'width=600,height=700');
-      if (!authWindow) alert('Please allow popups for this site to connect your account.');
+      // Check if we are running inside a Chromium browser extension
+      if (typeof chrome !== 'undefined' && chrome.identity && chrome.identity.launchWebAuthFlow) {
+        chrome.identity.launchWebAuthFlow(
+          {
+            url: data.url,
+            interactive: true,
+          },
+          (redirectUrl) => {
+            if (chrome.runtime.lastError || !redirectUrl) {
+              setError(chrome.runtime.lastError?.message || 'OAuth flow cancelled or failed');
+              return;
+            }
+            // The identity provider redirected back with a token or auth code in the URL.
+            // You will need to extract the parameters from redirectUrl and send them to your backend 
+            // to complete the login, similar to how your desktop app handles the OAUTH_AUTH_SUCCESS message.
+            console.log("OAuth Redirect URL received:", redirectUrl);
+            // Example extraction (implementation depends on your specific backend callback route):
+            // const urlParams = new URL(redirectUrl).searchParams;
+            // fetch(`/api/account/oauth/${provider}/callback?${urlParams.toString()}`).then(...)
+          }
+        );
+      } else {
+        // Fallback for standard desktop web environments
+        const authWindow = window.open(data.url, 'oauth_popup', 'width=600,height=700');
+        if (!authWindow) alert('Please allow popups for this site to connect your account.');
+      }
     } catch (err: any) {
       setError(err.message);
     }
   };
+
 
   const handleSaveOAuthConfig = async () => {
     if (!configureProvider || !oauthClientId || !oauthClientSecret) return;
