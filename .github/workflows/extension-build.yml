@@ -122,7 +122,7 @@ jobs:
           name: asynx-browser-extension-chrome-edge-v${{ needs.build-chromium-extension.outputs.version }}
 
       - name: Create Tag and Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.build-chromium-extension.outputs.release_tag }}
           target_commitish: ${{ github.sha }}
