@@ -599,7 +599,24 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors());
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (e.g., local curl, mobile apps)
+    if (!origin) return callback(null, true);
+    
+    // Explicitly allow browser extensions and local web clients
+    if (origin.startsWith('http://localhost') || 
+        origin.startsWith('chrome-extension://') || 
+        origin.startsWith('moz-extension://') ||
+        origin.startsWith('http://127.0.0.1')) {
+      return callback(null, true);
+    }
+    
+    // Fallback for custom domains/tunnels (e.g., itsjc.net)
+    return callback(null, true); 
+  },
+  credentials: true // CRITICAL: Allows the extension to send and receive the JWT cookie
+}));
 
 
 // Rate Limiting Middlewares
