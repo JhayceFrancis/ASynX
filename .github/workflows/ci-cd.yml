@@ -105,7 +105,7 @@ jobs:
         run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
 
       - name: Create Unified GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: asynx-win-v${{ env.VERSION }}
           name: ASynX Windows v${{ env.VERSION }}
