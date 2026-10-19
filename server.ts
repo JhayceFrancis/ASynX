@@ -257,7 +257,7 @@ app.set('trust proxy', 1);
 // Server Status Route
 export let activeServerPort: number | string = process.env.PORT || 3000;
 
-  // ================= Auth Routes =================
+// ================= Auth Routes =================
   
 // GDPR compliant encryption for PII
 const encryptPII = (text: string) => {
@@ -336,110 +336,55 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
 
   // OAuth Endpoints
   const getOAuthConfig = (provider: string) => {
-  let dbConfig: any = getOAuthCredentials(provider) || {};
+  // We no longer strictly need local Client IDs and Secrets,
+  // but we still need the user URL to fetch the profile info after the proxy gives us the token.
   switch (provider) {
     case 'github':
-      return {
-        authUrl: 'https://github.com/login/oauth/authorize',
-        tokenUrl: 'https://github.com/login/oauth/access_token',
-        userUrl: 'https://api.github.com/user',
-        clientId: dbConfig.clientId || process.env.GITHUB_CLIENT_ID,
-        clientSecret: dbConfig.clientSecret || process.env.GITHUB_CLIENT_SECRET,
-        scope: 'read:user'
-      };
+      return { userUrl: 'https://api.github.com/user' };
     case 'google':
-      return {
-        authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
-        tokenUrl: 'https://oauth2.googleapis.com/token',
-        userUrl: 'https://www.googleapis.com/oauth2/v2/userinfo',
-        clientId: dbConfig.clientId || process.env.GOOGLE_CLIENT_ID,
-        clientSecret: dbConfig.clientSecret || process.env.GOOGLE_CLIENT_SECRET,
-        scope: 'email profile'
-      };
+      return { userUrl: 'https://www.googleapis.com/oauth2/v2/userinfo' };
     case 'microsoft':
-      return {
-        authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
-        tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-        userUrl: 'https://graph.microsoft.com/v1.0/me',
-        clientId: dbConfig.clientId || process.env.MICROSOFT_CLIENT_ID,
-        clientSecret: dbConfig.clientSecret || process.env.MICROSOFT_CLIENT_SECRET,
-        scope: 'User.Read'
-      };
+      return { userUrl: 'https://graph.microsoft.com/v1.0/me' };
     default: return null;
   }
 };
 
-  app.post('/api/account/oauth/:provider/config', express.json(), (req, res) => {
-    const { provider } = req.params;
-    const { clientId, clientSecret } = req.body;
-    if (!clientId || !clientSecret) return res.status(400).json({ error: 'Missing Client ID or Secret' });
-    
-    saveOAuthCredentials(provider, clientId, clientSecret);
-    res.json({ success: true });
-  });
+  const AUTH_PROXY_URL = 'https://auth.asynx.itsjc.net'; 
 
   app.get('/api/account/oauth/:provider/url', (req, res) => {
     const { provider } = req.params;
     const config = getOAuthConfig(provider);
     if (!config) return res.status(400).json({ error: 'Unknown provider' });
-    if (!config.clientId) return res.status(500).json({ error: `Provider ${provider} is not configured (missing Client ID)` });
 
-    const redirectUri = `${process.env.APP_URL || ('http://' + req.headers.host)}/api/account/oauth/${provider}/callback`;
-    const params = new URLSearchParams({
-      client_id: config.clientId,
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: config.scope,
-      state: crypto.randomBytes(16).toString('hex')
-    });
+    // Tell the proxy where to send the token back to on this specific machine
+    const localCallback = `${process.env.APP_URL || ('http://' + req.headers.host)}/api/account/oauth/${provider}/callback`;
     
-    res.json({ url: `${config.authUrl}?${params.toString()}` });
+    // Redirect the user to the Cloudflare Worker instead of directly to Google/GitHub
+    res.json({ url: `${AUTH_PROXY_URL}/auth/${provider}?callback=${encodeURIComponent(localCallback)}` });
   });
 
   app.get('/api/account/oauth/:provider/callback', async (req, res) => {
     if (!dbState.users) dbState.users = [];
     const { provider } = req.params;
-    const { code } = req.query;
+    
+    // The Cloudflare proxy passes us the finished access_token
+    const { access_token, error } = req.query;
     const config = getOAuthConfig(provider);
     
-    if (!config || !code) return res.status(400).send('Invalid request');
+    if (error) return res.status(400).send(`Authentication Error: ${error}`);
+    if (!config || !access_token) return res.status(400).send('Invalid request or missing access token');
 
     try {
-      const redirectUri = `${process.env.APP_URL || ('http://' + req.headers.host)}/api/account/oauth/${provider}/callback`;
-      
-      const tokenRes = await fetch(config.tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          client_id: config.clientId,
-          client_secret: config.clientSecret,
-          code,
-          redirect_uri: redirectUri,
-          grant_type: 'authorization_code'
-        })
-      });
-      const tokenData = await tokenRes.json();
-      
       let userData;
-      if (provider === 'github') {
+      if (provider === 'github' || provider === 'google' || provider === 'microsoft') {
         const userRes = await fetch(config.userUrl, {
-          headers: { Authorization: `Bearer ${tokenData.access_token}` }
-        });
-        userData = await userRes.json();
-      } else if (provider === 'google') {
-        const userRes = await fetch(config.userUrl, {
-          headers: { Authorization: `Bearer ${tokenData.access_token}` }
-        });
-        userData = await userRes.json();
-      } else if (provider === 'microsoft') {
-        const userRes = await fetch(config.userUrl, {
-          headers: { Authorization: `Bearer ${tokenData.access_token}` }
+          headers: { Authorization: `Bearer ${access_token}` }
         });
         userData = await userRes.json();
       }
 
       if (!userData || (!userData.id && !userData.sub)) {
-        throw new Error('Failed to fetch user data');
+        throw new Error('Failed to fetch user data from provider');
       }
       
       const oauthId = (userData.id || userData.sub).toString();
@@ -458,7 +403,6 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
         saveDb(dbState);
       }
       
-      // Clear any existing mock data when a user logs in via OAuth
       libraryItems.length = 0;
       syncLogs.length = 0;
       webhookLogs.length = 0;
@@ -483,8 +427,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
         </html>
       `);
     } catch (err: any) {
-      console.error('OAuth error:', err);
-      res.status(500).send('Authentication failed');
+      console.error('OAuth callback processing error:', err);
+      res.status(500).send('Authentication processing failed');
     }
   });
 
