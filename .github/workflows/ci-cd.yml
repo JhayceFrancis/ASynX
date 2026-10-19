@@ -7,7 +7,7 @@ on:
     tags:
       - 'asynx-win-v*.*.*'
       - 'asynx-docker-v*.*.*'
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch:
 
 permissions:
   contents: write 
@@ -26,12 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0 
       
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           node-version: '24'
 
@@ -49,29 +49,28 @@ jobs:
           git push origin HEAD:refs/heads/main
 
   # ==========================================
-  # JOB 2: Windows Electron (.exe) Publisher
+  # JOB 2: Windows Electron (.exe & .appx) Publisher
   # ==========================================
   build-electron:
     name: Build & Publish Electron Installer
     needs: bump-version
-    # Only run if triggered by main branch, workflow dispatch, or the 'win' tag
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/asynx-win-v') || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: main # Explicitly pulls the newly bumped version
+          ref: main
 
       - name: Setup Node.js (v24 LTS)
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: 'npm'
 
       - name: Cache Electron & Builder Binaries
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           path: |
             ~\AppData\Local\electron\Cache
@@ -106,7 +105,7 @@ jobs:
         run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
 
       - name: Create Unified GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: asynx-win-v${{ env.VERSION }}
           name: ASynX Windows v${{ env.VERSION }}
@@ -116,6 +115,7 @@ jobs:
             release/*.exe
             release/*.blockmap
             release/latest.yml
+            release/*.appx
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -125,14 +125,13 @@ jobs:
   build-docker:
     name: Build & Push Docker Image
     needs: bump-version
-    # Only run if triggered by main branch, workflow dispatch, or the 'docker' tag
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/asynx-docker-v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
-          ref: main # Explicitly pulls the newly bumped version
+          ref: main
 
       - name: Extract Version from package.json
         id: get_version
@@ -148,17 +147,17 @@ jobs:
           echo "OWNER=$OWNER" >> $GITHUB_ENV
 
       - name: Log in to the Container registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v3
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
