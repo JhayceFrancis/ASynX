@@ -2189,7 +2189,7 @@ Respond ONLY with valid JSON in this exact structure:
       suggestedActionPlan: ["Align all platforms to latest watched episode."]
     });
   }
-};
+});
 
 // Plex Filename AI Matching Tool Endpoint
 app.post("/api/plex/match", async (req, res) => {
