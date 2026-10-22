@@ -27,7 +27,7 @@
     "noUnusedParameters": false,
     "types": [
       "vite/client",
-      "node"
+      "node", "chrome"
     ]
   }
 }
