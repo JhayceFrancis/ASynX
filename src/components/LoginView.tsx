@@ -1,3 +1,4 @@
+declare var chrome: any;
 import { apiFetch as fetch } from '../apiFetch';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
@@ -122,7 +123,7 @@ export default function LoginView() {
             url: data.url,
             interactive: true,
           },
-          (redirectUrl) => {
+          (redirectUrl: any) => {
             if (chrome.runtime.lastError || !redirectUrl) {
               setError(chrome.runtime.lastError?.message || 'OAuth flow cancelled or failed');
               return;
