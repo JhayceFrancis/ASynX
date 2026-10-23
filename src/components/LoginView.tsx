@@ -1,3 +1,4 @@
+declare var chrome: any;
 import { apiFetch as fetch } from '../apiFetch';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
