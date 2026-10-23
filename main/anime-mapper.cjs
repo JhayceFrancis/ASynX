@@ -40,7 +40,7 @@ class AnimeMapper {
    * Dynamically fetches rules from TheXEM for a specific TVDB ID.
    * Merges it into the local cache.
    */
-  async fetchTheXemMapping(tvdbId, malId) {
+  async fetchTheXemMapping(tvdbId) {
     try {
       const response = await fetch(`http://thexem.info/map/all?id=${tvdbId}&origin=tvdb`);
       if (!response.ok) return null;
