@@ -32,7 +32,7 @@ class AnimeRelationsUpdater {
       const stats = await fs.stat(this.cacheFile);
       const hoursSinceUpdate = (Date.now() - stats.mtimeMs) / (1000 * 60 * 60);
       return hoursSinceUpdate > this.updateIntervalHours;
-    } catch (error) {
+    } catch {
       return true;
     }
   }
@@ -87,7 +87,7 @@ class AnimeRelationsUpdater {
     try {
       const data = await fs.readFile(this.cacheFile, 'utf-8');
       return JSON.parse(data);
-    } catch (error) {
+    } catch {
       return {};
     }
   }
