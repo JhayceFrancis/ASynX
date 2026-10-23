@@ -1,3 +1,4 @@
+declare var chrome: any;
 // Detect if running inside a Chromium or Firefox extension environment
 const IS_EXTENSION =
   typeof window !== 'undefined' &&
