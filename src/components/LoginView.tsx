@@ -123,7 +123,7 @@ export default function LoginView() {
             url: data.url,
             interactive: true,
           },
-          (redirectUrl: any) => {
+          (redirectUrl: string | undefined) => {
             if (chrome.runtime.lastError || !redirectUrl) {
               setError(chrome.runtime.lastError?.message || 'OAuth flow cancelled or failed');
               return;

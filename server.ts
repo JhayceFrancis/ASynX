@@ -238,7 +238,7 @@ const csrfMiddleware = (req: any, res: any, next: any) => {
                     req.path === '/api/ingest' ||
                     req.path === '/api/playback/heartbeat' ||
                     req.path === '/api/daemon/report' ||
-                    req.path === '/api/daemon/scrobble';
+                    req.path === '/api/daemon/scrobble' || req.path === '/api/settings';
   if (!isApi || isWebhook) {
     return next();
   }
@@ -351,7 +351,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
   }
 };
 
-  const AUTH_PROXY_URL = 'https://auth.asynx.itsjc.net'; 
+  const AUTH_PROXY_URL = 'https://auth.jhayce.workers.dev';
 
   app.get('/api/account/oauth/:provider/url', (req, res) => {
     const { provider } = req.params;
