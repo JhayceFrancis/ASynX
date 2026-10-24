@@ -3273,8 +3273,8 @@ app.post("/api/backups/restore", async (req, res) => {
 
   if (sslKeyPath && sslCertPath) {
     try {
-      const privateKey = fs.readFileSync(sslKeyPath, 'utf8');
-      const certificate = fs.readFileSync(sslCertPath, 'utf8');
+      const privateKey = await fs.promises.readFile(sslKeyPath, 'utf8');
+      const certificate = await fs.promises.readFile(sslCertPath, 'utf8');
       const credentials = { key: privateKey, cert: certificate };
       httpServerInstance = https.createServer(credentials, app);
     } catch (err: unknown) {
