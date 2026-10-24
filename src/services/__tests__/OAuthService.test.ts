@@ -45,6 +45,12 @@ describe('OAuthService', () => {
 
       expect(windowAlertSpy).toHaveBeenCalledWith('Please allow popups for this site to connect your account.');
     });
+
+    it('should not alert if popup is successfully opened', () => {
+      OAuthService.initiateLogin('simkl');
+
+      expect(windowAlertSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('processAuthMessage', () => {
@@ -125,6 +131,26 @@ describe('OAuthService', () => {
 
       // According to implementation, it returns `updated` but no provider data is mutated
       expect(result).toEqual(mockSettings);
+    });
+
+    it('should return null when event.data is null or undefined', () => {
+      const event = new MessageEvent('message', {
+        origin: 'http://localhost:3000',
+        data: null
+      });
+
+      const result = OAuthService.processAuthMessage(event, mockSettings);
+      expect(result).toBeNull();
+    });
+
+    it('should return null when event.data does not have a type property', () => {
+      const event = new MessageEvent('message', {
+        origin: 'http://localhost:3000',
+        data: { provider: 'simkl', token: 'token' }
+      });
+
+      const result = OAuthService.processAuthMessage(event, mockSettings);
+      expect(result).toBeNull();
     });
   });
 });
