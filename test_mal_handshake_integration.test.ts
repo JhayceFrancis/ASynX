@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 describe('MAL Handshake & Integration', () => {
     it('Should correctly format handshake fetch with abort controller and signal', async () => {
