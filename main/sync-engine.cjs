@@ -331,6 +331,11 @@ class SyncEngine {
    * Target 3: MyAnimeList (MAL) REST v2 Synchronisation
    */
   async _syncToMal(malId, state) {
+    const safeMalId = Number(malId);
+    if (!Number.isFinite(safeMalId) || !Number.isInteger(safeMalId) || safeMalId <= 0) {
+      throw new Error('Invalid MAL ID');
+    }
+
     const formBody = new URLSearchParams({
       status: this.STATUS_MAP[state.status].mal,
       num_watched_episodes: String(state.episode)
@@ -340,7 +345,7 @@ class SyncEngine {
       formBody.set('score', String(state.score10));
     }
 
-    const res = await fetch(`https://api.myanimelist.net/v2/anime/${malId}/my_list_status`, {
+    const res = await fetch(`https://api.myanimelist.net/v2/anime/${safeMalId}/my_list_status`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
