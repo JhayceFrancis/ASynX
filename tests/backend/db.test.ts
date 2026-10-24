@@ -1,5 +1,4 @@
 import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { encryptData, decryptData, getOrCreateEncryptionKey } from '../../db.js';
