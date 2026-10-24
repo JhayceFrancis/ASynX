@@ -3448,7 +3448,10 @@ app.post("/api/library/import", (req, res) => {
     if (!newItem.id) newItem.id = `item-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
     
     // Check if it already exists
-    const exists = libraryItems.find(i => i.title === newItem.title || i.id === newItem.id);
+    let exists = newItem.id ? libraryItemsMap.get(newItem.id) : undefined;
+    if (!exists) {
+      exists = libraryItems.find(i => i.title === newItem.title);
+    }
     if (!exists) {
       libraryItems.unshift(newItem);
       if(newItem && newItem.id) libraryItemsMap.set(newItem.id, newItem);
@@ -3711,7 +3714,10 @@ class PlaybackSessionManager {
     const { title, episodeNumber, player, mediaId } = payload;
     
     // Attempt to update local database state
-    let matchedItem = libraryItems.find(i => i.id === mediaId || i.title.toLowerCase() === title?.toLowerCase());
+    let matchedItem = mediaId ? libraryItemsMap.get(mediaId) : undefined;
+    if (!matchedItem && title) {
+      matchedItem = libraryItems.find(i => i.title.toLowerCase() === title.toLowerCase());
+    }
     if (matchedItem) {
       if (matchedItem.platforms.simkl) matchedItem.platforms.simkl.episode = Math.max(matchedItem.platforms.simkl.episode, episodeNumber);
       if (matchedItem.platforms.mal) matchedItem.platforms.mal.episode = Math.max(matchedItem.platforms.mal.episode, episodeNumber);
