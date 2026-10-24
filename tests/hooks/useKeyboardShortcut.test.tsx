@@ -168,6 +168,35 @@ describe('useKeyboardShortcut', () => {
     expect(callback).not.toHaveBeenCalled();
   });
 
+  it('updates event listener when options change dynamically', () => {
+    const callback = vi.fn();
+    const { rerender } = renderHook(
+      (props) => useKeyboardShortcut(props.options, props.cb),
+      {
+        initialProps: { options: { key: 'a' }, cb: callback },
+      }
+    );
+
+    // Initial state: listens to 'a'
+    fireKeyDown('a');
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    // Rerender with new options
+    rerender({ options: { key: 'b', ctrl: true }, cb: callback });
+
+    // Old key shouldn't trigger
+    fireKeyDown('a');
+    expect(callback).toHaveBeenCalledTimes(1); // count hasn't changed
+
+    // New key without modifier shouldn't trigger
+    fireKeyDown('b');
+    expect(callback).toHaveBeenCalledTimes(1);
+
+    // New key with modifier should trigger
+    fireKeyDown('b', { ctrlKey: true });
+    expect(callback).toHaveBeenCalledTimes(2);
+  });
+
   describe('input target handling', () => {
     it('does not trigger if target is an INPUT', () => {
       const callback = vi.fn();
