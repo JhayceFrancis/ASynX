@@ -238,7 +238,7 @@ const csrfMiddleware = (req: any, res: any, next: any) => {
                     req.path === '/api/ingest' ||
                     req.path === '/api/playback/heartbeat' ||
                     req.path === '/api/daemon/report' ||
-                    req.path === '/api/daemon/scrobble';
+                    req.path === '/api/daemon/scrobble' || req.path === '/api/settings';
   if (!isApi || isWebhook) {
     return next();
   }
@@ -296,6 +296,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
     
     // Clear any existing mock data when a user creates an account
     libraryItems.length = 0;
+  libraryItemsMap.clear();
     syncLogs.length = 0;
     webhookLogs.length = 0;
     
@@ -320,6 +321,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
     
     // Clear any existing mock data when a user logs in
     libraryItems.length = 0;
+  libraryItemsMap.clear();
     syncLogs.length = 0;
     webhookLogs.length = 0;
     persistDb();
@@ -349,7 +351,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
   }
 };
 
-  const AUTH_PROXY_URL = 'https://auth.asynx.itsjc.net'; 
+  const AUTH_PROXY_URL = 'https://auth.jhayce.workers.dev';
 
   app.get('/api/account/oauth/:provider/url', (req, res) => {
     const { provider } = req.params;
@@ -404,6 +406,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
       }
       
       libraryItems.length = 0;
+  libraryItemsMap.clear();
       syncLogs.length = 0;
       webhookLogs.length = 0;
       persistDb();
@@ -760,7 +763,20 @@ if (!appSettings.remoteSync) {
     lastSync: "never"
   };
 }
+
 let libraryItems: LibraryItem[] = dbState.libraryItems || [];
+let libraryItemsMap: Map<string, LibraryItem> = new Map();
+
+function rebuildMap() {
+  libraryItemsMap.clear();
+  for (const item of libraryItems) {
+    if (item && item.id) {
+      libraryItemsMap.set(item.id, item);
+    }
+  }
+}
+rebuildMap();
+
 
 let syncLogs: SyncLog[] = dbState.syncLogs || [];
 let webhookLogs: WebhookLog[] = dbState.webhookLogs || [];
@@ -975,11 +991,13 @@ let bookmarks: any[] = dbState.bookmarks_database || [];
 if (dbState.libraryItems && dbState.libraryItems.length > 0) {
   // If loading from an old backup
   libraryItems = dbState.libraryItems;
+  rebuildMap();
 } else if (dbState.anime_database || dbState.tv_films_database) {
   libraryItems = [
     ...(dbState.anime_database || []),
     ...(dbState.tv_films_database || [])
   ];
+  rebuildMap();
 }
 
 // Ensure Remote Sync API Key exists
@@ -1585,17 +1603,19 @@ app.post("/api/sync/plex-watchlist", async (req, res) => {
           platformsObj.simkl = { id: 'simkl-wl', status: 'plan_to_watch', episode: 0, score: 0, updatedAt: now, synced: false };
         }
 
-        libraryItems.push({
+        const __newItem = {
           id: 'plex-wl-' + Date.now() + Math.floor(Math.random() * 1000),
           title: title,
-          mediaType: 'TV Series',
+          mediaType: 'TV Series' as any,
           coverImage: 'https://via.placeholder.com/150x225.png?text=' + encodeURIComponent(title),
           totalEpisodes: 12,
           year: new Date().getFullYear(),
           genres: [],
           platforms: platformsObj,
           hasConflict: false
-        });
+        };
+        libraryItems.push(__newItem);
+        if(__newItem.id) libraryItemsMap.set(__newItem.id, __newItem);
         addedCount++;
       }
     }
@@ -1679,7 +1699,7 @@ app.post("/api/sync/trigger", (req, res) => {
   let affected: LibraryItem[] = [];
 
   if (itemId) {
-    const item = libraryItems.find(i => i.id === itemId);
+    const item = libraryItemsMap.get(itemId);
     if (item) affected.push(item);
   } else {
     affected = [...libraryItems];
@@ -1724,7 +1744,7 @@ app.post("/api/sync/trigger", (req, res) => {
 // Single Item Sync Handler
 app.post("/api/sync/item/:itemId", (req, res) => {
   const { itemId } = req.params;
-  const item = libraryItems.find(i => i.id === itemId);
+  const item = libraryItemsMap.get(itemId);
   if (!item) {
     return res.status(404).json({ error: "Item not found" });
   }
@@ -1761,7 +1781,7 @@ app.post("/api/sync/override", (req, res) => {
     applyToPlatforms: PlatformType[];
   };
 
-  const item = libraryItems.find(i => i.id === itemId);
+  const item = libraryItemsMap.get(itemId);
   if (!item) {
     return res.status(404).json({ error: "Item not found" });
   }
@@ -1826,7 +1846,7 @@ app.post("/api/conflicts/bulk-resolve", (req, res) => {
   let resolvedCount = 0;
 
   itemIds.forEach(id => {
-    const item = libraryItems.find(i => i.id === id);
+    const item = libraryItemsMap.get(id);
     if (!item) return;
 
     let targetEp = 0;
@@ -1888,7 +1908,7 @@ app.post("/api/conflicts/bulk-resolve", (req, res) => {
 app.post("/api/conflicts/resolve", (req, res) => {
   const { itemId, sourceOfTruthPlatform, customEpisode, customStatus } = req.body;
 
-  const item = libraryItems.find(i => i.id === itemId);
+  const item = libraryItemsMap.get(itemId);
   if (!item) {
     return res.status(404).json({ error: "Item not found" });
   }
@@ -2116,7 +2136,7 @@ app.post("/api/webhooks/health/ping", async (req, res) => {
 // Gemini AI Conflict Auto-Resolution Endpoint
 app.post("/api/conflicts/ai-resolve", async (req, res) => {
   const { itemId } = req.body || {};
-  const item = libraryItems.find(i => i.id === itemId);
+  const item = libraryItemsMap.get(itemId);
 
   if (!item) {
     return res.status(404).json({ error: "Item not found" });
@@ -3252,6 +3272,7 @@ app.post("/api/backups/restore", async (req, res) => {
       const parsed = JSON.parse(payloadStr);
       if (parsed.appSettings) appSettings = parsed.appSettings;
       if (parsed.libraryItems) libraryItems = parsed.libraryItems;
+  rebuildMap();
       if (parsed.syncLogs) syncLogs = parsed.syncLogs;
       if (parsed.webhookLogs) webhookLogs = parsed.webhookLogs;
       persistDb();
@@ -3430,6 +3451,7 @@ app.post("/api/library/import", (req, res) => {
     const exists = libraryItems.find(i => i.title === newItem.title || i.id === newItem.id);
     if (!exists) {
       libraryItems.unshift(newItem);
+      if(newItem && newItem.id) libraryItemsMap.set(newItem.id, newItem);
     }
   });
 
@@ -3491,6 +3513,7 @@ app.post("/api/remote-sync/pull", proxyLimiter, async (req, res) => {
         // Simple overwrite for demonstration
         appSettings = remoteDb.appSettings || appSettings;
         libraryItems = remoteDb.libraryItems;
+  rebuildMap();
         syncLogs = remoteDb.syncLogs || syncLogs;
         webhookLogs = remoteDb.webhookLogs || webhookLogs;
         extensionState = remoteDb.extensionState || extensionState;
@@ -3516,6 +3539,7 @@ app.post("/api/remote-sync/receive", proxyLimiter, (req, res) => {
   if (data && data.libraryItems) {
     appSettings = data.appSettings || appSettings;
     libraryItems = data.libraryItems;
+  rebuildMap();
     syncLogs = data.syncLogs || syncLogs;
     webhookLogs = data.webhookLogs || webhookLogs;
     extensionState = data.extensionState || extensionState;
