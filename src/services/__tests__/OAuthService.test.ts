@@ -152,5 +152,51 @@ describe('OAuthService', () => {
       const result = OAuthService.processAuthMessage(event, mockSettings);
       expect(result).toBeNull();
     });
+
+    it('should return null for empty origin', () => {
+      const event = new MessageEvent('message', {
+        origin: '',
+        data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl', token: 'token123' }
+      });
+
+      const result = OAuthService.processAuthMessage(event, mockSettings);
+      expect(result).toBeNull();
+    });
+
+    it('should process correctly when origin includes localhost maliciously (current behavior)', () => {
+      const event = new MessageEvent('message', {
+        origin: 'http://malicious-localhost.com',
+        data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl', token: 'token123' }
+      });
+
+      const result = OAuthService.processAuthMessage(event, mockSettings);
+      // NOTE: Because of .includes('localhost'), this currently passes validation.
+      // If the behavior is updated in the future to fix this vulnerability, this test should be updated.
+      expect(result).not.toBeNull();
+      expect(result?.simkl.accessToken).toBe('token123');
+    });
+
+    it('should return updated settings even if token is missing', () => {
+      const event = new MessageEvent('message', {
+        origin: 'http://localhost:3000',
+        data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl' } // no token
+      });
+
+      const result = OAuthService.processAuthMessage(event, mockSettings);
+      expect(result).not.toBeNull();
+      expect(result?.simkl.accessToken).toBeUndefined();
+    });
+
+    it('should ignore processAuthMessage if origin is undefined', () => {
+      // Mocking origin as undefined by doing Object.defineProperty on a MessageEvent
+      const event = new MessageEvent('message', {
+        data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl', token: 'token123' }
+      });
+      Object.defineProperty(event, 'origin', { value: undefined });
+
+      // @ts-ignore
+      const result = OAuthService.processAuthMessage(event, mockSettings);
+      expect(result).toBeNull(); // Should fail gracefully or return null
+    });
   });
 });
