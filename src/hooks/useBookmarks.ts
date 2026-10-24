@@ -16,8 +16,7 @@ export interface Bookmark {
   createdAt: string;
 }
 
-// TODO: Replace with your existing Karakeep endpoint variables
-const API_BASE_URL = '/api'; 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 export function useBookmarks() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
