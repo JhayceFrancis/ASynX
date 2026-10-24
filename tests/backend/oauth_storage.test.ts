@@ -1,7 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import path from 'path';
 import fs from 'fs';
-import Database from 'better-sqlite3';
 
 // Set DATA_DIR to a temporary directory before importing modules
 const testDataDir = path.join(__dirname, 'test-data-oauth');
