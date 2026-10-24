@@ -1123,7 +1123,7 @@ app.get("/api/daemon/health", async (req, res) => {
     mal: {
       connected: appSettings.mal.connected,
       ...(appSettings.mal.connected 
-          ? await checkService('https://api.myanimelist.net/v2/users/@me', { headers: { 'Authorization': `Bearer ${appSettings.mal.accessToken}` }}) 
+          ? await checkService(createSafeUrl('https://api.myanimelist.net/v2/users/@me', 'api.myanimelist.net'), { headers: { 'Authorization': `Bearer ${appSettings.mal.accessToken}` }})
           : { status: 'disconnected', latencyMs: 0 })
     },
     anilist: {
@@ -1285,7 +1285,7 @@ app.post("/api/settings", async (req, res) => {
         const timeoutId = setTimeout(() => controller.abort(), 8000);
         try {
             SystemLogger.info('Handshake', 'Validating MyAnimeList API credentials...');
-            const malRes = await fetch(createSafeUrl('https://api.myanimelist.net/v2/users/@me'), {
+            const malRes = await fetch(createSafeUrl('https://api.myanimelist.net/v2/users/@me', 'api.myanimelist.net'), {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${incomingSettings.mal.accessToken}`
@@ -3763,7 +3763,7 @@ async function synchroniseToMal(animeId: number, episodeProgress: number, access
   try {
     SystemLogger.info('Synchronisation', `Pushing episode update to MyAnimeList for Anime ID: ${animeId}`);
 
-    const malRes = await fetch(`https://api.myanimelist.net/v2/anime/${animeId}/my_list_status`, {
+    const malRes = await fetch(createSafeUrl(`https://api.myanimelist.net/v2/anime/${animeId}/my_list_status`, 'api.myanimelist.net'), {
       method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
