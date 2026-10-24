@@ -1844,9 +1844,10 @@ app.post("/api/conflicts/bulk-resolve", (req, res) => {
 
   const now = new Date().toISOString();
   let resolvedCount = 0;
+  const itemsMap = new Map(libraryItems.map(item => [item.id, item]));
 
   itemIds.forEach(id => {
-    const item = libraryItemsMap.get(id);
+    const item = itemsMap.get(id);
     if (!item) return;
 
     let targetEp = 0;
