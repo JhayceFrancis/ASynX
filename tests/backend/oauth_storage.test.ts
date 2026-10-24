@@ -10,7 +10,6 @@ if (!fs.existsSync(testDataDir)) {
 process.env.DATA_DIR = testDataDir;
 
 import { encryptString, decryptString, getOAuthCredentials, saveOAuthCredentials } from '../../oauth_storage';
-import { getOrCreateEncryptionKey } from '../../db';
 
 describe('OAuth Storage Module', () => {
 
