@@ -162,4 +162,50 @@ describe('db.ts encryption', () => {
     // Decryption should throw
     expect(() => decryptData(corruptedEncryptedStr)).toThrow();
   });
+
+  it('should fail to decrypt if payload is not valid JSON', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const invalidJsonStr = '{ invalid_json';
+
+    expect(() => decryptData(invalidJsonStr)).toThrow(SyntaxError);
+  });
+
+  it('should fail to decrypt if payload is missing iv', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const payload = JSON.stringify({
+      encryptedData: 'abc',
+      authTag: 'def'
+    });
+
+    expect(() => decryptData(payload)).toThrow();
+  });
+
+  it('should fail to decrypt if payload is missing authTag', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const payload = JSON.stringify({
+      iv: 'abc',
+      encryptedData: 'def'
+    });
+
+    expect(() => decryptData(payload)).toThrow();
+  });
+
+  it('should fail to decrypt if payload is missing encryptedData', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const payload = JSON.stringify({
+      iv: 'abc',
+      authTag: 'def'
+    });
+
+    // In node 18+, decipher.update throws if data is undefined/null or not a string/buffer
+    expect(() => decryptData(payload)).toThrow();
+  });
 });

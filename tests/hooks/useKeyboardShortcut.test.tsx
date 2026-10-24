@@ -173,7 +173,7 @@ describe('useKeyboardShortcut', () => {
     const { rerender } = renderHook(
       (props) => useKeyboardShortcut(props.options, props.cb),
       {
-        initialProps: { options: { key: 'a' }, cb: callback },
+        initialProps: { options: { key: 'a' } as any, cb: callback },
       }
     );
 
@@ -182,7 +182,7 @@ describe('useKeyboardShortcut', () => {
     expect(callback).toHaveBeenCalledTimes(1);
 
     // Rerender with new options
-    rerender({ options: { key: 'b', ctrl: true }, cb: callback });
+    rerender({ options: { key: 'b', ctrl: true } as any, cb: callback });
 
     // Old key shouldn't trigger
     fireKeyDown('a');
@@ -229,7 +229,7 @@ describe('useKeyboardShortcut', () => {
       renderHook(() => useKeyboardShortcut({ key: 'Enter' }, callback));
 
       const div = document.createElement('div');
-      div.isContentEditable = true;
+      Object.defineProperty(div, 'isContentEditable', { value: true });
       document.body.appendChild(div);
 
       fireKeyDown('Enter', {}, div);
