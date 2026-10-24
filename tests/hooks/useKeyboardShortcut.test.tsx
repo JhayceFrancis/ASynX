@@ -173,7 +173,7 @@ describe('useKeyboardShortcut', () => {
     const { rerender } = renderHook(
       (props) => useKeyboardShortcut(props.options, props.cb),
       {
-        initialProps: { options: { key: 'a' }, cb: callback },
+        initialProps: { options: { key: 'a', ctrl: false }, cb: callback },
       }
     );
 
@@ -229,7 +229,7 @@ describe('useKeyboardShortcut', () => {
       renderHook(() => useKeyboardShortcut({ key: 'Enter' }, callback));
 
       const div = document.createElement('div');
-      div.isContentEditable = true;
+      Object.defineProperty(div, "isContentEditable", { value: true, writable: true });
       document.body.appendChild(div);
 
       fireKeyDown('Enter', {}, div);
