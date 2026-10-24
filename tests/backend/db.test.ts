@@ -1,100 +1,165 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getOrCreateEncryptionKey, encryptData, decryptData } from '../../db.ts';
 import fs from 'fs';
-import path from 'path';
+import crypto from 'crypto';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { encryptData, decryptData, getOrCreateEncryptionKey } from '../../db.js';
 
-describe('Database Encryption', () => {
-  const testDataDir = path.join(process.cwd(), 'test_data_dir');
-  const testKeyFile = path.join(testDataDir, '.db_key');
+// We need to mock fs to control the file system
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      readFileSync: vi.fn(),
+      writeFileSync: vi.fn(),
+      existsSync: vi.fn(),
+      mkdirSync: vi.fn(),
+    },
+    readFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    existsSync: vi.fn(),
+    mkdirSync: vi.fn(),
+  };
+});
 
+describe('db.ts encryption', () => {
   beforeEach(() => {
-    // Setup a clean test directory
-    if (!fs.existsSync(testDataDir)) {
-      fs.mkdirSync(testDataDir, { recursive: true });
-    }
-    process.env.DATA_DIR = testDataDir;
-    // Remove the default .db_key if it exists to ensure a new one is created
-    const defaultKeyFile = path.join(process.cwd(), '.db_key');
-    if (fs.existsSync(defaultKeyFile)) {
-        fs.unlinkSync(defaultKeyFile);
-    }
+    vi.resetAllMocks(); // This resets the implementation and call counts
+    // db.ts caches its key internally inside memory? Wait, looking at the code:
+    // export function getOrCreateEncryptionKey(): Buffer { ... }
+    // It does not cache it! It reads it every time! Let's verify this in db.ts.
   });
 
   afterEach(() => {
-    // Cleanup test directory
-    if (fs.existsSync(testDataDir)) {
-      fs.rmSync(testDataDir, { recursive: true, force: true });
-    }
-    delete process.env.DATA_DIR;
-    // Remove default .db_key if tests accidentally created it in root
-    const defaultKeyFile = path.join(process.cwd(), '.db_key');
-    if (fs.existsSync(defaultKeyFile)) {
-        fs.unlinkSync(defaultKeyFile);
-    }
   });
 
-  describe('getOrCreateEncryptionKey', () => {
-    it('should create a new 32-byte key if one does not exist', () => {
-      const key = getOrCreateEncryptionKey();
-      expect(Buffer.isBuffer(key)).toBe(true);
-      expect(key.length).toBe(32);
-      // db.ts gets process.cwd() as fallback if DATA_DIR is not set. We set DATA_DIR but let's check both
-      const defaultKeyFile = path.join(process.cwd(), '.db_key');
-      const keyFileCreated = fs.existsSync(testKeyFile) || fs.existsSync(defaultKeyFile);
-      expect(keyFileCreated).toBe(true);
+  it('should generate a new key if it does not exist', () => {
+    // Mock existsSync to return false for the key file, true for directory
+    vi.mocked(fs.existsSync).mockImplementation((p) => {
+      return false; // For .db_key
     });
 
-    it('should return the existing key if one exists', () => {
-      const firstKey = getOrCreateEncryptionKey();
-      const secondKey = getOrCreateEncryptionKey();
-
-      expect(firstKey.toString('hex')).toBe(secondKey.toString('hex'));
+    vi.mocked(fs.readFileSync).mockImplementation((p) => {
+      const err: any = new Error('ENOENT: no such file or directory');
+      err.code = 'ENOENT';
+      throw err;
     });
+
+    vi.mocked(fs.writeFileSync).mockImplementation(() => {});
+
+    const key = getOrCreateEncryptionKey();
+
+    expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalled();
+    expect(key.length).toBe(32); // AES-256 key is 32 bytes
   });
 
-  describe('encryptData and decryptData', () => {
-    it('should successfully encrypt and decrypt an object', () => {
-      const testData = {
-        user: 'testUser',
-        settings: { theme: 'dark', notifications: true },
-        items: [1, 2, 3]
-      };
+  it('should reuse the existing key if it exists', () => {
+    const predefinedKey = crypto.randomBytes(32);
 
-      const encrypted = encryptData(testData);
-      expect(typeof encrypted).toBe('string');
-      expect(encrypted).not.toBe(JSON.stringify(testData)); // Ensure it's actually encrypted
-      expect(encrypted).toContain('iv');
-      expect(encrypted).toContain('encryptedData');
-      expect(encrypted).toContain('authTag');
-
-      const decrypted = decryptData(encrypted);
-      expect(decrypted).toEqual(testData);
+    vi.mocked(fs.readFileSync).mockImplementation((p) => {
+      if (p.toString().endsWith('.db_key')) {
+        return predefinedKey;
+      }
+      throw new Error('Not mocked');
     });
 
-    it('should throw an error when tampering with the encrypted data', () => {
-      const testData = { secret: 'do not change' };
-      const encrypted = encryptData(testData);
-      const parsed = JSON.parse(encrypted);
+    vi.mocked(fs.writeFileSync).mockImplementation(() => {});
 
-      // Tamper with the encrypted content - swap first char for a diff char, avoiding luck where it is unchanged
-      const c = parsed.encryptedData.charAt(0);
-      parsed.encryptedData = (c === 'a' ? 'b' : 'a') + parsed.encryptedData.substring(1);
-      const tamperedStr = JSON.stringify(parsed);
+    const key = getOrCreateEncryptionKey();
 
-      expect(() => decryptData(tamperedStr)).toThrow();
+    expect(vi.mocked(fs.readFileSync)).toHaveBeenCalled();
+    expect(vi.mocked(fs.writeFileSync)).not.toHaveBeenCalled();
+    expect(key).toEqual(predefinedKey);
+  });
+
+  it('should encrypt and decrypt data correctly', () => {
+    // Setup predefined key for consistency
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation((p) => {
+      if (p.toString().endsWith('.db_key')) {
+        return predefinedKey;
+      }
+      const err: any = new Error('ENOENT');
+      err.code = 'ENOENT';
+      throw err;
     });
 
-    it('should throw an error when tampering with the auth tag', () => {
-      const testData = { secret: 'do not change' };
-      const encrypted = encryptData(testData);
-      const parsed = JSON.parse(encrypted);
+    const originalData = { hello: 'world', a: 1 };
 
-      // Tamper with auth tag - swap first char to guarantee change
-      const c = parsed.authTag.charAt(0);
-      parsed.authTag = (c === 'a' ? 'b' : 'a') + parsed.authTag.substring(1);
-      const tamperedStr = JSON.stringify(parsed);
+    // Encrypt the data
+    const encryptedStr = encryptData(originalData);
 
-      expect(() => decryptData(tamperedStr)).toThrow();
-    });
+    // Check that the encrypted string is a valid JSON with required fields
+    const parsedEncrypted = JSON.parse(encryptedStr);
+    expect(parsedEncrypted).toHaveProperty('iv');
+    expect(parsedEncrypted).toHaveProperty('encryptedData');
+    expect(parsedEncrypted).toHaveProperty('authTag');
+
+    // The data shouldn't be plain text
+    expect(encryptedStr).not.toContain('world');
+
+    // Decrypt the data
+    const decryptedData = decryptData(encryptedStr);
+
+    // Verify it matches the original
+    expect(decryptedData).toEqual(originalData);
+  });
+
+  it('should fail to decrypt if auth tag is manipulated', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const originalData = { hello: 'world' };
+    const encryptedStr = encryptData(originalData);
+
+    // Manipulate auth tag
+    const parsedEncrypted = JSON.parse(encryptedStr);
+
+    // Corrupt auth tag (flip last character)
+    const corruptedAuthTag = parsedEncrypted.authTag.slice(0, -1) + (parsedEncrypted.authTag.endsWith('0') ? '1' : '0');
+    parsedEncrypted.authTag = corruptedAuthTag;
+
+    const corruptedEncryptedStr = JSON.stringify(parsedEncrypted);
+
+    // Decryption should throw
+    expect(() => decryptData(corruptedEncryptedStr)).toThrow();
+  });
+
+  it('should fail to decrypt if encrypted data is manipulated', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const originalData = { hello: 'world' };
+    const encryptedStr = encryptData(originalData);
+
+    const parsedEncrypted = JSON.parse(encryptedStr);
+
+    // Corrupt encrypted data
+    const corruptedData = parsedEncrypted.encryptedData.slice(0, -1) + (parsedEncrypted.encryptedData.endsWith('0') ? '1' : '0');
+    parsedEncrypted.encryptedData = corruptedData;
+
+    const corruptedEncryptedStr = JSON.stringify(parsedEncrypted);
+
+    // Decryption should throw due to auth tag mismatch
+    expect(() => decryptData(corruptedEncryptedStr)).toThrow();
+  });
+
+  it('should fail to decrypt if iv is manipulated', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const originalData = { hello: 'world' };
+    const encryptedStr = encryptData(originalData);
+
+    const parsedEncrypted = JSON.parse(encryptedStr);
+
+    // Corrupt iv
+    const corruptedIv = parsedEncrypted.iv.slice(0, -1) + (parsedEncrypted.iv.endsWith('0') ? '1' : '0');
+    parsedEncrypted.iv = corruptedIv;
+
+    const corruptedEncryptedStr = JSON.stringify(parsedEncrypted);
+
+    // Decryption should throw
+    expect(() => decryptData(corruptedEncryptedStr)).toThrow();
   });
 });
