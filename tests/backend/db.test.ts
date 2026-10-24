@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getOrCreateEncryptionKey, encryptData, decryptData } from '../../db.ts';
 import fs from 'fs';
 import path from 'path';
