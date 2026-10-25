@@ -30,7 +30,7 @@ export class OAuthService {
     currentSettings: AppSettings
   ): AppSettings | null {
     const origin = event.origin;
-    if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+    if (!origin || (!origin.endsWith('.run.app') && !origin.includes('localhost'))) {
       return null;
     }
 
