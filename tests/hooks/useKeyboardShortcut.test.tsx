@@ -229,7 +229,7 @@ describe('useKeyboardShortcut', () => {
       renderHook(() => useKeyboardShortcut({ key: 'Enter' }, callback));
 
       const div = document.createElement('div');
-      div.isContentEditable = true;
+      Object.defineProperty(div, 'isContentEditable', { value: true, writable: true });
       document.body.appendChild(div);
 
       fireKeyDown('Enter', {}, div);
