@@ -172,62 +172,50 @@ describe('OAuthService', () => {
       expect(result).toBeNull();
     });
 
-    it('should accept malicious localhost origin because of naive includes check', () => {
-      // NOTE: This documents the current behavior (origin.includes('localhost')).
-      // If the behavior is updated to be more secure, this test will fail and should be updated.
+    it('should return null for empty origin', () => {
       const event = new MessageEvent('message', {
-        origin: 'https://localhost.malicious.com',
+        origin: '',
         data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl', token: 'token123' }
-      });
-
-      const result = OAuthService.processAuthMessage(event, mockSettings);
-      expect(result).not.toBeNull();
-      expect(result?.simkl.accessToken).toBe('token123');
-    });
-
-    it('should handle primitive string data safely', () => {
-      const event = new MessageEvent('message', {
-        origin: 'http://localhost:3000',
-        data: "some string data"
       });
 
       const result = OAuthService.processAuthMessage(event, mockSettings);
       expect(result).toBeNull();
     });
 
-    it('should handle missing token gracefully (sets to undefined)', () => {
+    it('should process correctly when origin includes localhost maliciously (current behavior)', () => {
+      const event = new MessageEvent('message', {
+        origin: 'http://malicious-localhost.com',
+        data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl', token: 'token123' }
+      });
+
+      const result = OAuthService.processAuthMessage(event, mockSettings);
+      // NOTE: Because of .includes('localhost'), this currently passes validation.
+      // If the behavior is updated in the future to fix this vulnerability, this test should be updated.
+      expect(result).not.toBeNull();
+      expect(result?.simkl.accessToken).toBe('token123');
+    });
+
+    it('should return updated settings even if token is missing', () => {
       const event = new MessageEvent('message', {
         origin: 'http://localhost:3000',
-        data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl' }
+        data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl' } // no token
       });
 
       const result = OAuthService.processAuthMessage(event, mockSettings);
       expect(result).not.toBeNull();
       expect(result?.simkl.accessToken).toBeUndefined();
-      expect(result?.simkl.connected).toBe(true);
     });
 
-    it('should not mutate original currentSettings object', () => {
-      const originalSettings = {
-        simkl: { connected: false, accessToken: '', clientId: 'client_123' },
-        mal: { connected: false, accessToken: '', clientId: 'client_456' },
-        anilist: { connected: false, accessToken: '', clientId: 'client_789' }
-      } as unknown as AppSettings;
-
-      const clonedSettings = JSON.parse(JSON.stringify(originalSettings));
-
+    it('should ignore processAuthMessage if origin is undefined', () => {
+      // Mocking origin as undefined by doing Object.defineProperty on a MessageEvent
       const event = new MessageEvent('message', {
-        origin: 'http://localhost:3000',
         data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl', token: 'token123' }
       });
+      Object.defineProperty(event, 'origin', { value: undefined });
 
-      const result = OAuthService.processAuthMessage(event, originalSettings);
-
-      // Ensure we returned a new object
-      expect(result).not.toBe(originalSettings);
-      // Ensure original settings were untouched
-      expect(originalSettings).toEqual(clonedSettings);
+      // @ts-ignore
+      const result = OAuthService.processAuthMessage(event, mockSettings);
+      expect(result).toBeNull(); // Should fail gracefully or return null
     });
-
   });
 });

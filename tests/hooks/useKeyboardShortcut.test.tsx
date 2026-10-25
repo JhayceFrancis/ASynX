@@ -173,7 +173,7 @@ describe('useKeyboardShortcut', () => {
     const { rerender } = renderHook(
       (props) => useKeyboardShortcut(props.options, props.cb),
       {
-        initialProps: { options: { key: 'a' }, cb: callback },
+        initialProps: { options: { key: 'a', ctrl: false } as { key: string; ctrl?: boolean; shift?: boolean; alt?: boolean; enabled?: boolean; preventDefault?: boolean }, cb: callback },
       }
     );
 
