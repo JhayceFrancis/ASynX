@@ -182,7 +182,7 @@ describe('useKeyboardShortcut', () => {
     expect(callback).toHaveBeenCalledTimes(1);
 
     // Rerender with new options
-    rerender({ options: { key: 'b', ctrl: true }, cb: callback });
+    rerender({ options: { key: 'b', ctrl: true } as any, cb: callback });
 
     // Old key shouldn't trigger
     fireKeyDown('a');
