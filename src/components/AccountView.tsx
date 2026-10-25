@@ -156,7 +156,6 @@ export default function AccountView() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="flex-1 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
-                    placeholder="Bind an email to link IDP"
                   />
                 </div>
               </div>
@@ -176,7 +175,6 @@ export default function AccountView() {
                     type="text"
                     value={avatarUrl}
                     onChange={(e) => setAvatarUrl(e.target.value)}
-                    placeholder="https://... or click Upload"
                     className="flex-1 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
                   />
                   <button type="button" onClick={() => avatarInputRef.current?.click()} className="px-4 py-2 bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 text-gray-900 dark:text-gray-100 rounded-xl transition-colors font-medium text-sm flex items-center">
@@ -192,7 +190,6 @@ export default function AccountView() {
                     type="text"
                     value={bannerUrl}
                     onChange={(e) => setBannerUrl(e.target.value)}
-                    placeholder="https://... or click Upload"
                     className="flex-1 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
                   />
                   <button type="button" onClick={() => bannerInputRef.current?.click()} className="px-4 py-2 bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 text-gray-900 dark:text-gray-100 rounded-xl transition-colors font-medium text-sm flex items-center">

@@ -57,7 +57,6 @@ export const QuickCustomizePanel: React.FC<QuickCustomizePanelProps> = ({
                 type="text"
                 value={t.subheadingText || ''}
                 onChange={(e) => updateTheme({ subheadingText: e.target.value })}
-                placeholder="e.g. Media Sync Engine"
                 className="w-full bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg px-2 py-1.5 text-xs text-gray-900 dark:text-gray-100"
               />
             </div>
@@ -369,7 +368,6 @@ export const QuickCustomizePanel: React.FC<QuickCustomizePanelProps> = ({
               </label>
               <input
                 type="text"
-                placeholder="e.g., Nexus Bookmarks"
                 value={settings?.nexusTabName || ''}
                 onChange={(e) => onSaveSettings({ ...settings, nexusTabName: e.target.value })}
                 className="w-full bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg px-2 py-1.5 text-xs text-gray-900 dark:text-gray-100"

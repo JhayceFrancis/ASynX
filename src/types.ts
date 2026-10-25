@@ -57,7 +57,8 @@ export interface LibraryItem {
   };
   hasConflict: boolean;
   conflictDetails?: {
-    type: 'episode_mismatch' | 'status_mismatch' | 'score_mismatch' | 'desync';
+    type: 'episode_mismatch' | 'status_mismatch' | 'score_mismatch' | 'desync' | 'platform_mismatch' | 'progress_discrepancy' | 'metadata_conflict';
+    category?: 'Platform Mismatch' | 'Progress Discrepancy' | 'Metadata Conflict';
     summary: string;
     differences: Array<{
       platform: PlatformType;
@@ -67,6 +68,8 @@ export interface LibraryItem {
     }>;
   };
 }
+
+export type ConflictCategory = 'all' | 'Platform Mismatch' | 'Progress Discrepancy' | 'Metadata Conflict';
 
 export interface SyncLog {
   id: string;
@@ -117,6 +120,7 @@ export interface BrowserExtensionState {
 
 export interface AppSettings {
   extensionEnabled?: boolean;
+  autoScrobbleThreshold?: any;
   pushNotifications?: {
     enabled: boolean;
     browserNotifications: boolean;
@@ -163,27 +167,38 @@ export interface AppSettings {
   };
   simkl: {
     clientId: string;
+    clientSecret?: string;
+    redirectUri?: string;
     accessToken: string;
     connected: boolean;
     username?: string;
+    scopes?: string[];
   };
   mal: {
     clientId: string;
+    clientSecret?: string;
+    redirectUri?: string;
     accessToken: string;
     connected: boolean;
-    username: string;
+    username?: string;
+    scopes?: string[];
   };
   anilist: {
     clientId?: string;
+    clientSecret?: string;
+    redirectUri?: string;
     accessToken: string;
     connected: boolean;
-    username: string;
+    username?: string;
+    scopes?: string[];
   };
   plex: {
     serverUrl: string;
     token: string;
     connected: boolean;
     serverName: string;
+    username?: string;
+    clientIdentifier?: string;
     webhookUrl: string;
     autoScrobbleThreshold: number;
     watchlistRssUrl?: string; // e.g. 80%
@@ -193,6 +208,8 @@ export interface AppSettings {
     apiKey: string;
     connected: boolean;
     serverName: string;
+    username?: string;
+    userId?: string;
     webhookUrl: string;
     autoScrobbleThreshold: number;
     watchlistRssUrl?: string;
@@ -202,6 +219,8 @@ export interface AppSettings {
     apiKey: string;
     connected: boolean;
     serverName: string;
+    username?: string;
+    userId?: string;
     webhookUrl: string;
     autoScrobbleThreshold: number;
     watchlistRssUrl?: string;
@@ -211,10 +230,15 @@ export interface AppSettings {
     apiKey: string;
     webhookUrl: string;
     connected: boolean;
+    username?: string;
   };
   tautulli: {
+    serverUrl?: string;
+    apiUrl?: string;
     webhookUrl: string;
     secretKey: string;
+    apiKey?: string;
+    username?: string;
     connected: boolean;
   };
   meilisearch: {
@@ -238,6 +262,26 @@ export interface AppSettings {
     runOnStartup: boolean;
     enableLocalMediaDetection: boolean;
     autoScrobbleLocal: boolean;
+    pollingIntervalSeconds?: number;
+    scrobbleThresholdPercent?: number;
+    offlineQueueEnabled?: boolean;
+    enabledPlayers?: {
+      wmp: boolean;
+      vlc: boolean;
+      mpcHc: boolean;
+      mpcBe: boolean;
+      stremio: boolean;
+      plexDesktop: boolean;
+      mpv: boolean;
+    };
+    playerWebUi?: {
+      vlcEnabled: boolean;
+      vlcPort: number;
+      vlcPassword?: string;
+      mpcEnabled: boolean;
+      mpcPort: number;
+      stremioPort: number;
+    };
     scrobbleRules?: {
       [playerName: string]: {
         enabled: boolean;
@@ -348,3 +392,8 @@ export interface NotificationItem {
   read: boolean;
   actionUrl?: string;
 }
+
+declare module '../oauth_storage' {
+  export function saveOAuthCredentials(provider: string, creds: any, clientSecret?: string): void;
+}
+

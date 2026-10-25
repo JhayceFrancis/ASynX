@@ -59,10 +59,9 @@ export const BookmarkTab: React.FC<{ settings?: AppSettings }> = ({ settings }) 
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-cyan-400 transition-colors" />
               <input
                 type="text"
-                placeholder="QUERY DATA..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 text-cyan-400 pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono placeholder:text-zinc-700 shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]"
+                className="w-full bg-zinc-950 border border-zinc-800 text-cyan-400 pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]"
               />
             </div>
             

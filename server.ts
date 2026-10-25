@@ -666,7 +666,27 @@ const defaultSettings: AppSettings = {
   daemonSettings: {
     runOnStartup: true,
     enableLocalMediaDetection: true,
-    autoScrobbleLocal: false
+    autoScrobbleLocal: false,
+    pollingIntervalSeconds: 5,
+    scrobbleThresholdPercent: 80,
+    offlineQueueEnabled: true,
+    enabledPlayers: {
+      wmp: true,
+      vlc: true,
+      mpcHc: true,
+      mpcBe: true,
+      stremio: true,
+      plexDesktop: true,
+      mpv: true
+    },
+    playerWebUi: {
+      vlcEnabled: false,
+      vlcPort: 8080,
+      vlcPassword: "",
+      mpcEnabled: false,
+      mpcPort: 13579,
+      stremioPort: 11470
+    }
   },
   automatedBackups: {
     enabled: false,
@@ -738,7 +758,18 @@ export let appSettings: AppSettings = {
   meilisearch: dbState.appSettings?.meilisearch || defaultSettings.meilisearch,
   llamaAI: dbState.appSettings?.llamaAI || defaultSettings.llamaAI,
   remoteSync: dbState.appSettings?.remoteSync || defaultSettings.remoteSync,
-  daemonSettings: dbState.appSettings?.daemonSettings || defaultSettings.daemonSettings,
+  daemonSettings: {
+    ...defaultSettings.daemonSettings!,
+    ...(dbState.appSettings?.daemonSettings || {}),
+    enabledPlayers: {
+      ...defaultSettings.daemonSettings!.enabledPlayers!,
+      ...(dbState.appSettings?.daemonSettings?.enabledPlayers || {})
+    },
+    playerWebUi: {
+      ...defaultSettings.daemonSettings!.playerWebUi!,
+      ...(dbState.appSettings?.daemonSettings?.playerWebUi || {})
+    }
+  },
   databaseManagement: dbState.appSettings?.databaseManagement || defaultSettings.databaseManagement,
   automatedBackups: dbState.appSettings?.automatedBackups || defaultSettings.automatedBackups,
   syncRules: dbState.appSettings?.syncRules || defaultSettings.syncRules,
@@ -764,7 +795,7 @@ if (!appSettings.remoteSync) {
   };
 }
 
-let libraryItems: LibraryItem[] = dbState.libraryItems || [];
+export let libraryItems: LibraryItem[] = dbState.libraryItems || [];
 let libraryItemsMap: Map<string, LibraryItem> = new Map();
 
 function rebuildMap() {
@@ -778,8 +809,8 @@ function rebuildMap() {
 rebuildMap();
 
 
-let syncLogs: SyncLog[] = dbState.syncLogs || [];
-let webhookLogs: WebhookLog[] = dbState.webhookLogs || [];
+export let syncLogs: SyncLog[] = dbState.syncLogs || [];
+export let webhookLogs: WebhookLog[] = dbState.webhookLogs || [];
 let extensionState: BrowserExtensionState = dbState.extensionState || {
   isActive: false,
   version: "1.0.0",
@@ -1211,22 +1242,335 @@ app.get("/api/theme", (req, res) => {
 
 // Get Settings
 
-app.get("/api/daemon/local-player/status", (req, res) => {
+function parseMediaMetadataFromWindowOrFile(rawTitle: string): {
+  parsedTitle: string | null;
+  season: number | null;
+  episode: number | null;
+} {
+  if (!rawTitle) return { parsedTitle: null, season: null, episode: null };
+
+  let cleaned = rawTitle.trim();
+
+  // Strip common player window title suffixes/prefixes
+  cleaned = cleaned
+    .replace(/\s*-\s*VLC media player$/i, '')
+    .replace(/\s*-\s*MPC-BE(\s+x64)?(\s+v[\d.]+)?$/i, '')
+    .replace(/\s*-\s*MPC-HC(\s+x64)?(\s+v[\d.]+)?$/i, '')
+    .replace(/\s*-\s*mpv$/i, '')
+    .replace(/\s*-\s*Windows Media Player$/i, '')
+    .replace(/\s*-\s*Media Player$/i, '')
+    .replace(/^Stremio\s*-\s*/i, '')
+    .replace(/\s*-\s*Stremio$/i, '')
+    .replace(/\s*-\s*Plex(\s+HTPC|\s+Desktop)?$/i, '');
+
+  // Strip file path if full path is reported
+  cleaned = cleaned.replace(/^.*[\\/]/, '');
+
+  // Strip common video extensions
+  cleaned = cleaned.replace(/\.(mkv|mp4|avi|webm|mov|m4v|flv|wmv|ts)$/i, '');
+
+  // Strip leading release group tags like [SubsPlease], [Erai-raws], (1080p), etc.
+  cleaned = cleaned.replace(/^\[[^\]]+\]\s*/, '');
+
+  // Remove trailing bracketed/parenthesized resolution, codecs, hashes (e.g. [1080p], (1080p), [ABCD1234])
+  cleaned = cleaned.replace(/\s*[\[\(](1080p|720p|2160p|4k|480p|x264|x265|hevc|aac|flac|web-dl|webrip|bluray|bdrip|dual[\s-]?audio|[0-9a-fA-F]{8})[^\]\)]*[\]\)]/gi, '');
+
+  // Replace dots and underscores with spaces if no spaces exist in the main title
+  if (!cleaned.includes(' ')) {
+    cleaned = cleaned.replace(/[._]+/g, ' ');
+  }
+
+  let season: number | null = 1;
+  let episode: number | null = null;
+  let titlePart = cleaned;
+
+  // Pattern 1: S01E12 or S1E12
+  const sxeMatch = cleaned.match(/^(.*?)[.\s_-]*\bS(\d{1,2})E(\d{1,4})\b/i);
+  if (sxeMatch) {
+    titlePart = sxeMatch[1];
+    season = parseInt(sxeMatch[2], 10);
+    episode = parseInt(sxeMatch[3], 10);
+  } else {
+    // Pattern 2: 1x12
+    const xMatch = cleaned.match(/^(.*?)[.\s_-]*\b(\d{1,2})x(\d{1,3})\b/i);
+    if (xMatch) {
+      titlePart = xMatch[1];
+      season = parseInt(xMatch[2], 10);
+      episode = parseInt(xMatch[3], 10);
+    } else {
+      // Pattern 3: "Season 2 - 12" or "S2 - 12" or "Title - 12"
+      const animeDashMatch = cleaned.match(/^(.*?)(?:\s+S(?:eason\s*)?(\d{1,2}))?\s+-\s+(?:Ep(?:isode)?\s*)?(\d{1,4})(?:\b|\s|v\d)/i);
+      if (animeDashMatch) {
+        titlePart = animeDashMatch[1];
+        if (animeDashMatch[2]) season = parseInt(animeDashMatch[2], 10);
+        episode = parseInt(animeDashMatch[3], 10);
+      } else {
+        // Pattern 4: "Episode 12" or "Ep 12" or "E12"
+        const epMatch = cleaned.match(/^(.*?)[.\s_-]+(?:Episode|Ep\.?|E)\s*(\d{1,4})\b/i);
+        if (epMatch) {
+          titlePart = epMatch[1];
+          episode = parseInt(epMatch[2], 10);
+        }
+      }
+    }
+  }
+
+  const parsedTitle = titlePart
+    .replace(/[._]+/g, ' ')
+    .replace(/\s*-\s*$/, '')
+    .trim() || null;
+
+  return {
+    parsedTitle,
+    season: parsedTitle ? season : null,
+    episode
+  };
+}
+
+function matchLibraryItemByTitle(parsedTitle: string | null): LibraryItem | null {
+  if (!parsedTitle) return null;
+  const norm = parsedTitle.toLowerCase().trim();
+  if (!norm) return null;
+
+  return (
+    libraryItems.find(item => {
+      const t = item.title?.toLowerCase().trim();
+      const jt = item.japaneseTitle?.toLowerCase().trim();
+      return t === norm || jt === norm || (t && (t.includes(norm) || norm.includes(t)));
+    }) || null
+  );
+}
+
+app.get("/api/daemon/local-player/status", async (req, res) => {
+  if (appSettings.daemonSettings?.enableLocalMediaDetection === false) {
+    return res.json({ activePlayer: null, detectionEnabled: false });
+  }
+
+  const enabledPlayers = {
+    wmp: true,
+    vlc: true,
+    mpcHc: true,
+    mpcBe: true,
+    stremio: true,
+    plexDesktop: true,
+    mpv: true,
+    ...(appSettings.daemonSettings?.enabledPlayers || {})
+  };
+
+  const webUi = {
+    vlcEnabled: false,
+    vlcPort: 8080,
+    vlcPassword: "",
+    mpcEnabled: false,
+    mpcPort: 13579,
+    stremioPort: 11470,
+    ...(appSettings.daemonSettings?.playerWebUi || {})
+  };
+
+  // 1. Optional MPC-HC / MPC-BE Web UI Position Polling
+  if (webUi.mpcEnabled && (enabledPlayers.mpcHc || enabledPlayers.mpcBe)) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
+      const mpcPort = Number(webUi.mpcPort) || 13579;
+      const mpcUrl = createSafeUrl(`http://127.0.0.1:${mpcPort}/variables.html`);
+      const mpcRes = await fetch(mpcUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (mpcRes.ok) {
+        const html = await mpcRes.text();
+        const fileMatch = html.match(/<p id="file">(.*?)<\/p>/i) || html.match(/<p id="filepath">(.*?)<\/p>/i);
+        const posMatch = html.match(/<p id="position">(\d+)<\/p>/i);
+        const durMatch = html.match(/<p id="duration">(\d+)<\/p>/i);
+        const stateMatch = html.match(/<p id="state">(-?\d+)<\/p>/i);
+
+        const rawFile = fileMatch ? fileMatch[1].trim() : "";
+        if (rawFile) {
+          let rawPos = posMatch ? parseInt(posMatch[1], 10) : 0;
+          let rawDur = durMatch ? parseInt(durMatch[1], 10) : 0;
+          // MPC variables.html reports position and duration in milliseconds
+          const positionSeconds = rawDur > 36000 ? Math.floor(rawPos / 1000) : rawPos;
+          const durationSeconds = rawDur > 36000 ? Math.floor(rawDur / 1000) : rawDur;
+          const progressPercent = durationSeconds > 0 ? Math.round((positionSeconds / durationSeconds) * 1000) / 10 : 0;
+          const stateCode = stateMatch ? parseInt(stateMatch[1], 10) : 2;
+          const isPlaying = stateCode === 2;
+          const { parsedTitle, season, episode } = parseMediaMetadataFromWindowOrFile(rawFile);
+          const matchedLibraryItem = matchLibraryItemByTitle(parsedTitle);
+          const activePlayer = enabledPlayers.mpcBe ? 'MPC-BE' : 'MPC-HC';
+          const playerKey = enabledPlayers.mpcBe ? 'mpcBe' : 'mpcHc';
+
+          return res.json({
+            activePlayer,
+            playerKey,
+            rawWindowTitle: rawFile,
+            parsedTitle,
+            season,
+            episode,
+            positionSeconds,
+            durationSeconds,
+            progressPercent,
+            isPlaying,
+            trackingMode: "webui",
+            matchedLibraryItem
+          });
+        }
+      }
+    } catch (_e) {
+      // Fall back to process & window title detection if Web UI is unreachable
+    }
+  }
+
+  // 2. Optional VLC HTTP Interface Position Polling
+  if (webUi.vlcEnabled && enabledPlayers.vlc) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500);
+      const vlcPort = Number(webUi.vlcPort) || 8080;
+      const vlcUrl = createSafeUrl(`http://127.0.0.1:${vlcPort}/requests/status.json`);
+      const authHeader = 'Basic ' + Buffer.from(`:${webUi.vlcPassword || ''}`).toString('base64');
+      const vlcRes = await fetch(vlcUrl, {
+        headers: { Authorization: authHeader },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (vlcRes.ok) {
+        const vlcData: any = await vlcRes.json();
+        const meta = vlcData?.information?.category?.meta || {};
+        const rawFile = meta.filename || meta.title || "";
+        const stateStr = String(vlcData?.state || "").toLowerCase();
+        if (rawFile || stateStr === "playing" || stateStr === "paused") {
+          const positionSeconds = Number(vlcData?.time) || 0;
+          const durationSeconds = Number(vlcData?.length) || 0;
+          const progressPercent =
+            durationSeconds > 0
+              ? Math.round((positionSeconds / durationSeconds) * 1000) / 10
+              : vlcData?.position
+              ? Math.round(Number(vlcData.position) * 1000) / 10
+              : 0;
+          const isPlaying = stateStr === "playing";
+          const { parsedTitle, season, episode } = parseMediaMetadataFromWindowOrFile(rawFile);
+          const matchedLibraryItem = matchLibraryItemByTitle(parsedTitle);
+
+          return res.json({
+            activePlayer: "VLC",
+            playerKey: "vlc",
+            rawWindowTitle: rawFile,
+            parsedTitle,
+            season,
+            episode,
+            positionSeconds,
+            durationSeconds,
+            progressPercent,
+            isPlaying,
+            trackingMode: "webui",
+            matchedLibraryItem
+          });
+        }
+      }
+    } catch (_e) {
+      // Fall back to process & window title detection if VLC Web UI is unreachable
+    }
+  }
+
+  // 3. OS Process & Window Title Detection via tasklist
   const { exec } = require('child_process');
-  exec('tasklist /FO CSV /NH', (err: any, stdout: any) => {
-    if (err) {
+
+  const runTasklist = (cmd: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      exec(cmd, (err: any, stdout: any) => {
+        if (err) return reject(err);
+        resolve(String(stdout || ""));
+      });
+    });
+
+  let stdout = "";
+  try {
+    stdout = await runTasklist('tasklist /V /FO CSV /NH');
+  } catch (_errVerbose) {
+    try {
+      stdout = await runTasklist('tasklist /FO CSV /NH');
+    } catch (_errBasic) {
       return res.json({ activePlayer: null });
     }
-    const output = stdout.toLowerCase();
-    let activePlayer = null;
-    if (output.includes('mpc-be64.exe') || output.includes('mpc-be.exe')) {
-      activePlayer = 'MPC-BE';
-    } else if (output.includes('mpv.exe')) {
-      activePlayer = 'MPV';
-    } else if (output.includes('vlc.exe')) {
-      activePlayer = 'VLC';
+  }
+
+  const playerDefinitions: Array<{
+    key: keyof typeof enabledPlayers;
+    name: string;
+    executables: string[];
+  }> = [
+    { key: 'mpcBe', name: 'MPC-BE', executables: ['mpc-be64.exe', 'mpc-be.exe'] },
+    { key: 'mpcHc', name: 'MPC-HC', executables: ['mpc-hc64.exe', 'mpc-hc.exe'] },
+    { key: 'vlc', name: 'VLC', executables: ['vlc.exe'] },
+    { key: 'wmp', name: 'Windows Media Player', executables: ['wmplayer.exe', 'microsoft.media.player.exe'] },
+    { key: 'stremio', name: 'Stremio', executables: ['stremio.exe', 'stremio-runtime.exe', 'stremio-shell-ng.exe'] },
+    { key: 'plexDesktop', name: 'Plex Desktop', executables: ['plex.exe', 'plex htpc.exe', 'plexmediaplayer.exe'] },
+    { key: 'mpv', name: 'MPV', executables: ['mpv.exe'] }
+  ];
+
+  const lines = stdout
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  for (const def of playerDefinitions) {
+    if (!enabledPlayers[def.key]) continue;
+
+    for (const line of lines) {
+      const lowerLine = line.toLowerCase();
+      const matchedExe = def.executables.some(exe => lowerLine.includes(exe));
+      if (!matchedExe) continue;
+
+      // Parse CSV columns: "Image Name","PID",...,"Window Title"
+      const cols = line
+        .split('","')
+        .map(c => c.replace(/^"|"$/g, '').trim());
+
+      // If /V was used, there are typically 9 columns and the last column is Window Title
+      let rawWindowTitle: string | null = null;
+      if (cols.length >= 8) {
+        const winTitle = cols[cols.length - 1];
+        if (winTitle && winTitle !== 'N/A' && winTitle.toLowerCase() !== 'olemainthreadwndname') {
+          rawWindowTitle = winTitle;
+        }
+      }
+
+      const { parsedTitle, season, episode } = rawWindowTitle
+        ? parseMediaMetadataFromWindowOrFile(rawWindowTitle)
+        : { parsedTitle: null, season: null, episode: null };
+      const matchedLibraryItem = matchLibraryItemByTitle(parsedTitle);
+
+      return res.json({
+        activePlayer: def.name,
+        playerKey: def.key,
+        rawWindowTitle,
+        parsedTitle,
+        season,
+        episode,
+        positionSeconds: 0,
+        durationSeconds: 0,
+        progressPercent: 0,
+        isPlaying: true,
+        trackingMode: "window_title",
+        matchedLibraryItem
+      });
     }
-    res.json({ activePlayer });
+  }
+
+  return res.json({
+    activePlayer: null,
+    playerKey: null,
+    rawWindowTitle: null,
+    parsedTitle: null,
+    season: null,
+    episode: null,
+    positionSeconds: 0,
+    durationSeconds: 0,
+    progressPercent: 0,
+    isPlaying: false,
+    trackingMode: null,
+    matchedLibraryItem: null
   });
 });
 

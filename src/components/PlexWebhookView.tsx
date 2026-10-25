@@ -45,7 +45,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
   const [selectedItemTitle, setSelectedItemTitle] = useState(libraryItems[0]?.title || 'Solo Leveling Season 2');
   const [testSeason, setTestSeason] = useState<number>(2);
   const [testEpisode, setTestEpisode] = useState<number>(10);
-  const [testUser, setTestUser] = useState<string>('OtakuWatcher99');
+  const [testUser, setTestUser] = useState<string>(settings.plex?.username || settings.tautulli?.username || settings.jellyfin?.username || settings.emby?.username || '');
   const [testDevice] = useState<string>('NVIDIA SHIELD TV');
   const [testSource, setTestSource] = useState<'plex' | 'tautulli' | 'jellyfin' | 'emby'>('plex');
 
@@ -677,7 +677,7 @@ export const PlexWebhookView: React.FC<PlexWebhookViewProps> = ({
 
             {/* User */}
             <div>
-              <label className="text-[11px] text-gray-600 dark:text-gray-400 font-medium">Plex Account User</label>
+              <label className="text-[11px] text-gray-600 dark:text-gray-400 font-medium">Account Username</label>
               <input
                 type="text"
                 value={testUser}

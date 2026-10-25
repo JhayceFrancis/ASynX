@@ -34,8 +34,15 @@ describe('ASynX Security & Persistence Validation Suite', () => {
     });
 
     it('Prototype Pollution: Assert that attempting to inject __proto__ is rejected/stripped', async () => {
+      const csrfRes = await request(app).get('/api/csrf-token');
+      const csrfToken = csrfRes.body.csrfToken;
+      const setCookie = csrfRes.headers['set-cookie'];
+      const cookieStr = Array.isArray(setCookie) ? setCookie.join('; ') : (setCookie || '');
+
       const res = await request(app)
         .post('/api/sync/override')
+        .set('Cookie', cookieStr)
+        .set('x-csrf-token', csrfToken)
         .send({
           itemId: 'test-item',
           targetEpisode: 5,
@@ -117,8 +124,15 @@ describe('ASynX Security & Persistence Validation Suite', () => {
         status: 401
       });
 
+      const csrfRes = await request(app).get('/api/csrf-token');
+      const csrfToken = csrfRes.body.csrfToken;
+      const setCookie = csrfRes.headers['set-cookie'];
+      const cookieStr = Array.isArray(setCookie) ? setCookie.join('; ') : (setCookie || '');
+
       const res = await request(app)
         .post('/api/settings')
+        .set('Cookie', cookieStr)
+        .set('x-csrf-token', csrfToken)
         .send({
           mal: {
             clientId: 'test-client',

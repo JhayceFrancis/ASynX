@@ -1,6 +1,6 @@
 import { apiFetch as fetch } from '../apiFetch';
-import React, { useState, useEffect } from 'react';
-import { LibraryItem, PlatformType, WatchStatus, AIConflictAnalysis, AppSettings } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { LibraryItem, PlatformType, WatchStatus, AIConflictAnalysis, AppSettings, ConflictCategory } from '../types';
 import { SystemLog } from './SystemLogOverlay';
 import { MalLogo, AniListLogo, SimklLogo } from './PlatformLogos';
 import { 
@@ -16,7 +16,11 @@ import {
   Zap,
   ListChecks,
   Info,
-  AlertCircle
+  AlertCircle,
+  Filter,
+  Layers,
+  Split,
+  Tag
 } from 'lucide-react';
 
 interface ConflictResolutionViewProps {
@@ -28,6 +32,64 @@ interface ConflictResolutionViewProps {
   systemLogs?: SystemLog[];
 }
 
+/**
+ * Categorizes a conflict into one of the three core user categories:
+ * - 'Platform Mismatch': Status differences, unlinked/missing platform presence, or platform-level desync
+ * - 'Progress Discrepancy': Watch episode mismatch, progress gap, or scrobble count difference
+ * - 'Metadata Conflict': Score/rating differences, title/season mismatch, or metadata alignment issues
+ */
+export function getConflictCategory(item: LibraryItem): 'Platform Mismatch' | 'Progress Discrepancy' | 'Metadata Conflict' {
+  if (item.conflictDetails?.category) {
+    return item.conflictDetails.category;
+  }
+
+  const type = item.conflictDetails?.type;
+  if (type === 'progress_discrepancy' || type === 'episode_mismatch') {
+    return 'Progress Discrepancy';
+  }
+  if (type === 'platform_mismatch' || type === 'status_mismatch') {
+    return 'Platform Mismatch';
+  }
+  if (type === 'metadata_conflict' || type === 'score_mismatch') {
+    return 'Metadata Conflict';
+  }
+
+  const summary = (item.conflictDetails?.summary || '').toLowerCase();
+  if (summary.includes('episode') || summary.includes('progress') || summary.includes('ep ') || summary.includes('watch count')) {
+    return 'Progress Discrepancy';
+  }
+  if (summary.includes('score') || summary.includes('rating') || summary.includes('title') || summary.includes('metadata') || summary.includes('season')) {
+    return 'Metadata Conflict';
+  }
+  if (summary.includes('platform') || summary.includes('status') || summary.includes('desync') || summary.includes('missing') || summary.includes('unlinked')) {
+    return 'Platform Mismatch';
+  }
+
+  // Differences array inspection
+  if (item.conflictDetails?.differences && item.conflictDetails.differences.length > 1) {
+    const diffs = item.conflictDetails.differences;
+    const eps = diffs.map(d => d.episode).filter(e => typeof e === 'number');
+    if (new Set(eps).size > 1) return 'Progress Discrepancy';
+    const stats = diffs.map(d => d.status).filter(Boolean);
+    if (new Set(stats).size > 1) return 'Platform Mismatch';
+  }
+
+  // Active platform states inspection
+  const platforms = Object.values(item.platforms || {}).filter(Boolean);
+  const eps = platforms.map(p => p?.episode).filter(e => typeof e === 'number');
+  if (new Set(eps).size > 1) return 'Progress Discrepancy';
+
+  const statuses = platforms.map(p => p?.status).filter(Boolean);
+  if (new Set(statuses).size > 1) return 'Platform Mismatch';
+
+  const scores = platforms.map(p => p?.score).filter(s => typeof s === 'number' && s > 0);
+  if (new Set(scores).size > 1) return 'Metadata Conflict';
+
+  if (platforms.some(p => p?.id === 'mal-none')) return 'Platform Mismatch';
+
+  return 'Progress Discrepancy';
+}
+
 export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
   conflicts,
   onResolveConflict,
@@ -36,6 +98,8 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
   onNavigateSettings,
   systemLogs = []
 }) => {
+  // 1. ALL useState hooks declared first (Zero Tolerance for Temporal Dead Zones)
+  const [selectedCategory, setSelectedCategory] = useState<ConflictCategory>('all');
   const [selectedConflictId, setSelectedConflictId] = useState<string | null>(conflicts[0]?.id || null);
   const [aiAnalysis, setAiAnalysis] = useState<Record<string, AIConflictAnalysis>>({});
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
@@ -47,6 +111,27 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
   const [isBulkResolving, setIsBulkResolving] = useState<boolean>(false);
   const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string | null>(null);
 
+  // 2. ALL useMemo hooks declared at top
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      all: conflicts.length,
+      'Platform Mismatch': 0,
+      'Progress Discrepancy': 0,
+      'Metadata Conflict': 0
+    };
+    conflicts.forEach(item => {
+      const cat = getConflictCategory(item);
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return counts;
+  }, [conflicts]);
+
+  const filteredConflicts = useMemo(() => {
+    if (selectedCategory === 'all') return conflicts;
+    return conflicts.filter(item => getConflictCategory(item) === selectedCategory);
+  }, [conflicts, selectedCategory]);
+
+  // 3. ALL useEffect hooks declared at top
   useEffect(() => {
     if (settings) {
       const sot = (settings.syncRules?.defaultSourceOfTruth || 'anilist') as 'anilist' | 'simkl' | 'mal' | 'highest_episode';
@@ -54,12 +139,16 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
     }
   }, [settings]);
 
-  // Handle setting selection when conflict list changes
+  // Handle setting selection when conflict list or filtered category changes
   useEffect(() => {
-    if (conflicts.length > 0 && (!selectedConflictId || !conflicts.find(c => c.id === selectedConflictId))) {
-      setSelectedConflictId(conflicts[0].id);
+    if (filteredConflicts.length > 0) {
+      if (!selectedConflictId || !filteredConflicts.some(c => c.id === selectedConflictId)) {
+        setSelectedConflictId(filteredConflicts[0].id);
+      }
+    } else {
+      setSelectedConflictId(null);
     }
-  }, [conflicts, selectedConflictId]);
+  }, [filteredConflicts, selectedConflictId]);
 
   if (conflicts.length === 0) {
     return (
@@ -87,13 +176,16 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
     );
   }
 
-  const selectedItem = conflicts.find(c => c.id === selectedConflictId) || conflicts[0];
+  const selectedItem = filteredConflicts.find(c => c.id === selectedConflictId) || filteredConflicts[0] || null;
 
   const handleToggleSelectAll = () => {
-    if (bulkSelectedIds.length === conflicts.length) {
-      setBulkSelectedIds([]);
+    const visibleIds = filteredConflicts.map(c => c.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => bulkSelectedIds.includes(id));
+
+    if (allVisibleSelected) {
+      setBulkSelectedIds(bulkSelectedIds.filter(id => !visibleIds.includes(id)));
     } else {
-      setBulkSelectedIds(conflicts.map(c => c.id));
+      setBulkSelectedIds(Array.from(new Set([...bulkSelectedIds, ...visibleIds])));
     }
   };
 
@@ -148,21 +240,10 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
     }
   };
 
-  if (conflicts.length === 0) {
-    return (
-      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-12 text-center max-w-2xl mx-auto space-y-4 my-8">
-        <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto border border-emerald-500/20">
-          <ShieldCheck className="w-8 h-8" />
-        </div>
-        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Zero Desync Conflicts Found</h2>
-        <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
-          All your tracked anime and drama progress across Simkl, MyAnimeList, and AniList are in 100% matrix synchronization. Real-time webhooks and scroobles are aligned.
-        </p>
-      </div>
-    );
-  }
-
   const currentAi = selectedItem ? aiAnalysis[selectedItem.id] : undefined;
+  const visibleSelectedCount = bulkSelectedIds.filter(id => filteredConflicts.some(fc => fc.id === id)).length;
+  const isAllVisibleSelected = filteredConflicts.length > 0 && visibleSelectedCount === filteredConflicts.length;
+  const selectedItemCategory = selectedItem ? getConflictCategory(selectedItem) : null;
 
   return (
     <div className="space-y-6">
@@ -180,8 +261,11 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <span className="px-3 py-1 rounded-full bg-amber-500 text-slate-950 font-bold text-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span 
+            id="badge-conflicts-total"
+            className="px-3 py-1 rounded-full bg-amber-500 text-slate-950 font-bold text-xs shadow-sm"
+          >
             {conflicts.length} Pending {conflicts.length === 1 ? 'Conflict' : 'Conflicts'}
           </span>
         </div>
@@ -234,33 +318,111 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
         </div>
       </div>
 
-      {/* BULK-ACTION FEATURE TOOLBAR */}
+      {/* BULK-ACTION & CATEGORIZATION FILTER TOOLBAR */}
       <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-5 shadow-md space-y-3">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={handleToggleSelectAll}
-              className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 hover:border-gray-300 dark:border-neutral-800 text-gray-700 dark:text-gray-300 text-xs font-semibold cursor-pointer transition"
-            >
-              {bulkSelectedIds.length === conflicts.length ? (
-                <CheckSquare className="w-4 h-4 text-indigo-400" />
-              ) : (
-                <Square className="w-4 h-4 text-gray-500 dark:text-gray-500" />
-              )}
-              <span>{bulkSelectedIds.length === conflicts.length ? 'Deselect All' : 'Select All Conflicts'}</span>
-            </button>
+        <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+            {/* Filter Dropdown */}
+            <div id="conflict-category-filter-container" className="flex items-center space-x-2 bg-gray-50 dark:bg-black px-3 py-1.5 rounded-xl border border-gray-200 dark:border-neutral-900 text-xs text-gray-700 dark:text-gray-300">
+              <Filter className="w-4 h-4 text-indigo-500 dark:text-indigo-400 flex-shrink-0" />
+              <label htmlFor="conflict-category-filter-select" className="font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                Category:
+              </label>
+              <select
+                id="conflict-category-filter-select"
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value as ConflictCategory)}
+                className="bg-transparent font-bold text-gray-900 dark:text-gray-100 focus:outline-none cursor-pointer pr-1"
+              >
+                <option value="all" className="bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100">
+                  All Conflicts ({categoryCounts.all})
+                </option>
+                <option value="Platform Mismatch" className="bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100">
+                  Platform Mismatch ({categoryCounts['Platform Mismatch']})
+                </option>
+                <option value="Progress Discrepancy" className="bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100">
+                  Progress Discrepancy ({categoryCounts['Progress Discrepancy']})
+                </option>
+                <option value="Metadata Conflict" className="bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100">
+                  Metadata Conflict ({categoryCounts['Metadata Conflict']})
+                </option>
+              </select>
+            </div>
 
-            <span className="text-xs text-gray-600 dark:text-gray-400 font-mono">
-              <strong className="text-indigo-300">{bulkSelectedIds.length}</strong> of {conflicts.length} Selected
-            </span>
+            {/* Quick Category Chips for Faster Processing */}
+            <div className="hidden sm:flex items-center space-x-1.5">
+              {(['all', 'Platform Mismatch', 'Progress Discrepancy', 'Metadata Conflict'] as ConflictCategory[]).map((cat) => {
+                const isCurrent = selectedCategory === cat;
+                const label = cat === 'all' ? 'All' : cat;
+                const count = categoryCounts[cat];
+                return (
+                  <button
+                    key={cat}
+                    id={`btn-filter-category-${cat.toLowerCase().replace(/\s+/g, '-')}`}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center space-x-1.5 ${
+                      isCurrent
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'bg-gray-100 dark:bg-neutral-900 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 border border-transparent hover:border-gray-200 dark:hover:border-neutral-800'
+                    }`}
+                  >
+                    <span>{label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                      isCurrent ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-neutral-800 text-gray-700 dark:text-gray-300'
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Selection Controls */}
+            <div className="flex items-center space-x-2 border-l border-gray-200 dark:border-neutral-800 pl-3">
+              <button
+                id="btn-toggle-select-all"
+                onClick={handleToggleSelectAll}
+                disabled={filteredConflicts.length === 0}
+                className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 hover:border-gray-300 dark:border-neutral-800 text-gray-700 dark:text-gray-300 text-xs font-semibold cursor-pointer transition disabled:opacity-40"
+              >
+                {isAllVisibleSelected ? (
+                  <CheckSquare className="w-4 h-4 text-indigo-400" />
+                ) : (
+                  <Square className="w-4 h-4 text-gray-500 dark:text-gray-500" />
+                )}
+                <span>
+                  {isAllVisibleSelected 
+                    ? (selectedCategory === 'all' ? 'Deselect All' : `Deselect ${selectedCategory}`) 
+                    : (selectedCategory === 'all' ? 'Select All' : `Select All ${selectedCategory}`)}
+                </span>
+              </button>
+
+              <span className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+                <strong className="text-indigo-500 dark:text-indigo-300">{visibleSelectedCount}</strong> of {filteredConflicts.length} Selected
+                {selectedCategory !== 'all' && bulkSelectedIds.length > visibleSelectedCount && (
+                  <span className="text-gray-400 text-[11px] ml-1">({bulkSelectedIds.length} total)</span>
+                )}
+              </span>
+
+              {bulkSelectedIds.length > 0 && (
+                <button
+                  id="btn-clear-selection"
+                  onClick={() => setBulkSelectedIds([])}
+                  className="text-[11px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 underline cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Strategy Selector & Apply Button */}
-          <div className="flex items-center space-x-2.5 w-full md:w-auto">
-            <div className="flex items-center space-x-2 bg-gray-50 dark:bg-black px-3 py-1.5 rounded-xl border border-gray-200 dark:border-neutral-900 text-xs text-gray-700 dark:text-gray-300 w-full md:w-auto">
+          <div className="flex items-center space-x-2.5 w-full xl:w-auto justify-end">
+            <div className="flex items-center space-x-2 bg-gray-50 dark:bg-black px-3 py-1.5 rounded-xl border border-gray-200 dark:border-neutral-900 text-xs text-gray-700 dark:text-gray-300 w-full sm:w-auto">
               <ListChecks className="w-4 h-4 text-amber-400 flex-shrink-0" />
               <span className="text-gray-600 dark:text-gray-400 whitespace-nowrap hidden sm:inline">Strategy:</span>
               <select
+                id="bulk-strategy-selector"
                 value={bulkStrategy}
                 onChange={(e) => setBulkStrategy(e.target.value as any)}
                 className="bg-transparent font-bold text-gray-900 dark:text-gray-100 focus:outline-none cursor-pointer w-full"
@@ -273,12 +435,13 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
             </div>
 
             <button
+              id="btn-apply-bulk-strategy"
               onClick={handleApplyBulkStrategy}
               disabled={bulkSelectedIds.length === 0 || isBulkResolving}
               className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold rounded-xl text-xs shadow transition cursor-pointer flex items-center space-x-1.5 flex-shrink-0 disabled:opacity-40"
             >
               <Zap className="w-4 h-4" />
-              <span>{isBulkResolving ? 'Resolving...' : 'Apply Strategy'}</span>
+              <span>{isBulkResolving ? 'Resolving...' : `Apply Strategy (${bulkSelectedIds.length})`}</span>
             </button>
           </div>
         </div>
@@ -294,55 +457,100 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Conflict Selector List (4 cols) */}
         <div className="lg:col-span-4 space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 px-1">
-            Flagged Items ({conflicts.length})
-          </h3>
-          <div className="space-y-2">
-            {conflicts.map((item) => {
-              const isSelected = item.id === (selectedItem?.id);
-              const isBulkChecked = bulkSelectedIds.includes(item.id);
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => setSelectedConflictId(item.id)}
-                  className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
-                    isSelected
-                      ? 'bg-indigo-900/30 border-indigo-500 shadow-md'
-                      : 'bg-white dark:bg-[#0a0a0a] border-gray-200 dark:border-neutral-900 hover:border-gray-300 dark:border-neutral-800'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <button
-                      onClick={(e) => handleToggleSelectItem(item.id, e)}
-                      className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-400 cursor-pointer"
-                    >
-                      {isBulkChecked ? (
-                        <CheckSquare className="w-4 h-4 text-indigo-400" />
-                      ) : (
-                        <Square className="w-4 h-4 text-slate-600" />
-                      )}
-                    </button>
-                    <img
-                      src={item.coverImage}
-                      alt={item.title}
-                      className="w-10 h-14 object-cover rounded-lg border border-gray-200 dark:border-neutral-900"
-                    />
-                    <div>
-                      <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100 line-clamp-1">{item.title}</h4>
-                      <p className="text-[11px] text-amber-400 mt-0.5 line-clamp-1">
-                        {item.conflictDetails?.summary || 'Desync detected'}
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight className={`w-4 h-4 ${isSelected ? 'text-indigo-400' : 'text-slate-600'}`} />
-                </div>
-              );
-            })}
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+              Flagged Items ({filteredConflicts.length}{selectedCategory !== 'all' ? ` of ${conflicts.length}` : ''})
+            </h3>
+            {selectedCategory !== 'all' && (
+              <button
+                id="btn-clear-category-filter"
+                onClick={() => setSelectedCategory('all')}
+                className="text-[11px] text-indigo-500 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
+              >
+                Show All
+              </button>
+            )}
           </div>
+
+          {filteredConflicts.length === 0 ? (
+            <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-2xl p-6 text-center space-y-3">
+              <Filter className="w-8 h-8 text-gray-400 mx-auto" />
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                No conflicts categorized as <strong className="text-gray-900 dark:text-gray-100">{selectedCategory}</strong>
+              </p>
+              <button
+                id="btn-reset-filter"
+                onClick={() => setSelectedCategory('all')}
+                className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-semibold cursor-pointer transition hover:bg-indigo-100 dark:hover:bg-indigo-900/60"
+              >
+                Reset to All Conflicts
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredConflicts.map((item) => {
+                const isSelected = item.id === (selectedItem?.id);
+                const isBulkChecked = bulkSelectedIds.includes(item.id);
+                const itemCategory = getConflictCategory(item);
+                return (
+                  <div
+                    key={item.id}
+                    id={`conflict-item-card-${item.id}`}
+                    onClick={() => setSelectedConflictId(item.id)}
+                    className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
+                      isSelected
+                        ? 'bg-indigo-900/30 border-indigo-500 shadow-md'
+                        : 'bg-white dark:bg-[#0a0a0a] border-gray-200 dark:border-neutral-900 hover:border-gray-300 dark:border-neutral-800'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <button
+                        id={`btn-select-item-${item.id}`}
+                        onClick={(e) => handleToggleSelectItem(item.id, e)}
+                        className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-400 cursor-pointer"
+                      >
+                        {isBulkChecked ? (
+                          <CheckSquare className="w-4 h-4 text-indigo-400" />
+                        ) : (
+                          <Square className="w-4 h-4 text-slate-600" />
+                        )}
+                      </button>
+                      <img
+                        src={item.coverImage}
+                        alt={item.title}
+                        className="w-10 h-14 object-cover rounded-lg border border-gray-200 dark:border-neutral-900"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-1.5 mb-1">
+                          <span
+                            id={`badge-cat-${item.id}`}
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                              itemCategory === 'Platform Mismatch' 
+                                ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30' 
+                                : itemCategory === 'Progress Discrepancy' 
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30' 
+                                : 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300 border border-sky-200 dark:border-sky-500/30'
+                            }`}
+                          >
+                            {itemCategory}
+                          </span>
+                        </div>
+                        <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100 line-clamp-1">{item.title}</h4>
+                        <p className="text-[11px] text-amber-500 dark:text-amber-400 mt-0.5 line-clamp-1">
+                          {item.conflictDetails?.summary || 'Desync detected'}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-indigo-400' : 'text-slate-600'}`} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Right Active Conflict Detailed Resolution Workspace (8 cols) */}
-        {selectedItem && (
+        {selectedItem ? (
           <div className="lg:col-span-8 space-y-6">
             <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 shadow-md space-y-6">
               {/* Item Overview Header */}
@@ -353,12 +561,28 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
                   className="w-16 h-24 object-cover rounded-2xl shadow border border-gray-300 dark:border-neutral-800"
                 />
                 <div>
-                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    Conflict Identified
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      Conflict Identified
+                    </span>
+                    {selectedItemCategory && (
+                      <span 
+                        id="selected-item-category-badge"
+                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${
+                          selectedItemCategory === 'Platform Mismatch' 
+                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 border-purple-300 dark:border-purple-500/30' 
+                            : selectedItemCategory === 'Progress Discrepancy' 
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 border-amber-300 dark:border-amber-500/30' 
+                            : 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300 border-sky-300 dark:border-sky-500/30'
+                        }`}
+                      >
+                        {selectedItemCategory}
+                      </span>
+                    )}
+                  </div>
                   <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mt-1">{selectedItem.title}</h3>
                   <p className="text-xs text-gray-600 dark:text-gray-400">{selectedItem.japaneseTitle}</p>
-                  <p className="text-xs text-amber-300/90 mt-1 font-medium">
+                  <p className="text-xs text-amber-400 mt-1 font-medium">
                     {selectedItem.conflictDetails?.summary}
                   </p>
                 </div>
@@ -564,6 +788,25 @@ export const ConflictResolutionView: React.FC<ConflictResolutionViewProps> = ({
               </div>
             </div>
 
+          </div>
+        ) : (
+          <div className="lg:col-span-8 bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-12 text-center space-y-4">
+            <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-500 dark:text-indigo-400 rounded-2xl flex items-center justify-center mx-auto border border-indigo-200 dark:border-indigo-900/50 shadow-inner">
+              <Filter className="w-8 h-8" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">
+              No Conflicts Found for &quot;{selectedCategory}&quot;
+            </h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400 max-w-sm mx-auto leading-relaxed">
+              There are currently no flagged items matching the &quot;{selectedCategory}&quot; criteria. Switch categories or reset the filter to review all pending conflicts.
+            </p>
+            <button
+              id="btn-empty-reset-category-filter"
+              onClick={() => setSelectedCategory('all')}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow transition cursor-pointer"
+            >
+              Reset Filter to All Conflicts ({conflicts.length})
+            </button>
           </div>
         )}
       </div>
