@@ -229,7 +229,7 @@ describe('useKeyboardShortcut', () => {
       renderHook(() => useKeyboardShortcut({ key: 'Enter' }, callback));
 
       const div = document.createElement('div');
-      Object.defineProperty(div, 'isContentEditable', { value: true });
+      Object.defineProperty(div, 'isContentEditable', { value: true, writable: true });
       document.body.appendChild(div);
 
       fireKeyDown('Enter', {}, div);
@@ -262,6 +262,35 @@ describe('useKeyboardShortcut', () => {
 
       expect(callback).not.toHaveBeenCalled();
       document.body.removeChild(input);
+    });
+
+    it('allows Ctrl+Shift+S / Cmd+Shift+S exception even inside input', () => {
+      const callback = vi.fn();
+      renderHook(() => useKeyboardShortcut({ key: 's', ctrl: true, shift: true }, callback));
+
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+
+      fireKeyDown('s', { ctrlKey: true, shiftKey: true }, input);
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      document.body.removeChild(input);
+    });
+
+    it('handles non-HTMLElement targets gracefully', () => {
+      const callback = vi.fn();
+      renderHook(() => useKeyboardShortcut({ key: 'Enter' }, callback));
+
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+
+      // document is a Node but not an HTMLElement, it doesn't have tagName
+      document.dispatchEvent(event);
+
+      expect(callback).toHaveBeenCalledTimes(1);
     });
   });
 });

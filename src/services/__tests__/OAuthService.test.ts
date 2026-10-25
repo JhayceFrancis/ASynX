@@ -51,6 +51,24 @@ describe('OAuthService', () => {
 
       expect(windowAlertSpy).not.toHaveBeenCalled();
     });
+
+    it('should calculate correct position when screenX and screenY are non-zero', () => {
+      Object.defineProperty(window, 'screenX', { value: 100, writable: true });
+      Object.defineProperty(window, 'screenY', { value: 50, writable: true });
+
+      OAuthService.initiateLogin('simkl');
+
+      const expectedWidth = 600;
+      const expectedHeight = 700;
+      const expectedLeft = 1024 / 2 - expectedWidth / 2 + 100;
+      const expectedTop = 768 / 2 - expectedHeight / 2 + 50;
+
+      expect(windowOpenSpy).toHaveBeenCalledWith(
+        '/api/auth/simkl/login',
+        'oauth_popup',
+        `width=${expectedWidth},height=${expectedHeight},left=${expectedLeft},top=${expectedTop}`
+      );
+    });
   });
 
   describe('processAuthMessage', () => {
@@ -142,6 +160,7 @@ describe('OAuthService', () => {
       const result = OAuthService.processAuthMessage(event, mockSettings);
       expect(result).toBeNull();
     });
+
 
     it('should return null when event.data does not have a type property', () => {
       const event = new MessageEvent('message', {
