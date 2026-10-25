@@ -3887,7 +3887,38 @@ app.post("/api/remote-sync/receive", proxyLimiter, (req, res) => {
   }
 
   if (data && data.libraryItems) {
-    appSettings = data.appSettings || appSettings;
+    if (data.appSettings) {
+      const incomingSettings = data.appSettings;
+      appSettings = {
+        ...appSettings,
+        ...incomingSettings,
+        plex: {
+          ...appSettings?.plex,
+          ...incomingSettings?.plex,
+          serverUrl: appSettings?.plex?.serverUrl
+        },
+        jellyfin: {
+          ...appSettings?.jellyfin,
+          ...incomingSettings?.jellyfin,
+          serverUrl: appSettings?.jellyfin?.serverUrl
+        },
+        emby: {
+          ...appSettings?.emby,
+          ...incomingSettings?.emby,
+          serverUrl: appSettings?.emby?.serverUrl
+        },
+        karakeep: {
+          ...appSettings?.karakeep,
+          ...incomingSettings?.karakeep,
+          apiUrl: appSettings?.karakeep?.apiUrl
+        },
+        remoteSync: {
+          ...appSettings?.remoteSync,
+          ...incomingSettings?.remoteSync,
+          serverUrl: appSettings?.remoteSync?.serverUrl
+        }
+      };
+    }
     libraryItems = data.libraryItems;
   rebuildMap();
     syncLogs = data.syncLogs || syncLogs;
@@ -4281,7 +4312,7 @@ async function synchroniseToKarakeep(mediaId: string, episodeProgress: number, a
   try {
     SystemLogger.info('Synchronisation', `Pushing episode update to Karakeep for Media ID: ${mediaId}`);
 
-    const karakeepRes = await fetch(createSafeUrl(`${apiUrl}/api/v1/sync`, new URL(apiUrl).hostname), {
+    const karakeepRes = await fetch(createSafeUrl(`${apiUrl}/api/v1/sync`), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
