@@ -72,6 +72,59 @@ describe('db.ts encryption', () => {
     expect(key).toEqual(predefinedKey);
   });
 
+
+  it('should throw if initial readFileSync fails with error other than ENOENT', () => {
+    vi.mocked(fs.readFileSync).mockImplementation((p) => {
+      const err: any = new Error('EACCES: permission denied');
+      err.code = 'EACCES';
+      throw err;
+    });
+
+    expect(() => getOrCreateEncryptionKey()).toThrowError('EACCES: permission denied');
+  });
+
+  it('should handle race condition where writeFileSync fails with EEXIST', () => {
+    const predefinedKey = crypto.randomBytes(32);
+
+    vi.mocked(fs.readFileSync).mockImplementationOnce((p) => {
+      const err: any = new Error('ENOENT: no such file or directory');
+      err.code = 'ENOENT';
+      throw err;
+    }).mockImplementationOnce((p) => {
+      if (p.toString().endsWith('.db_key')) {
+        return predefinedKey;
+      }
+      throw new Error('Not mocked');
+    });
+
+    vi.mocked(fs.writeFileSync).mockImplementation(() => {
+      const err: any = new Error('EEXIST: file already exists');
+      err.code = 'EEXIST';
+      throw err;
+    });
+
+    const key = getOrCreateEncryptionKey();
+
+    expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalled();
+    expect(key).toEqual(predefinedKey);
+  });
+
+  it('should throw if writeFileSync fails with error other than EEXIST', () => {
+    vi.mocked(fs.readFileSync).mockImplementation((p) => {
+      const err: any = new Error('ENOENT: no such file or directory');
+      err.code = 'ENOENT';
+      throw err;
+    });
+
+    vi.mocked(fs.writeFileSync).mockImplementation(() => {
+      const err: any = new Error('ENOSPC: no space left on device');
+      err.code = 'ENOSPC';
+      throw err;
+    });
+
+    expect(() => getOrCreateEncryptionKey()).toThrowError('ENOSPC: no space left on device');
+  });
+
   it('should encrypt and decrypt data correctly', () => {
     // Setup predefined key for consistency
     const predefinedKey = crypto.randomBytes(32);
@@ -210,4 +263,50 @@ describe('db.ts encryption', () => {
       authTag: authTag
     }))).toThrow();
   });
+  it('should fail to decrypt if payload is invalid JSON', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    expect(() => decryptData('invalid-json')).toThrow();
+  });
+
+  it('should fail to decrypt if payload is missing iv', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const originalData = { hello: 'world' };
+    const encryptedStr = encryptData(originalData);
+
+    const parsedEncrypted = JSON.parse(encryptedStr);
+    delete parsedEncrypted.iv;
+
+    expect(() => decryptData(JSON.stringify(parsedEncrypted))).toThrow();
+  });
+
+  it('should fail to decrypt if payload is missing authTag', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const originalData = { hello: 'world' };
+    const encryptedStr = encryptData(originalData);
+
+    const parsedEncrypted = JSON.parse(encryptedStr);
+    delete parsedEncrypted.authTag;
+
+    expect(() => decryptData(JSON.stringify(parsedEncrypted))).toThrow();
+  });
+
+  it('should fail to decrypt if payload is missing encryptedData', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const originalData = { hello: 'world' };
+    const encryptedStr = encryptData(originalData);
+
+    const parsedEncrypted = JSON.parse(encryptedStr);
+    delete parsedEncrypted.encryptedData;
+
+    expect(() => decryptData(JSON.stringify(parsedEncrypted))).toThrow();
+  });
+
 });
