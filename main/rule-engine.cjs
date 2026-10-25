@@ -70,7 +70,7 @@ class ScrobbleRuleEngine {
         malId: malId,
         releaseGroup: parsed.release_group || null
       };
-    } catch (e) {
+    } catch {
       // Fallback
     }
 
