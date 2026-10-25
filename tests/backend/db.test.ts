@@ -162,4 +162,51 @@ describe('db.ts encryption', () => {
     // Decryption should throw
     expect(() => decryptData(corruptedEncryptedStr)).toThrow();
   });
+
+  it('should fail to decrypt if payload is invalid JSON', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    expect(() => decryptData('invalid-json')).toThrow();
+  });
+
+  it('should fail to decrypt if payload is missing iv', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const originalData = { hello: 'world' };
+    const encryptedStr = encryptData(originalData);
+
+    const parsedEncrypted = JSON.parse(encryptedStr);
+    delete parsedEncrypted.iv;
+
+    expect(() => decryptData(JSON.stringify(parsedEncrypted))).toThrow();
+  });
+
+  it('should fail to decrypt if payload is missing authTag', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const originalData = { hello: 'world' };
+    const encryptedStr = encryptData(originalData);
+
+    const parsedEncrypted = JSON.parse(encryptedStr);
+    delete parsedEncrypted.authTag;
+
+    expect(() => decryptData(JSON.stringify(parsedEncrypted))).toThrow();
+  });
+
+  it('should fail to decrypt if payload is missing encryptedData', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const originalData = { hello: 'world' };
+    const encryptedStr = encryptData(originalData);
+
+    const parsedEncrypted = JSON.parse(encryptedStr);
+    delete parsedEncrypted.encryptedData;
+
+    expect(() => decryptData(JSON.stringify(parsedEncrypted))).toThrow();
+  });
+
 });
