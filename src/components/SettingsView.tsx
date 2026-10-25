@@ -1,8 +1,11 @@
 import { apiFetch as fetch } from '../apiFetch';
 import React, { useState } from 'react';
 import { PreImportModal } from './PreImportModal';
+import { SecureCredentialManager } from './SecureCredentialManager';
 import { BackupSettingsView } from './BackupSettingsView';
 import { OAuthConnectButton } from './OAuthConnectButton';
+import { OAuthScopeSelector } from './OAuthScopeSelector';
+import { LocalPlayerScrobblerModal } from './LocalPlayerScrobblerModal';
 import { AppSettings, PlatformType } from '../types';
 import { OAuthService } from '../services/OAuthService';
 import { SimklLogo, MalLogo, AniListLogo, PlexLogo, KarakeepLogo } from './PlatformLogos';
@@ -15,8 +18,9 @@ import {
   ShieldCheck, 
   Keyboard,
   Trash2,
-  Activity
-, Bell } from 'lucide-react';
+  Activity,
+  Server,
+  Bell } from 'lucide-react';
 
 export type QueueItemStatus = 'pending' | 'processing' | 'awaiting_mapping' | 'importing' | 'completed' | 'error';
 export interface ImportQueueItem {
@@ -50,16 +54,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [, setTestResults] = useState<Record<string, any>>({});
   const [testingWebhookId, setTestingWebhookId] = useState<string | null>(null);
   const [webhookTestResults, setWebhookTestResults] = useState<Record<string, any>>({});
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'general' | 'credentials'>('general');
+  const [isScrobblerModalOpen, setIsScrobblerModalOpen] = useState(false);
+  const isDirtyRef = React.useRef(false);
 
-  // Synchronize formState when props update
+  // Synchronize formState when props update, only if user is not actively editing
   React.useEffect(() => {
-    setFormState(settings);
+    if (!isDirtyRef.current) {
+      setFormState(settings);
+    }
   }, [settings]);
 
   // OAuth Popup Handler
   const handleConnect = async (provider: string) => {
     setConnectingProvider(provider);
-    await OAuthService.initiateLogin(provider);
+    const configuredScopes = (formState as any)[provider]?.scopes;
+    // Ensure currently selected scopes are also synchronized to backend vault beforehand
+    if (formState[provider as keyof AppSettings]) {
+      fetch(`/api/account/oauth/${provider}/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formState[provider as keyof AppSettings])
+      }).catch(() => {});
+    }
+    await OAuthService.initiateLogin(provider, configuredScopes);
   };
 
   React.useEffect(() => {
@@ -214,55 +232,110 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  const handleTestWebhook = async (server: string, serverUrl: string) => {
-    setTestingWebhookId(server);
+  const handleTestWebhook = async (provider: string, serverUrl?: string) => {
+    setTestingWebhookId(provider);
     try {
-      await new Promise(r => setTimeout(r, 1200)); 
-
-      const payloadMock = {
-        action: "WEBHOOK_VALIDATION_HANDSHAKE",
-        server: server,
-        url: serverUrl,
-        timestamp: new Date().toISOString(),
-        requestedMetadata: ["system_info", "version", "webhook_status"]
-      };
-
-      const responseMock = {
-        status: 200,
-        ok: true,
-        message: "Handshake successful",
-        data: {
-          pingLatencyMs: Math.floor(Math.random() * 80) + 15,
-          serverVerified: true,
-          webhooksRegistered: true,
-          mockPayloadAccepted: true
-        }
-      };
-
+      const config = (formState as any)[provider] || {};
+      const res = await fetch('/api/integrations/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider,
+          config: {
+            ...config,
+            serverUrl: serverUrl || config.serverUrl || config.apiUrl || config.serverUri
+          }
+        })
+      });
+      const data = await res.json();
       setWebhookTestResults(prev => ({
         ...prev,
-        [server]: { payload: payloadMock, response: responseMock, success: true }
+        [provider]: {
+          payload: data.request || { provider, timestamp: new Date().toISOString() },
+          response: data.response || data.error || (data.success ? { message: "Handshake verified", status: data.status, latencyMs: data.latencyMs } : { error: data.error || "Handshake failed" }),
+          success: !!data.success
+        }
       }));
+      if (data.success) {
+        const noOAuth = ['karakeep', 'plex', 'jellyfin', 'emby', 'tautulli'].includes(provider);
+        if (noOAuth) {
+          const currentConfig = (formState as any)[provider] || {};
+          const updatedConfig = {
+            ...currentConfig,
+            connected: true,
+            ...(serverUrl ? { serverUrl } : {})
+          };
+          const updatedFormState = {
+            ...formState,
+            [provider]: updatedConfig
+          };
+          setFormState(updatedFormState);
+          isDirtyRef.current = false;
+          try {
+            await onSaveSettings(updatedFormState);
+          } catch (err) {
+            console.warn('[SettingsView] Error auto-saving after handshake:', err);
+          }
+          // Securely store credentials in SQLite AES-256-GCM vault
+          try {
+            await fetch(`/api/account/oauth/${provider}/config`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updatedConfig)
+            });
+          } catch (vaultErr) {
+            console.warn('[SettingsView] Error storing in vault:', vaultErr);
+          }
+          if (addToast) {
+            addToast('success', 'Handshake Verified & Saved', `${provider.toUpperCase()} handshake succeeded (${data.latencyMs}ms). Configuration and credentials securely stored.`);
+          }
+        } else {
+          if (addToast) addToast('success', 'Handshake Verified', `${provider.toUpperCase()} handshake succeeded (${data.latencyMs}ms).`);
+        }
+      } else {
+        if (addToast) addToast('error', 'Handshake Failed', `${provider.toUpperCase()} handshake failed: ${data.error || 'Host unreachable'}`);
+      }
     } catch (err: any) {
       setWebhookTestResults(prev => ({
         ...prev,
-        [server]: { error: err.message, success: false }
+        [provider]: {
+          payload: { provider, error: err.message },
+          response: { error: err.message },
+          success: false
+        }
       }));
+      if (addToast) addToast('error', 'Handshake Error', `Failed to execute handshake for ${provider}: ${err.message}`);
     } finally {
       setTestingWebhookId(null);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-
     e.preventDefault();
+    isDirtyRef.current = false;
     setError(null);
     try {
       await onSaveSettings(formState);
+      // Synchronize with SQLite AES-256-GCM credential vault for configured providers
+      const providersToVault = ['simkl', 'mal', 'anilist', 'karakeep', 'plex', 'jellyfin', 'emby', 'tautulli'];
+      for (const p of providersToVault) {
+        const conf = (formState as any)[p];
+        if (conf) {
+          fetch(`/api/account/oauth/${p}/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(conf)
+          }).catch(() => {});
+        }
+      }
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 2500);
-    } catch (err) {
+      if (addToast) {
+        addToast('success', 'Preferences Saved', 'All settings and API credentials securely stored.');
+      }
+    } catch (err: any) {
       console.error("[Settings] Failed to save settings:", err);
+      setError(err?.message || "Failed to save settings.");
     }
   };
 
@@ -291,7 +364,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           {isSaved ? <CheckCircle2 className="w-4 h-4 text-emerald-300" /> : <Save className="w-4 h-4" />}
           <span>{isSaved ? 'Settings Saved!' : 'Save All Preferences'}</span>
         </button>
+            </div>
+
+      <div className="flex border-b border-gray-200 dark:border-neutral-800 mb-6 space-x-4">
+        <button
+          type="button"
+          onClick={() => setActiveSettingsTab('general')}
+          className={`py-2 px-4 font-semibold text-sm border-b-2 transition-colors ${activeSettingsTab === 'general' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+        >
+          General Settings
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSettingsTab('credentials')}
+          className={`py-2 px-4 font-semibold text-sm border-b-2 transition-colors ${activeSettingsTab === 'credentials' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+        >
+          Secure Credentials
+        </button>
       </div>
+      
+      {activeSettingsTab === 'credentials' && (
+        <div className="space-y-6">
+          <SecureCredentialManager />
+        </div>
+      )}
+
+      <div className={activeSettingsTab === 'general' ? 'space-y-6 block' : 'hidden'}>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Section 1: Simkl API Config */}
@@ -300,28 +398,147 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex items-center space-x-2">
               <SimklLogo className="w-4 h-4 text-emerald-400" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Simkl API Connection</h3>
+              <button
+                type="button"
+                onClick={() => handleTestWebhook('simkl')}
+                disabled={testingWebhookId === 'simkl'}
+                className="text-[10px] text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition ml-2"
+              >
+                {testingWebhookId === 'simkl' ? <div className="w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                Test Handshake
+              </button>
             </div>
-            {formState.simkl?.connected ? (
-              <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                Connected
-              </span>
-            ) : (
-              <span className="text-xs text-gray-500 font-semibold bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700">
-                Disconnected
-              </span>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                isDirtyRef.current = true;
+                setFormState(prev => ({
+                  ...prev,
+                  simkl: {
+                    clientId: prev.simkl?.clientId ?? '',
+                    clientSecret: prev.simkl?.clientSecret ?? '',
+                    redirectUri: prev.simkl?.redirectUri ?? '',
+                    accessToken: prev.simkl?.accessToken ?? '',
+                    username: prev.simkl?.username ?? '',
+                    connected: !(prev.simkl?.connected ?? false)
+                  }
+                }));
+              }}
+              className={`w-10 h-5 rounded-full transition-colors relative ${formState.simkl?.connected ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-gray-800'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform ${formState.simkl?.connected ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
           </div>
+
+          {webhookTestResults['simkl'] && (
+            <div className={`rounded-xl p-3 border text-xs ${webhookTestResults['simkl'].success ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/30' : 'bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30'}`}>
+              <div className="flex justify-between items-center mb-1.5 font-bold">
+                <span className="text-xs">Simkl Payload Handshake</span>
+                {webhookTestResults['simkl'].success ? (
+                  <span className="text-[10px] text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 rounded flex items-center"><CheckCircle2 className="w-3 h-3 mr-1" /> Valid</span>
+                ) : (
+                  <span className="text-[10px] text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">Failed</span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                <div>
+                  <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Request Payload</span>
+                  <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['simkl'].payload, null, 2)}</pre>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Response Output</span>
+                  <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['simkl'].response || webhookTestResults['simkl'].error, null, 2)}</pre>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">Simkl Client ID / API Key</label>
+                <input
+                  type="text"
+                  value={formState.simkl?.clientId ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, simkl: { ...prev.simkl, clientId: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">Simkl Client Secret</label>
+                <input
+                  type="password"
+                  value={formState.simkl?.clientSecret ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, simkl: { ...prev.simkl, clientSecret: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">User OAuth Access Token</label>
+                <input
+                  type="password"
+                  value={formState.simkl?.accessToken ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, simkl: { ...prev.simkl, accessToken: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">Simkl Username</label>
+                <input
+                  type="text"
+                  value={formState.simkl?.username ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, simkl: { ...prev.simkl, username: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">OAuth 2.0 Redirect URI</label>
+                <input
+                  type="text"
+                  value={formState.simkl?.redirectUri ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, simkl: { ...prev.simkl, redirectUri: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-emerald-500 font-mono text-[11px]"
+                />
+              </div>
+            </div>
             <div className="pt-2">
-              <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">Simkl Client ID</label>
-              <input
-                type="text"
-                placeholder="Enter your Simkl API Client ID"
-                value={formState.simkl?.clientId || ''}
-                onChange={(e) => setFormState({ ...formState, simkl: { ...(formState.simkl as any), clientId: e.target.value } })}
-                className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none mb-3"
+              <OAuthScopeSelector
+                provider="simkl"
+                selectedScopes={formState.simkl?.scopes}
+                onChange={(scopes) => {
+                  isDirtyRef.current = true;
+                  setFormState(prev => ({
+                    ...prev,
+                    simkl: {
+                      ...prev.simkl,
+                      scopes
+                    }
+                  }));
+                }}
               />
-              <p className="text-gray-600 dark:text-gray-400 font-medium mb-3">1-Click OAuth 2.0 Authorization</p>
+            </div>
+            <div className="pt-2">
+              <p className="text-gray-600 dark:text-gray-400 font-medium mb-2">1-Click OAuth 2.0 Authorization</p>
               <OAuthConnectButton provider="simkl" connected={!!formState.simkl?.connected} isLoading={connectingProvider === 'simkl'} onConnect={handleConnect} />
             </div>
           </div>
@@ -333,28 +550,147 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex items-center space-x-2">
               <MalLogo className="w-4 h-4 text-[#2E51A2] dark:text-blue-400" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">MyAnimeList (MAL) API Connection</h3>
+              <button
+                type="button"
+                onClick={() => handleTestWebhook('mal')}
+                disabled={testingWebhookId === 'mal'}
+                className="text-[10px] text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition ml-2"
+              >
+                {testingWebhookId === 'mal' ? <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                Test Handshake
+              </button>
             </div>
-            {formState.mal?.connected ? (
-              <span className="text-xs text-blue-400 font-semibold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                Connected
-              </span>
-            ) : (
-              <span className="text-xs text-gray-500 font-semibold bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700">
-                Disconnected
-              </span>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                isDirtyRef.current = true;
+                setFormState(prev => ({
+                  ...prev,
+                  mal: {
+                    clientId: prev.mal?.clientId ?? '',
+                    clientSecret: prev.mal?.clientSecret ?? '',
+                    redirectUri: prev.mal?.redirectUri ?? '',
+                    accessToken: prev.mal?.accessToken ?? '',
+                    username: prev.mal?.username ?? '',
+                    connected: !(prev.mal?.connected ?? false)
+                  }
+                }));
+              }}
+              className={`w-10 h-5 rounded-full transition-colors relative ${formState.mal?.connected ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-800'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform ${formState.mal?.connected ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
           </div>
+
+          {webhookTestResults['mal'] && (
+            <div className={`rounded-xl p-3 border text-xs ${webhookTestResults['mal'].success ? 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/30' : 'bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30'}`}>
+              <div className="flex justify-between items-center mb-1.5 font-bold">
+                <span className="text-xs">MAL Payload Handshake</span>
+                {webhookTestResults['mal'].success ? (
+                  <span className="text-[10px] text-blue-600 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded flex items-center"><CheckCircle2 className="w-3 h-3 mr-1" /> Valid</span>
+                ) : (
+                  <span className="text-[10px] text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">Failed</span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                <div>
+                  <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Request Payload</span>
+                  <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['mal'].payload, null, 2)}</pre>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Response Output</span>
+                  <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['mal'].response || webhookTestResults['mal'].error, null, 2)}</pre>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">MAL Client ID</label>
+                <input
+                  type="text"
+                  value={formState.mal?.clientId ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, mal: { ...prev.mal, clientId: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">MAL Client Secret</label>
+                <input
+                  type="password"
+                  value={formState.mal?.clientSecret ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, mal: { ...prev.mal, clientSecret: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">User OAuth Access Token</label>
+                <input
+                  type="password"
+                  value={formState.mal?.accessToken ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, mal: { ...prev.mal, accessToken: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">MAL Username</label>
+                <input
+                  type="text"
+                  value={formState.mal?.username ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, mal: { ...prev.mal, username: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">OAuth 2.0 Redirect URI</label>
+                <input
+                  type="text"
+                  value={formState.mal?.redirectUri ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, mal: { ...prev.mal, redirectUri: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-blue-500 font-mono text-[11px]"
+                />
+              </div>
+            </div>
             <div className="pt-2">
-              <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">MAL Client ID</label>
-              <input
-                type="text"
-                placeholder="Enter your MAL API Client ID"
-                value={formState.mal?.clientId || ''}
-                onChange={(e) => setFormState({ ...formState, mal: { ...(formState.mal as any), clientId: e.target.value } })}
-                className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none mb-3"
+              <OAuthScopeSelector
+                provider="mal"
+                selectedScopes={formState.mal?.scopes}
+                onChange={(scopes) => {
+                  isDirtyRef.current = true;
+                  setFormState(prev => ({
+                    ...prev,
+                    mal: {
+                      ...prev.mal,
+                      scopes
+                    }
+                  }));
+                }}
               />
-              <p className="text-gray-600 dark:text-gray-400 font-medium mb-3">1-Click OAuth 2.0 Authorization</p>
+            </div>
+            <div className="pt-2">
+              <p className="text-gray-600 dark:text-gray-400 font-medium mb-2">1-Click OAuth 2.0 Authorization</p>
               <OAuthConnectButton provider="mal" connected={!!formState.mal?.connected} isLoading={connectingProvider === 'mal'} onConnect={handleConnect} />
             </div>
           </div>
@@ -366,33 +702,151 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex items-center space-x-2">
               <AniListLogo className="w-4 h-4 text-[#02A9FF] dark:text-cyan-400" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">AniList API Connection</h3>
+              <button
+                type="button"
+                onClick={() => handleTestWebhook('anilist')}
+                disabled={testingWebhookId === 'anilist'}
+                className="text-[10px] text-cyan-500 hover:bg-cyan-50 dark:hover:bg-cyan-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition ml-2"
+              >
+                {testingWebhookId === 'anilist' ? <div className="w-3 h-3 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                Test Handshake
+              </button>
             </div>
-            {formState.anilist?.connected ? (
-              <span className="text-xs text-cyan-400 font-semibold bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
-                Connected
-              </span>
-            ) : (
-              <span className="text-xs text-gray-500 font-semibold bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700">
-                Disconnected
-              </span>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                isDirtyRef.current = true;
+                setFormState(prev => ({
+                  ...prev,
+                  anilist: {
+                    clientId: prev.anilist?.clientId ?? '',
+                    clientSecret: prev.anilist?.clientSecret ?? '',
+                    redirectUri: prev.anilist?.redirectUri ?? '',
+                    accessToken: prev.anilist?.accessToken ?? '',
+                    username: prev.anilist?.username ?? '',
+                    connected: !(prev.anilist?.connected ?? false)
+                  }
+                }));
+              }}
+              className={`w-10 h-5 rounded-full transition-colors relative ${formState.anilist?.connected ? 'bg-cyan-500' : 'bg-gray-200 dark:bg-gray-800'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform ${formState.anilist?.connected ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
           </div>
+
+          {webhookTestResults['anilist'] && (
+            <div className={`rounded-xl p-3 border text-xs ${webhookTestResults['anilist'].success ? 'bg-cyan-50/50 dark:bg-cyan-950/20 border-cyan-200 dark:border-cyan-900/30' : 'bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30'}`}>
+              <div className="flex justify-between items-center mb-1.5 font-bold">
+                <span className="text-xs">AniList Payload Handshake</span>
+                {webhookTestResults['anilist'].success ? (
+                  <span className="text-[10px] text-cyan-600 bg-cyan-100 dark:bg-cyan-900/30 px-2 py-0.5 rounded flex items-center"><CheckCircle2 className="w-3 h-3 mr-1" /> Valid</span>
+                ) : (
+                  <span className="text-[10px] text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">Failed</span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                <div>
+                  <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Request Payload</span>
+                  <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['anilist'].payload, null, 2)}</pre>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Response Output</span>
+                  <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['anilist'].response || webhookTestResults['anilist'].error, null, 2)}</pre>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">AniList Client ID</label>
+                <input
+                  type="text"
+                  value={formState.anilist?.clientId ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, anilist: { ...prev.anilist, clientId: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">AniList Client Secret</label>
+                <input
+                  type="password"
+                  value={formState.anilist?.clientSecret ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, anilist: { ...prev.anilist, clientSecret: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">GraphQL Access Token</label>
+                <input
+                  type="password"
+                  value={formState.anilist?.accessToken ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, anilist: { ...prev.anilist, accessToken: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">AniList Username</label>
+                <input
+                  type="text"
+                  value={formState.anilist?.username ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, anilist: { ...prev.anilist, username: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">OAuth 2.0 Redirect URI</label>
+                <input
+                  type="text"
+                  value={formState.anilist?.redirectUri ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, anilist: { ...prev.anilist, redirectUri: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
+                />
+              </div>
+            </div>
             <div className="pt-2">
-              <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">AniList Client ID</label>
-              <input
-                type="text"
-                placeholder="Enter your AniList API Client ID"
-                value={formState.anilist?.clientId || ''}
-                onChange={(e) => setFormState({ ...formState, anilist: { ...(formState.anilist as any), clientId: e.target.value } })}
-                className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none mb-3"
+              <OAuthScopeSelector
+                provider="anilist"
+                selectedScopes={formState.anilist?.scopes}
+                onChange={(scopes) => {
+                  isDirtyRef.current = true;
+                  setFormState(prev => ({
+                    ...prev,
+                    anilist: {
+                      ...prev.anilist,
+                      scopes
+                    }
+                  }));
+                }}
               />
-              <p className="text-gray-600 dark:text-gray-400 font-medium mb-3">1-Click OAuth 2.0 Authorization</p>
+            </div>
+            <div className="pt-2">
+              <p className="text-gray-600 dark:text-gray-400 font-medium mb-2">1-Click OAuth 2.0 Authorization</p>
               <OAuthConnectButton provider="anilist" connected={!!formState.anilist?.connected} isLoading={connectingProvider === 'anilist'} onConnect={handleConnect} />
             </div>
           </div>
         </div>
-
 
         {/* Section 4: KaraKeep Tracker */}
         <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
@@ -400,430 +854,752 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex items-center space-x-2">
               <KarakeepLogo className="w-4 h-4 text-pink-500" />
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">KaraKeep Integration</h3>
-              {formState.karakeep?.apiUrl && (
-                    <button type="button" onClick={() => handleTestWebhook('karakeep', formState.karakeep.apiUrl)} className="text-[10px] text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition ml-4">
-                      {testingWebhookId === 'karakeep' ? <div className="w-3 h-3 border-2 border-pink-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
-                      Test Handshake
-                    </button>
-                  )}
+              <button
+                type="button"
+                onClick={() => handleTestWebhook('karakeep')}
+                disabled={testingWebhookId === 'karakeep'}
+                className="text-[10px] text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition ml-2"
+              >
+                {testingWebhookId === 'karakeep' ? <div className="w-3 h-3 border-2 border-pink-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                Test Handshake
+              </button>
             </div>
-            <button type="button"
-              onClick={() => setFormState(prev => ({ ...prev, karakeep: { apiUrl: prev.karakeep?.apiUrl ?? '', apiKey: prev.karakeep?.apiKey ?? '', webhookUrl: prev.karakeep?.webhookUrl ?? '', connected: !(prev.karakeep?.connected ?? false) } }))}
+            <button
+              type="button"
+              onClick={() => {
+                isDirtyRef.current = true;
+                setFormState(prev => ({
+                  ...prev,
+                  karakeep: {
+                    apiUrl: prev.karakeep?.apiUrl ?? '',
+                    apiKey: prev.karakeep?.apiKey ?? '',
+                    username: prev.karakeep?.username ?? '',
+                    webhookUrl: prev.karakeep?.webhookUrl ?? '',
+                    connected: !(prev.karakeep?.connected ?? false)
+                  }
+                }));
+              }}
               className={`w-10 h-5 rounded-full transition-colors relative ${formState.karakeep?.connected ? 'bg-pink-500' : 'bg-gray-200 dark:bg-gray-800'}`}
             >
               <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform ${formState.karakeep?.connected ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </button>
           </div>
-          
-          {formState.karakeep?.connected && (
-            <div className="space-y-4 mt-2 text-xs">
-              {webhookTestResults['karakeep'] && (
-                <div className="bg-pink-50/50 dark:bg-pink-900/10 rounded-lg p-3 border border-pink-100 dark:border-pink-900/30 animate-in fade-in">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-semibold text-pink-700 dark:text-pink-300">KaraKeep Validator</span>
-                    {webhookTestResults['karakeep'].success ? (
-                       <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
-                    ) : (
-                       <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-[10px]">
-                    <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Request</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['karakeep'].payload, null, 2)}</pre></div>
-                    <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['karakeep'].response || webhookTestResults['karakeep'].error, null, 2)}</pre></div>
-                  </div>
+
+          {webhookTestResults['karakeep'] && (
+            <div className={`rounded-xl p-3 border text-xs ${webhookTestResults['karakeep'].success ? 'bg-pink-50/50 dark:bg-pink-950/20 border-pink-200 dark:border-pink-900/30' : 'bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30'}`}>
+              <div className="flex justify-between items-center mb-1.5 font-bold">
+                <span className="text-xs">KaraKeep Payload Handshake</span>
+                {webhookTestResults['karakeep'].success ? (
+                  <span className="text-[10px] text-pink-600 bg-pink-100 dark:bg-pink-900/30 px-2 py-0.5 rounded flex items-center"><CheckCircle2 className="w-3 h-3 mr-1" /> Valid</span>
+                ) : (
+                  <span className="text-[10px] text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">Failed</span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                <div>
+                  <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Request Payload</span>
+                  <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['karakeep'].payload, null, 2)}</pre>
                 </div>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div>
-                <label className="text-gray-600 dark:text-gray-400 font-medium">KaraKeep API URL</label>
-                <input
-                  type="text"
-                  value={formState.karakeep.apiUrl || ''}
-                  onChange={(e) => setFormState({
-                    ...formState,
-                    karakeep: { ...formState.karakeep, apiUrl: e.target.value }
-                  })}
-                  className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-pink-500"
-                  placeholder="https://api.karakeep.com"
-                />
-              </div>
-              <div>
-                <label className="text-gray-600 dark:text-gray-400 font-medium">API Key</label>
-                <input
-                  type="password"
-                  value={formState.karakeep.apiKey || ''}
-                  onChange={(e) => setFormState({
-                    ...formState,
-                    karakeep: { ...formState.karakeep, apiKey: e.target.value }
-                  })}
-                  className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-pink-500"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-gray-600 dark:text-gray-400 font-medium flex items-center space-x-1">
-                  <span>Generated Webhook URL (For ASynX Inbound)</span>
-                  <span className="bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400 px-1.5 py-0.5 rounded text-[10px] font-bold">READY</span>
-                </label>
-                <input
-                  type="text"
-                  readOnly
-                  value={(() => {
-                    let base = typeof window !== 'undefined' ? window.location.origin : `http://localhost:${import.meta.env.VITE_PORT || 3000}`;
-                    if (base === 'file://' || base.startsWith('chrome-extension://')) base = `http://localhost:${import.meta.env.VITE_PORT || 3000}`;
-                    if (formState.karakeep.webhookUrl && !formState.karakeep.webhookUrl.includes(`localhost:${import.meta.env.VITE_PORT || 3000}`)) return formState.karakeep.webhookUrl;
-                    return `${base}/api/webhooks/karakeep?authKey=${formState.karakeep.apiKey || ''}`;
-                  })()}
-                  className="w-full mt-1 bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-500 dark:text-gray-400 cursor-not-allowed font-mono text-[10px]"
-                />
-                <p className="text-[10px] text-gray-400 mt-1">Provide this URL in your KaraKeep settings so ASynX can receive watch updates.</p></div>
+                <div>
+                  <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Response Output</span>
+                  <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['karakeep'].response || webhookTestResults['karakeep'].error, null, 2)}</pre>
+                </div>
               </div>
             </div>
           )}
+
+          <div className="space-y-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">KaraKeep API Base URL</label>
+                <input
+                  type="text"
+                  value={formState.karakeep?.apiUrl ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, karakeep: { ...prev.karakeep, apiUrl: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-pink-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">API Secret Key / Token</label>
+                <input
+                  type="password"
+                  value={formState.karakeep?.apiKey ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, karakeep: { ...prev.karakeep, apiKey: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-pink-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">KaraKeep Username</label>
+                <input
+                  type="text"
+                  value={formState.karakeep?.username ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, karakeep: { ...prev.karakeep, username: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-pink-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1">Inbound Webhook URL (For ASynX Inbound)</label>
+                <input
+                  type="text"
+                  value={formState.karakeep?.webhookUrl ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, karakeep: { ...prev.karakeep, webhookUrl: val } }));
+                  }}
+                  className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-pink-500 font-mono text-[11px]"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
       </div>
 
-      {/* Section 5: Media Servers & Scrobbler */}
-        <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
-            
-            <div className="flex items-center space-x-2">
-              <PlexLogo className="w-4 h-4 text-[#E5A00D]" />
-              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Media Servers & Scrobblers (Plex, Jellyfin, Emby)</h3>
+      {/* Section 5: Media Servers & Scrobbler (Plex, Jellyfin, Emby, Tautulli) */}
+      <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-6 shadow-sm">
+        <div className="flex items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3">
+          <div className="flex items-center space-x-2">
+            <PlexLogo className="w-4 h-4 text-[#E5A00D]" />
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Media Servers & Scrobblers (Plex, Jellyfin, Emby, Tautulli)</h3>
+          </div>
+          {(formState.plex?.connected || formState.jellyfin?.connected || formState.emby?.connected || formState.tautulli?.connected) ? (
+            <span className="text-xs text-emerald-500 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+              Integrations Active
+            </span>
+          ) : (
+            <span className="text-xs text-gray-500 font-semibold bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700">
+              Disconnected
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-6 text-xs">
+          {/* 5.1 Plex */}
+          <div className="p-4 rounded-2xl bg-gray-50/60 dark:bg-black/40 border border-gray-200/80 dark:border-neutral-800/80 space-y-3">
+            <div className="flex items-center justify-between border-b border-gray-200/60 dark:border-neutral-800/60 pb-2">
+              <div className="flex items-center space-x-2">
+                <span className="font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                  <PlexLogo className="w-3.5 h-3.5 text-[#E5A00D] mr-1.5" /> Plex Media Server
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleTestWebhook('plex', formState.plex?.serverUrl)}
+                  disabled={testingWebhookId === 'plex'}
+                  className="text-[10px] text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition"
+                >
+                  {testingWebhookId === 'plex' ? <div className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                  Test Handshake
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  isDirtyRef.current = true;
+                  setFormState(prev => ({
+                    ...prev,
+                    plex: {
+                      serverUrl: prev.plex?.serverUrl ?? '',
+                      token: prev.plex?.token ?? '',
+                      serverName: prev.plex?.serverName ?? '',
+                      clientIdentifier: prev.plex?.clientIdentifier ?? '',
+                      webhookUrl: prev.plex?.webhookUrl ?? '',
+                      autoScrobbleThreshold: prev.plex?.autoScrobbleThreshold ?? 80,
+                      watchlistRssUrl: prev.plex?.watchlistRssUrl ?? '',
+                      connected: !(prev.plex?.connected ?? false)
+                    }
+                  }));
+                }}
+                className={`w-9 h-4.5 rounded-full transition-colors relative ${formState.plex?.connected ? 'bg-amber-500' : 'bg-gray-200 dark:bg-gray-800'}`}
+              >
+                <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 transition-transform ${formState.plex?.connected ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+              </button>
             </div>
-            {(formState.plex?.connected || formState.jellyfin?.connected || formState.emby?.connected) ? (
-              <span className="text-xs text-purple-400 font-semibold bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
-                Webhooks Active
-              </span>
-            ) : (
-              <span className="text-xs text-gray-500 font-semibold bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700">
-                Disconnected
-              </span>
+
+            {webhookTestResults['plex'] && (
+              <div className={`rounded-xl p-3 border text-xs ${webhookTestResults['plex'].success ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/30' : 'bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30'}`}>
+                <div className="flex justify-between items-center mb-1.5 font-bold">
+                  <span className="text-xs">Plex Connection Validator</span>
+                  {webhookTestResults['plex'].success ? (
+                    <span className="text-[10px] text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded flex items-center"><CheckCircle2 className="w-3 h-3 mr-1" /> Valid</span>
+                  ) : (
+                    <span className="text-[10px] text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">Failed</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div>
+                    <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Payload Request</span>
+                    <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['plex'].payload, null, 2)}</pre>
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Response Output</span>
+                    <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['plex'].response || webhookTestResults['plex'].error, null, 2)}</pre>
+                  </div>
+                </div>
+              </div>
             )}
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Plex Server URL</label>
+                <input
+                  type="text"
+                  value={formState.plex?.serverUrl ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, plex: { ...prev.plex, serverUrl: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Plex Token (X-Plex-Token)</label>
+                <input
+                  type="password"
+                  value={formState.plex?.token ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, plex: { ...prev.plex, token: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Plex Username</label>
+                <input
+                  type="text"
+                  value={formState.plex?.username ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, plex: { ...prev.plex, username: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Plex Server Name</label>
+                <input
+                  type="text"
+                  value={formState.plex?.serverName ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, plex: { ...prev.plex, serverName: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Client Machine ID</label>
+                <input
+                  type="text"
+                  value={formState.plex?.clientIdentifier ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, plex: { ...prev.plex, clientIdentifier: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Auto-Scrobble Threshold (%)</label>
+                <input
+                  type="number"
+                  min="50"
+                  max="98"
+                  value={formState.plex?.autoScrobbleThreshold ?? 80}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = Number(e.target.value);
+                    setFormState(prev => ({ ...prev, plex: { ...prev.plex, autoScrobbleThreshold: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Plex Webhook Inbound URL</label>
+                <input
+                  type="text"
+                  value={formState.plex?.webhookUrl ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, plex: { ...prev.plex, webhookUrl: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-amber-500 font-mono text-[11px]"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Watchlist RSS URL (Optional)</label>
+                <input
+                  type="text"
+                  value={formState.plex?.watchlistRssUrl ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, plex: { ...prev.plex, watchlistRssUrl: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-amber-500 font-mono text-[11px]"
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-6 text-xs">
-            {/* Plex */}
-            <div className="space-y-3">
-                            <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
-                <h4 className="font-semibold text-gray-800 dark:text-gray-200">Plex</h4>
-                {formState.plex?.serverUrl && (
-                  <button type="button" onClick={() => handleTestWebhook('plex', formState.plex.serverUrl)} className="text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition">
-                    {testingWebhookId === 'plex' ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
-                    Test Handshake
-                  </button>
-                )}
-              </div>
-              {webhookTestResults['plex'] && (
-                <div className="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-lg p-3 border border-indigo-100 dark:border-indigo-900/30 animate-in fade-in">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Plex Connection Validator</span>
-                    {webhookTestResults['plex'].success ? (
-                       <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
-                    ) : (
-                       <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-[10px]">
-                    <div>
-                      <span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Payload Request</span>
-                      <pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['plex'].payload, null, 2)}</pre>
-                    </div>
-                    <div>
-                      <span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response Output</span>
-                      <pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['plex'].response || webhookTestResults['plex'].error, null, 2)}</pre>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-            {/* Tautulli */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
-                <div className="flex items-center space-x-2">
-                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">Tautulli</h4>
-                  {formState.tautulli?.webhookUrl && (
-                    <button type="button" onClick={() => handleTestWebhook('tautulli', formState.tautulli.webhookUrl)} className="text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition">
-                      {testingWebhookId === 'tautulli' ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
-                      Test Handshake
-                    </button>
-                  )}
-                </div>
-                <button type="button"
-                  onClick={() => setFormState(prev => ({ ...prev, tautulli: { secretKey: prev.tautulli?.secretKey ?? '', webhookUrl: prev.tautulli?.webhookUrl ?? '', connected: !(prev.tautulli?.connected ?? false) } }))}
-                  className={`w-8 h-4 rounded-full transition-colors relative ${formState.tautulli?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+          {/* 5.2 Jellyfin */}
+          <div className="p-4 rounded-2xl bg-gray-50/60 dark:bg-black/40 border border-gray-200/80 dark:border-neutral-800/80 space-y-3">
+            <div className="flex items-center justify-between border-b border-gray-200/60 dark:border-neutral-800/60 pb-2">
+              <div className="flex items-center space-x-2">
+                <span className="font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                  <Server className="w-3.5 h-3.5 text-indigo-500 mr-1.5" /> Jellyfin Media Server
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleTestWebhook('jellyfin', formState.jellyfin?.serverUrl)}
+                  disabled={testingWebhookId === 'jellyfin'}
+                  className="text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition"
                 >
-                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.tautulli?.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                  {testingWebhookId === 'jellyfin' ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                  Test Handshake
                 </button>
               </div>
-                
-              {formState.tautulli?.connected && (
-                <div className="space-y-3">
-                  {webhookTestResults['tautulli'] && (
-                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-lg p-3 border border-indigo-100 dark:border-indigo-900/30 animate-in fade-in">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Tautulli Validator</span>
-                        {webhookTestResults['tautulli'].success ? (
-                           <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
-                        ) : (
-                           <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-[10px]">
-                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Request</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['tautulli'].payload, null, 2)}</pre></div>
-                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['tautulli'].response || webhookTestResults['tautulli'].error, null, 2)}</pre></div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-gray-600 dark:text-gray-400 font-medium">Tautulli Secret/API Key</label>
-                      <input
-                        type="password"
-                        value={formState.tautulli?.secretKey || ''}
-                        onChange={(e) => setFormState(prev => ({
-                          ...prev,
-                          tautulli: { ...prev.tautulli, webhookUrl: prev.tautulli?.webhookUrl ?? '', connected: true, secretKey: e.target.value }
-                        }))}
-                        className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-gray-600 dark:text-gray-400 font-medium">Tautulli Webhook Inbound URL</label>
-                      <input
-                        type="text"
-                        value={formState.tautulli?.webhookUrl || ''}
-                        onChange={(e) => setFormState(prev => ({
-                          ...prev,
-                          tautulli: { ...prev.tautulli, secretKey: prev.tautulli?.secretKey ?? '', connected: true, webhookUrl: e.target.value }
-                        }))}
-                        className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  isDirtyRef.current = true;
+                  setFormState(prev => ({
+                    ...prev,
+                    jellyfin: {
+                      serverUrl: prev.jellyfin?.serverUrl ?? '',
+                      apiKey: prev.jellyfin?.apiKey ?? '',
+                      serverName: prev.jellyfin?.serverName ?? '',
+                      userId: prev.jellyfin?.userId ?? '',
+                      webhookUrl: prev.jellyfin?.webhookUrl ?? '',
+                      autoScrobbleThreshold: prev.jellyfin?.autoScrobbleThreshold ?? 80,
+                      watchlistRssUrl: prev.jellyfin?.watchlistRssUrl ?? '',
+                      connected: !(prev.jellyfin?.connected ?? false)
+                    }
+                  }));
+                }}
+                className={`w-9 h-4.5 rounded-full transition-colors relative ${formState.jellyfin?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+              >
+                <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 transition-transform ${formState.jellyfin?.connected ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+              </button>
             </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-gray-600 dark:text-gray-400 font-medium">Server URL</label>
-                  <input
-                    type="text"
-                    value={formState.plex.serverUrl || ''}
-                    onChange={(e) => setFormState({
-                      ...formState,
-                      plex: { ...formState.plex, serverUrl: e.target.value }
-                    })}
-                    className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                    placeholder="http://192.168.1.100:32400"
-                  />
+            {webhookTestResults['jellyfin'] && (
+              <div className={`rounded-xl p-3 border text-xs ${webhookTestResults['jellyfin'].success ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/30' : 'bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30'}`}>
+                <div className="flex justify-between items-center mb-1.5 font-bold">
+                  <span className="text-xs">Jellyfin Validator</span>
+                  {webhookTestResults['jellyfin'].success ? (
+                    <span className="text-[10px] text-indigo-600 bg-indigo-100 dark:bg-indigo-900/30 px-2 py-0.5 rounded flex items-center"><CheckCircle2 className="w-3 h-3 mr-1" /> Valid</span>
+                  ) : (
+                    <span className="text-[10px] text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">Failed</span>
+                  )}
                 </div>
-                <div>
-                  <label className="text-gray-600 dark:text-gray-400 font-medium">Plex Token</label>
-                  <input
-                    type="password"
-                    value={formState.plex.token || ''}
-                    onChange={(e) => setFormState({
-                      ...formState,
-                      plex: { ...formState.plex, token: e.target.value }
-                    })}
-                    className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                    placeholder="Plex API Token"
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-600 dark:text-gray-400 font-medium">Plex Server Name</label>
-                  <input
-                    type="text"
-                    value={formState.plex.serverName}
-                    onChange={(e) => setFormState({
-                      ...formState,
-                      plex: { ...formState.plex, serverName: e.target.value }
-                    })}
-                    className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-gray-600 dark:text-gray-400 font-medium">Scrobble Threshold (%)</label>
-                  <input
-                    type="number"
-                    min="50"
-                    max="98"
-                    value={formState.plex.autoScrobbleThreshold}
-                    onChange={(e) => setFormState({
-                      ...formState,
-                      plex: { ...formState.plex, autoScrobbleThreshold: Number(e.target.value) }
-                    })}
-                    className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                  />
+                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div>
+                    <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Payload Request</span>
+                    <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['jellyfin'].payload, null, 2)}</pre>
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Response Output</span>
+                    <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['jellyfin'].response || webhookTestResults['jellyfin'].error, null, 2)}</pre>
+                  </div>
                 </div>
               </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Server URL</label>
+                <input
+                  type="text"
+                  value={formState.jellyfin?.serverUrl ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, jellyfin: { ...prev.jellyfin, serverUrl: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">API Key (X-Emby-Token)</label>
+                <input
+                  type="password"
+                  value={formState.jellyfin?.apiKey ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, jellyfin: { ...prev.jellyfin, apiKey: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Server Name</label>
+                <input
+                  type="text"
+                  value={formState.jellyfin?.serverName ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, jellyfin: { ...prev.jellyfin, serverName: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Jellyfin Username</label>
+                <input
+                  type="text"
+                  value={formState.jellyfin?.username ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, jellyfin: { ...prev.jellyfin, username: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Jellyfin User ID</label>
+                <input
+                  type="text"
+                  value={formState.jellyfin?.userId ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, jellyfin: { ...prev.jellyfin, userId: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Auto-Scrobble Threshold (%)</label>
+                <input
+                  type="number"
+                  min="50"
+                  max="98"
+                  value={formState.jellyfin?.autoScrobbleThreshold ?? 80}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = Number(e.target.value);
+                    setFormState(prev => ({ ...prev, jellyfin: { ...prev.autoScrobbleThreshold, autoScrobbleThreshold: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Jellyfin Webhook Inbound URL</label>
+                <input
+                  type="text"
+                  value={formState.jellyfin?.webhookUrl ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, jellyfin: { ...prev.jellyfin, webhookUrl: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 font-mono text-[11px]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 5.3 Emby */}
+          <div className="p-4 rounded-2xl bg-gray-50/60 dark:bg-black/40 border border-gray-200/80 dark:border-neutral-800/80 space-y-3">
+            <div className="flex items-center justify-between border-b border-gray-200/60 dark:border-neutral-800/60 pb-2">
+              <div className="flex items-center space-x-2">
+                <span className="font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                  <Server className="w-3.5 h-3.5 text-emerald-500 mr-1.5" /> Emby Media Server
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleTestWebhook('emby', formState.emby?.serverUrl)}
+                  disabled={testingWebhookId === 'emby'}
+                  className="text-[10px] text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition"
+                >
+                  {testingWebhookId === 'emby' ? <div className="w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                  Test Handshake
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  isDirtyRef.current = true;
+                  setFormState(prev => ({
+                    ...prev,
+                    emby: {
+                      serverUrl: prev.emby?.serverUrl ?? '',
+                      apiKey: prev.emby?.apiKey ?? '',
+                      serverName: prev.emby?.serverName ?? '',
+                      userId: prev.emby?.userId ?? '',
+                      webhookUrl: prev.emby?.webhookUrl ?? '',
+                      autoScrobbleThreshold: prev.emby?.autoScrobbleThreshold ?? 80,
+                      watchlistRssUrl: prev.emby?.watchlistRssUrl ?? '',
+                      connected: !(prev.emby?.connected ?? false)
+                    }
+                  }));
+                }}
+                className={`w-9 h-4.5 rounded-full transition-colors relative ${formState.emby?.connected ? 'bg-emerald-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+              >
+                <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 transition-transform ${formState.emby?.connected ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+              </button>
             </div>
 
-            {/* Jellyfin */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
-                <div className="flex items-center space-x-2">
-                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">Jellyfin</h4>
-                  {formState.jellyfin?.serverUrl && (
-                    <button type="button" onClick={() => handleTestWebhook('jellyfin', formState.jellyfin.serverUrl)} className="text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition">
-                      {testingWebhookId === 'jellyfin' ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
-                      Test Handshake
-                    </button>
+            {webhookTestResults['emby'] && (
+              <div className={`rounded-xl p-3 border text-xs ${webhookTestResults['emby'].success ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/30' : 'bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30'}`}>
+                <div className="flex justify-between items-center mb-1.5 font-bold">
+                  <span className="text-xs">Emby Validator</span>
+                  {webhookTestResults['emby'].success ? (
+                    <span className="text-[10px] text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 rounded flex items-center"><CheckCircle2 className="w-3 h-3 mr-1" /> Valid</span>
+                  ) : (
+                    <span className="text-[10px] text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">Failed</span>
                   )}
                 </div>
-                <button type="button"
-                  onClick={() => setFormState(prev => ({ ...prev, jellyfin: { serverUrl: prev.jellyfin?.serverUrl ?? '', apiKey: prev.jellyfin?.apiKey ?? '', serverName: prev.jellyfin?.serverName ?? '', webhookUrl: prev.jellyfin?.webhookUrl ?? '', autoScrobbleThreshold: prev.jellyfin?.autoScrobbleThreshold ?? 85, connected: !(prev.jellyfin?.connected ?? false) } }))}
-                  className={`w-8 h-4 rounded-full transition-colors relative ${formState.jellyfin?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div>
+                    <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Payload Request</span>
+                    <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['emby'].payload, null, 2)}</pre>
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Response Output</span>
+                    <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['emby'].response || webhookTestResults['emby'].error, null, 2)}</pre>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Server URL</label>
+                <input
+                  type="text"
+                  value={formState.emby?.serverUrl ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, emby: { ...prev.emby, serverUrl: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">API Key (X-Emby-Token)</label>
+                <input
+                  type="password"
+                  value={formState.emby?.apiKey ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, emby: { ...prev.emby, apiKey: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Server Name</label>
+                <input
+                  type="text"
+                  value={formState.emby?.serverName ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, emby: { ...prev.emby, serverName: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Emby Username</label>
+                <input
+                  type="text"
+                  value={formState.emby?.username ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, emby: { ...prev.emby, username: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Emby User ID</label>
+                <input
+                  type="text"
+                  value={formState.emby?.userId ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, emby: { ...prev.emby, userId: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Auto-Scrobble Threshold (%)</label>
+                <input
+                  type="number"
+                  min="50"
+                  max="98"
+                  value={formState.emby?.autoScrobbleThreshold ?? 80}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = Number(e.target.value);
+                    setFormState(prev => ({ ...prev, emby: { ...prev.emby, autoScrobbleThreshold: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Emby Webhook Inbound URL</label>
+                <input
+                  type="text"
+                  value={formState.emby?.webhookUrl ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, emby: { ...prev.emby, webhookUrl: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-emerald-500 font-mono text-[11px]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 5.4 Tautulli */}
+          <div className="p-4 rounded-2xl bg-gray-50/60 dark:bg-black/40 border border-gray-200/80 dark:border-neutral-800/80 space-y-3">
+            <div className="flex items-center justify-between border-b border-gray-200/60 dark:border-neutral-800/60 pb-2">
+              <div className="flex items-center space-x-2">
+                <span className="font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                  <Activity className="w-3.5 h-3.5 text-cyan-500 mr-1.5" /> Tautulli Monitoring & Webhook
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleTestWebhook('tautulli', formState.tautulli?.serverUrl)}
+                  disabled={testingWebhookId === 'tautulli'}
+                  className="text-[10px] text-cyan-500 hover:bg-cyan-50 dark:hover:bg-cyan-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition"
                 >
-                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.jellyfin?.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                  {testingWebhookId === 'tautulli' ? <div className="w-3 h-3 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                  Test Handshake
                 </button>
               </div>
-              
-              {formState.jellyfin?.connected && (
-                <div className="space-y-3">
-                  {webhookTestResults['jellyfin'] && (
-                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-lg p-3 border border-indigo-100 dark:border-indigo-900/30 animate-in fade-in">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Jellyfin Validator</span>
-                        {webhookTestResults['jellyfin'].success ? (
-                           <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
-                        ) : (
-                           <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-[10px]">
-                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Request</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['jellyfin'].payload, null, 2)}</pre></div>
-                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['jellyfin'].response || webhookTestResults['jellyfin'].error, null, 2)}</pre></div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-gray-600 dark:text-gray-400 font-medium">Jellyfin Server Name</label>
-                    <input
-                      type="text"
-                      value={formState.jellyfin.serverName}
-                      onChange={(e) => setFormState({
-                        ...formState,
-                        jellyfin: { ...formState.jellyfin, serverName: e.target.value }
-                      })}
-                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-gray-600 dark:text-gray-400 font-medium">Server URL</label>
-                    <input
-                      type="text"
-                      value={formState.jellyfin.serverUrl}
-                      onChange={(e) => setFormState({
-                        ...formState,
-                        jellyfin: { ...formState.jellyfin, serverUrl: e.target.value }
-                      })}
-                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="text-gray-600 dark:text-gray-400 font-medium">API Key</label>
-                    <input
-                      type="password"
-                      value={formState.jellyfin.apiKey}
-                      onChange={(e) => setFormState({
-                        ...formState,
-                        jellyfin: { ...formState.jellyfin, apiKey: e.target.value }
-                      })}
-                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                      placeholder="Jellyfin API Token"
-                    />
-                  </div></div>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  isDirtyRef.current = true;
+                  setFormState(prev => ({
+                    ...prev,
+                    tautulli: {
+                      serverUrl: prev.tautulli?.serverUrl ?? '',
+                      secretKey: prev.tautulli?.secretKey ?? '',
+                      webhookUrl: prev.tautulli?.webhookUrl ?? '',
+                      connected: !(prev.tautulli?.connected ?? false)
+                    }
+                  }));
+                }}
+                className={`w-9 h-4.5 rounded-full transition-colors relative ${formState.tautulli?.connected ? 'bg-cyan-600' : 'bg-gray-200 dark:bg-gray-800'}`}
+              >
+                <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 transition-transform ${formState.tautulli?.connected ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+              </button>
             </div>
-            {/* Emby */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-1">
-                <div className="flex items-center space-x-2">
-                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">Emby</h4>
-                  {formState.emby?.serverUrl && (
-                    <button type="button" onClick={() => handleTestWebhook('emby', formState.emby.serverUrl)} className="text-[10px] text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded font-bold uppercase tracking-wider flex items-center transition">
-                      {testingWebhookId === 'emby' ? <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
-                      Test Handshake
-                    </button>
+
+            {webhookTestResults['tautulli'] && (
+              <div className={`rounded-xl p-3 border text-xs ${webhookTestResults['tautulli'].success ? 'bg-cyan-50/50 dark:bg-cyan-950/20 border-cyan-200 dark:border-cyan-900/30' : 'bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30'}`}>
+                <div className="flex justify-between items-center mb-1.5 font-bold">
+                  <span className="text-xs">Tautulli Validator</span>
+                  {webhookTestResults['tautulli'].success ? (
+                    <span className="text-[10px] text-cyan-600 bg-cyan-100 dark:bg-cyan-900/30 px-2 py-0.5 rounded flex items-center"><CheckCircle2 className="w-3 h-3 mr-1" /> Valid</span>
+                  ) : (
+                    <span className="text-[10px] text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">Failed</span>
                   )}
                 </div>
-                <button type="button"
-                  onClick={() => setFormState(prev => ({ ...prev, emby: { serverUrl: prev.emby?.serverUrl ?? '', apiKey: prev.emby?.apiKey ?? '', serverName: prev.emby?.serverName ?? '', webhookUrl: prev.emby?.webhookUrl ?? '', autoScrobbleThreshold: prev.emby?.autoScrobbleThreshold ?? 85, connected: !(prev.emby?.connected ?? false) } }))}
-                  className={`w-8 h-4 rounded-full transition-colors relative ${formState.emby?.connected ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-800'}`}
-                >
-                  <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${formState.emby?.connected ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                </button>
+                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div>
+                    <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Payload Request</span>
+                    <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['tautulli'].payload, null, 2)}</pre>
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase text-gray-500 font-bold block mb-1">Response Output</span>
+                    <pre className="bg-white dark:bg-black p-2 rounded border border-gray-200 dark:border-neutral-800 overflow-x-auto text-gray-700 dark:text-gray-300 custom-scrollbar">{JSON.stringify(webhookTestResults['tautulli'].response || webhookTestResults['tautulli'].error, null, 2)}</pre>
+                  </div>
+                </div>
               </div>
-              
-              {formState.emby?.connected && (
-                <div className="space-y-3">
-                  {webhookTestResults['emby'] && (
-                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 rounded-lg p-3 border border-indigo-100 dark:border-indigo-900/30 animate-in fade-in">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Emby Validator</span>
-                        {webhookTestResults['emby'].success ? (
-                           <span className="text-[10px] text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded font-bold uppercase flex items-center"><CheckCircle2 className="w-3 h-3 mr-1"/> Valid</span>
-                        ) : (
-                           <span className="text-[10px] text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded font-bold uppercase">Failed</span>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-[10px]">
-                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Request</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['emby'].payload, null, 2)}</pre></div>
-                        <div><span className="text-[9px] uppercase text-gray-500 font-bold mb-1 block">Response</span><pre className="bg-white dark:bg-black p-2 rounded border border-gray-100 dark:border-neutral-800 overflow-x-auto text-gray-600 dark:text-gray-400 custom-scrollbar">{JSON.stringify(webhookTestResults['emby'].response || webhookTestResults['emby'].error, null, 2)}</pre></div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-gray-600 dark:text-gray-400 font-medium">Emby Server Name</label>
-                    <input
-                      type="text"
-                      value={formState.emby.serverName}
-                      onChange={(e) => setFormState({
-                        ...formState,
-                        emby: { ...formState.emby, serverName: e.target.value }
-                      })}
-                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-gray-600 dark:text-gray-400 font-medium">Server URL</label>
-                    <input
-                      type="text"
-                      value={formState.emby.serverUrl}
-                      onChange={(e) => setFormState({
-                        ...formState,
-                        emby: { ...formState.emby, serverUrl: e.target.value }
-                      })}
-                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="text-gray-600 dark:text-gray-400 font-medium">API Key</label>
-                    <input
-                      type="password"
-                      value={formState.emby.apiKey}
-                      onChange={(e) => setFormState({
-                        ...formState,
-                        emby: { ...formState.emby, apiKey: e.target.value }
-                      })}
-                      className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                      placeholder="Emby API Token"
-                    />
-                  </div>
-                </div>
-                </div>
-              )}
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Tautulli Server URL</label>
+                <input
+                  type="text"
+                  value={formState.tautulli?.serverUrl ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, tautulli: { ...prev.tautulli, serverUrl: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Tautulli API / Secret Key</label>
+                <input
+                  type="password"
+                  value={formState.tautulli?.secretKey ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, tautulli: { ...prev.tautulli, secretKey: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Tautulli Username</label>
+                <input
+                  type="text"
+                  value={formState.tautulli?.username ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, tautulli: { ...prev.tautulli, username: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-600 dark:text-gray-400 font-medium block mb-1">Tautulli Webhook Inbound URL</label>
+                <input
+                  type="text"
+                  value={formState.tautulli?.webhookUrl ?? ''}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    const val = e.target.value;
+                    setFormState(prev => ({ ...prev, tautulli: { ...prev.tautulli, webhookUrl: val } }));
+                  }}
+                  className="w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
+                />
+              </div>
             </div>
-            
           </div>
         </div>
+      </div>
 
       
 
@@ -981,9 +1757,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       
       {/* Section 7: Background Daemon (Local Media Detection) */}
       <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-900 rounded-3xl p-6 space-y-4 shadow-sm">
-        <div className="flex items-center space-x-2 border-b border-gray-200 dark:border-neutral-900 pb-3">
-          <Tv className="w-5 h-5 text-indigo-400" />
-          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Local Media & Background Daemon</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-200 dark:border-neutral-900 pb-3 gap-3">
+          <div className="flex items-center space-x-2">
+            <Tv className="w-5 h-5 text-indigo-400" />
+            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Local Media & Background Daemon</h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsScrobblerModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 text-xs font-semibold flex items-center space-x-1.5 transition-colors"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>Configure Local Media Players & Position Tracking</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 gap-4 text-sm">
@@ -1092,7 +1878,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Ignore Paths (Comma separated)</label>
                         <input 
                           type="text"
-                          placeholder="e.g. C:\Downloads, D:\Private"
                           value={(formState.daemonSettings?.scrobbleRules?.['MPC-BE']?.ignorePaths || []).join(', ')}
                           onChange={(e) => {
                             const paths = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
@@ -1701,7 +2486,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     const titles = e.target.value.split(',').map(t => t.trim());
                     setFormState(prev => ({ ...prev, syncRules: { ...prev.syncRules, excludedTitles: titles } as any }));
                   }}
-                  placeholder="e.g. One Piece, Naruto"
                   rows={2}
                   className="w-full bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 transition-colors"
                 />
@@ -1883,7 +2667,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Discord Webhook URL</label>
                 <input
                   type="text"
-                  placeholder="https://discord.com/api/webhooks/..."
                   value={formState.pushNotifications?.discordWebhookUrl || ''}
                   onChange={(e) => setFormState({ ...formState, pushNotifications: { ...formState.pushNotifications, discordWebhookUrl: e.target.value } as any })}
                   className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 text-xs"
@@ -1894,7 +2677,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Apprise URL</label>
                 <input
                   type="text"
-                  placeholder="apprise://..."
                   value={formState.pushNotifications?.appriseUrl || ''}
                   onChange={(e) => setFormState({ ...formState, pushNotifications: { ...formState.pushNotifications, appriseUrl: e.target.value } as any })}
                   className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 text-xs"
@@ -1905,7 +2687,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Pushbullet Access Token</label>
                 <input
                   type="password"
-                  placeholder="o.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                   value={formState.pushNotifications?.pushbulletToken || ''}
                   onChange={(e) => setFormState({ ...formState, pushNotifications: { ...formState.pushNotifications, pushbulletToken: e.target.value } as any })}
                   className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 text-xs"
@@ -2090,7 +2871,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       </div>
-        </form>
+              </div>
+    </form>
       
       {importState && (
         <PreImportModal
@@ -2133,6 +2915,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           }}
         />
       )}
+
+      <LocalPlayerScrobblerModal
+        isOpen={isScrobblerModalOpen}
+        onClose={() => setIsScrobblerModalOpen(false)}
+        settings={formState}
+        onSaveSettings={(newSettings) => {
+          setFormState(newSettings);
+          onSaveSettings(newSettings);
+        }}
+      />
     </>
   );
 };

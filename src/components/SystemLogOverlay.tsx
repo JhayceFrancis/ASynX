@@ -98,7 +98,6 @@ export const SystemLogOverlay: React.FC<SystemLogOverlayProps> = ({
                   <Search className="w-3 h-3 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="Filter logs..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-48 bg-white dark:bg-[#111] border border-gray-200 dark:border-neutral-800 rounded px-2 pl-7 py-1 text-[11px] text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 transition-colors"

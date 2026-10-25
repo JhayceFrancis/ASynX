@@ -99,8 +99,7 @@ export const BookmarkModal: React.FC<Props> = ({ isOpen, onClose, onSave, initia
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full bg-black border border-zinc-800 text-gray-100 px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono placeholder:text-zinc-700"
-                placeholder="e.g. Cyberdeck Build Guide"
+                className="w-full bg-black border border-zinc-800 text-gray-100 px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono"
               />
             </div>
             
@@ -111,8 +110,7 @@ export const BookmarkModal: React.FC<Props> = ({ isOpen, onClose, onSave, initia
                 required
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="w-full bg-black border border-zinc-800 text-cyan-400 px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono placeholder:text-zinc-700"
-                placeholder="https://..."
+                className="w-full bg-black border border-zinc-800 text-cyan-400 px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono"
               />
             </div>
 
@@ -121,8 +119,7 @@ export const BookmarkModal: React.FC<Props> = ({ isOpen, onClose, onSave, initia
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-black border border-zinc-800 text-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono placeholder:text-zinc-700 min-h-[80px]"
-                placeholder="Short description..."
+                className="w-full bg-black border border-zinc-800 text-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono min-h-[80px]"
               />
             </div>
 
@@ -132,8 +129,7 @@ export const BookmarkModal: React.FC<Props> = ({ isOpen, onClose, onSave, initia
                 type="url"
                 value={image}
                 onChange={(e) => setImage(e.target.value)}
-                className="w-full bg-black border border-zinc-800 text-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono placeholder:text-zinc-700"
-                placeholder="https://..."
+                className="w-full bg-black border border-zinc-800 text-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono"
               />
             </div>
 
@@ -143,8 +139,7 @@ export const BookmarkModal: React.FC<Props> = ({ isOpen, onClose, onSave, initia
                 type="text"
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
-                className="w-full bg-black border border-zinc-800 text-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono placeholder:text-zinc-700"
-                placeholder="hardware, reference, tutorial"
+                className="w-full bg-black border border-zinc-800 text-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono"
               />
             </div>
             
@@ -223,8 +218,7 @@ export const BookmarkModal: React.FC<Props> = ({ isOpen, onClose, onSave, initia
                     type="text"
                     value={karakeepId}
                     onChange={(e) => setKarakeepId(e.target.value)}
-                    className="w-full bg-black border border-zinc-800 text-gray-300 px-3 py-2 text-xs focus:outline-none focus:border-cyan-500 transition-all font-mono placeholder:text-zinc-700"
-                    placeholder="e.g. kkp_123456"
+                    className="w-full bg-black border border-zinc-800 text-gray-300 px-3 py-2 text-xs focus:outline-none focus:border-cyan-500 transition-all font-mono"
                   />
                 </div>
               </div>

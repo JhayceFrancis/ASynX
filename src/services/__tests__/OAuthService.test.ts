@@ -51,6 +51,24 @@ describe('OAuthService', () => {
 
       expect(windowAlertSpy).not.toHaveBeenCalled();
     });
+
+    it('should calculate correct position when screenX and screenY are non-zero', () => {
+      Object.defineProperty(window, 'screenX', { value: 100, writable: true });
+      Object.defineProperty(window, 'screenY', { value: 50, writable: true });
+
+      OAuthService.initiateLogin('simkl');
+
+      const expectedWidth = 600;
+      const expectedHeight = 700;
+      const expectedLeft = 1024 / 2 - expectedWidth / 2 + 100;
+      const expectedTop = 768 / 2 - expectedHeight / 2 + 50;
+
+      expect(windowOpenSpy).toHaveBeenCalledWith(
+        '/api/auth/simkl/login',
+        'oauth_popup',
+        `width=${expectedWidth},height=${expectedHeight},left=${expectedLeft},top=${expectedTop}`
+      );
+    });
   });
 
   describe('processAuthMessage', () => {
@@ -143,6 +161,7 @@ describe('OAuthService', () => {
       expect(result).toBeNull();
     });
 
+
     it('should return null when event.data does not have a type property', () => {
       const event = new MessageEvent('message', {
         origin: 'http://localhost:3000',
@@ -152,5 +171,100 @@ describe('OAuthService', () => {
       const result = OAuthService.processAuthMessage(event, mockSettings);
       expect(result).toBeNull();
     });
+
+    it('should return null for empty origin', () => {
+      const event = new MessageEvent('message', {
+        origin: '',
+        data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl', token: 'token123' }
+      });
+
+      const result = OAuthService.processAuthMessage(event, mockSettings);
+      expect(result).toBeNull();
+    });
+
+    it('should process correctly when origin includes localhost maliciously (current behavior)', () => {
+      const event = new MessageEvent('message', {
+        origin: 'http://malicious-localhost.com',
+        data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl', token: 'token123' }
+      });
+
+      const result = OAuthService.processAuthMessage(event, mockSettings);
+      // NOTE: Because of .includes('localhost'), this currently passes validation.
+      // If the behavior is updated in the future to fix this vulnerability, this test should be updated.
+      expect(result).not.toBeNull();
+      expect(result?.simkl.accessToken).toBe('token123');
+    });
+
+    it('should return updated settings even if token is missing', () => {
+      const event = new MessageEvent('message', {
+        origin: 'http://localhost:3000',
+        data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl' } // no token
+      });
+
+      const result = OAuthService.processAuthMessage(event, mockSettings);
+      expect(result).not.toBeNull();
+      expect(result?.simkl.accessToken).toBeUndefined();
+    });
+
+    it('should ignore processAuthMessage if origin is undefined', () => {
+      // Mocking origin as undefined by doing Object.defineProperty on a MessageEvent
+      const event = new MessageEvent('message', {
+        data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl', token: 'token123' }
+      });
+      Object.defineProperty(event, 'origin', { value: undefined });
+
+      // @ts-ignore
+      const result = OAuthService.processAuthMessage(event, mockSettings);
+      expect(result).toBeNull(); // Should fail gracefully or return null
+    });
+  });
+});
+
+describe('OAuthService Edge Cases', () => {
+  const mockSettings = {
+    simkl: { connected: false, accessToken: '', clientId: 'client_123' },
+    mal: { connected: false, accessToken: '', clientId: 'client_456' },
+    anilist: { connected: false, accessToken: '', clientId: 'client_789' }
+  } as unknown as AppSettings;
+
+  it('should gracefully handle currentSettings missing the provider property', () => {
+    const incompleteSettings = {
+      simkl: { connected: false, accessToken: '', clientId: 'client_123' }
+    } as unknown as AppSettings;
+
+    const event = new MessageEvent('message', {
+      origin: 'http://localhost:5173',
+      data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'mal', token: 'mal-token' }
+    });
+
+    const result = OAuthService.processAuthMessage(event, incompleteSettings);
+
+    expect(result).not.toBeNull();
+    // It creates the mal property because it destructures and overrides
+    expect(result?.mal.accessToken).toBe('mal-token');
+    expect(result?.mal.connected).toBe(true);
+  });
+
+  it('should handle missing token in the success event', () => {
+    const event = new MessageEvent('message', {
+      origin: 'http://localhost:5173',
+      data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'anilist' } // No token provided
+    });
+
+    const result = OAuthService.processAuthMessage(event, mockSettings);
+
+    expect(result).not.toBeNull();
+    expect(result?.anilist.accessToken).toBeUndefined();
+    expect(result?.anilist.connected).toBe(true);
+  });
+
+  it('should not throw if event.origin is empty', () => {
+    const event = new MessageEvent('message', {
+      origin: '', // empty origin
+      data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl', token: 'token' }
+    });
+
+    const result = OAuthService.processAuthMessage(event, mockSettings);
+    expect(result).toBeNull();
   });
 });

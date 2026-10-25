@@ -1,6 +1,6 @@
 {
   "name": "asynx",
-  "version": "2.5.78",
+  "version": "2.5.99",
   "author": {
     "name": "JhayceFrancis"
   },
@@ -108,7 +108,7 @@
     "@types/supertest": "^7.2.1",
     "autoprefixer": "^10.6.1",
     "concurrently": "^10.0.6",
-    "electron": "^43.8.0",
+    "electron": "^43.8.1",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
     "jsdom": "^30.0.1",
@@ -116,7 +116,7 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.23.15",
     "typescript": "~7.0.2",
-    "vite": "^8.3.4",
+    "vite": "^8.3.5",
     "vitest": "^4.1.11",
     "wait-on": "^9.5.1"
   }

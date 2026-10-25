@@ -1,0 +1,615 @@
+Please implement Step 2 of the Local Media Player Scrobbler feature: create the shared `LocalPlayerScrobblerModal.tsx` GUI component (inspired by ByteTrix/Media-Player-Scrobbler-for-Simkl) and integrate trigger buttons to open it inside `ExtensionCompanionView.tsx` and `SettingsView.tsx`.
+
+### Rules & Constraints
+1. Only create `src/components/LocalPlayerScrobblerModal.tsx` and minimally update `src/components/ExtensionCompanionView.tsx` and `src/components/SettingsView.tsx` to mount and open the modal.
+2. Maintain strict TypeScript type safety so `npm run lint` (`tsc --noEmit`) passes with zero errors.
+3. Only use standard `lucide-react` icons that exist in all versions (`Monitor`, `Play`, `Settings2`, `Check`, `RefreshCw`, `Sliders`, `Shield`, `Sparkles`, `Radio`, `X`, `Save`, `AlertCircle`).
+
+### 1. Create `src/components/LocalPlayerScrobblerModal.tsx`
+Create `src/components/LocalPlayerScrobblerModal.tsx` with the following implementation:
+
+```tsx
+import React, { useState, useEffect, useCallback } from 'react';
+import { Monitor, Play, Settings2, Check, RefreshCw, Shield, Sparkles, Radio, X, Save } from 'lucide-react';
+import { AppSettings } from '../types';
+
+interface LocalPlayerStatus {
+  activePlayer: string | null;
+  playerKey?: string;
+  rawWindowTitle?: string;
+  parsedTitle?: string;
+  season?: number;
+  episode?: number;
+  positionSeconds?: number;
+  durationSeconds?: number;
+  progressPercent?: number;
+  isPlaying?: boolean;
+  trackingMode?: 'webui' | 'window_title';
+  detectionEnabled?: boolean;
+}
+
+interface LocalPlayerScrobblerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  settings?: AppSettings;
+  onSaveSettings?: (newSettings: AppSettings) => void;
+}
+
+const DEFAULT_DAEMON_SETTINGS = {
+  runOnStartup: true,
+  enableLocalMediaDetection: true,
+  autoScrobbleLocal: false,
+  pollingIntervalSeconds: 5,
+  scrobbleThresholdPercent: 80,
+  offlineQueueEnabled: true,
+  enabledPlayers: {
+    wmp: true,
+    vlc: true,
+    mpcHc: true,
+    mpcBe: true,
+    stremio: true,
+    plexDesktop: true,
+    mpv: true,
+  },
+  playerWebUi: {
+    vlcEnabled: false,
+    vlcPort: 8080,
+    vlcPassword: '',
+    mpcEnabled: false,
+    mpcPort: 13579,
+    stremioPort: 11470,
+  },
+};
+
+export const LocalPlayerScrobblerModal: React.FC<LocalPlayerScrobblerModalProps> = ({
+  isOpen,
+  onClose,
+  settings,
+  onSaveSettings,
+}) => {
+  const [activeTab, setActiveTab] = useState<'monitor' | 'players' | 'webui'>('monitor');
+  const [status, setStatus] = useState<LocalPlayerStatus>({ activePlayer: null });
+  const [isPolling, setIsPolling] = useState(false);
+  const [scrobbleMessage, setScrobbleMessage] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [fullSettings, setFullSettings] = useState<AppSettings null |>(settings || null);
+
+  const [daemonConfig, setDaemonConfig] = useState(() => ({
+    ...DEFAULT_DAEMON_SETTINGS,
+    ...(settings?.daemonSettings || {}),
+    enabledPlayers: {
+      ...DEFAULT_DAEMON_SETTINGS.enabledPlayers,
+      ...(settings?.daemonSettings?.enabledPlayers || {}),
+    },
+    playerWebUi: {
+      ...DEFAULT_DAEMON_SETTINGS.playerWebUi,
+      ...(settings?.daemonSettings?.playerWebUi || {}),
+    },
+  }));
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch('/api/settings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: AppSettings | null) => {
+        if (data) {
+          setFullSettings(data);
+          setDaemonConfig({
+            ...DEFAULT_DAEMON_SETTINGS,
+            ...(data.daemonSettings || {}),
+            enabledPlayers: {
+              ...DEFAULT_DAEMON_SETTINGS.enabledPlayers,
+              ...(data.daemonSettings?.enabledPlayers || {}),
+            },
+            playerWebUi: {
+              ...DEFAULT_DAEMON_SETTINGS.playerWebUi,
+              ...(data.daemonSettings?.playerWebUi || {}),
+            },
+          });
+        }
+      })
+      .catch(() => {});
+  }, [isOpen]);
+
+  const pollPlayerStatus = useCallback(async () => {
+    if (!daemonConfig.enableLocalMediaDetection) {
+      setStatus({ activePlayer: null, detectionEnabled: false });
+      return;
+    }
+    setIsPolling(true);
+    try {
+      const res = await fetch('/api/daemon/local-player/status');
+      if (res.ok) {
+        const data = await res.json();
+        setStatus(data);
+      }
+    } catch {
+      // Ignore transient network errors
+    } finally {
+      setIsPolling(false);
+    }
+  }, [daemonConfig.enableLocalMediaDetection]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    pollPlayerStatus();
+    const intervalMs = Math.max(2, daemonConfig.pollingIntervalSeconds || 5) * 1000;
+    const timer = setInterval(pollPlayerStatus, intervalMs);
+    return () => clearInterval(timer);
+  }, [isOpen, pollPlayerStatus, daemonConfig.pollingIntervalSeconds]);
+
+  if (!isOpen) return null;
+
+  const formatSeconds = (secs?: number) => {
+    if (!secs || secs <= 0) return '00:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; };  const handleManualScrobble = async () => { const titleToScrobble = status.parsedTitle \vert{}\vert{} status.rawWindowTitle \vert{}\vert{} 'Detected Local Media'; const epToScrobble = status.episode \vert{}\vert{} 1; const playerToScrobble = status.activePlayer \vert{}\vert{} 'Local Media Player';  try { const res = await fetch('/api/daemon/scrobble', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: titleToScrobble, episode: epToScrobble, platform: playerToScrobble, }), }); if (res.ok) { setScrobbleMessage(`Scrobbled "${titleToScrobble}" (Ep ${epToScrobble}) from${playerToScrobble}!`);
+        setTimeout(() => setScrobbleMessage(null), 4000);
+      }
+    } catch {
+      setScrobbleMessage('Failed to dispatch scrobble.');
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    try {
+      const csrfRes = await fetch('/api/csrf-token').catch(() => null);
+      const csrfData = csrfRes && csrfRes.ok ? await csrfRes.json() : {};
+      const updatedPayload = {
+        ...(fullSettings || {}),
+        daemonSettings: daemonConfig,
+      } as AppSettings;
+
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(csrfData.csrfToken ? { 'x-csrf-token': csrfData.csrfToken } : {}),
+        },
+        body: JSON.stringify(updatedPayload),
+      });
+
+      if (res.ok) {
+        if (onSaveSettings) onSaveSettings(updatedPayload);
+        setSaveMessage('Local Scrobbler settings saved!');
+        setTimeout(() => setSaveMessage(null), 3000);
+        pollPlayerStatus();
+      } else {
+        setSaveMessage('Failed to save settings.');
+      }
+    } catch {
+      setSaveMessage('Network error while saving settings.');
+    }
+  };
+
+  const playerList: { key: keyof typeof DEFAULT_DAEMON_SETTINGS.enabledPlayers; label: string; exe: string; desc: string }[] = [
+    { key: 'vlc', label: 'VLC Media Player', exe: 'vlc.exe', desc: 'Window title + Lua HTTP accurate position tracking' },
+    { key: 'mpcBe', label: 'MPC-BE', exe: 'mpc-be64.exe / mpc-be.exe', desc: 'Window title + Web UI port 13579 position tracking' },
+    { key: 'mpcHc', label: 'MPC-HC', exe: 'mpc-hc64.exe / mpc-hc.exe', desc: 'Window title + Web UI port 13579 position tracking' },
+    { key: 'wmp', label: 'Windows Media Player', exe: 'wmplayer.exe / Microsoft.Media.Player.exe', desc: 'Legacy WMP & Windows 11 Media Player detection' },
+    { key: 'stremio', label: 'Stremio (Local Desktop)', exe: 'stremio.exe / stremio-runtime.exe', desc: 'Local Stremio client & streaming server (port 11470)' },
+    { key: 'plexDesktop', label: 'Plex Desktop / HTPC', exe: 'Plex.exe / Plex HTPC.exe', desc: 'Locally installed Plex Windows player detection' },
+    { key: 'mpv', label: 'MPV Player', exe: 'mpv.exe', desc: 'Lightweight CLI/GUI anime media player detection' },
+  ];
+
+  const threshold = daemonConfig.scrobbleThresholdPercent || 80;
+  const progress = status.progressPercent ?? 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+      <div className="w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+              <Monitor className="h-5 w-5"/>
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                Local Media Player Scrobbler
+                <span className="rounded-full bg-cyan-500/15 border border-cyan-500/30 px-2.5 py-0.5 text-[11px] font-medium text-cyan-300">
+                  Windows & Plugin Sync
+                </span>
+              </h2>
+              <p className="text-xs text-zinc-400">
+                Real-time detection & scrobbling for WMP, VLC, MPC-HC, MPC-BE, Stremio, Plex & MPV
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+          >
+            <X className="h-5 w-5"/>
+          </button>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex border-b border-zinc-800 bg-zinc-900/30 px-6">
+          <button
+            onClick={() => setActiveTab('monitor')}
+            className={`flex items-center gap-2 border-b-2 py-3 px-4 text-xs font-medium transition-colors ${
+              activeTab === 'monitor'
+                ? 'border-cyan-400 text-cyan-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Radio className="h-4 w-4"/>
+            Live Monitor
+          </button>
+          <button
+            onClick={() => setActiveTab('players')}
+            className={`flex items-center gap-2 border-b-2 py-3 px-4 text-xs font-medium transition-colors ${
+              activeTab === 'players'
+                ? 'border-cyan-400 text-cyan-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Play className="h-4 w-4"/>
+            Supported Players
+          </button>
+          <button
+            onClick={() => setActiveTab('webui')}
+            className={`flex items-center gap-2 border-b-2 py-3 px-4 text-xs font-medium transition-colors ${
+              activeTab === 'webui'
+                ? 'border-cyan-400 text-cyan-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Settings2 className="h-4 w-4"/>
+            Position & Web UI Settings
+          </button>
+        </div>
+
+        {/* Body Content */}
+        <div className="p-6 max-h-[70vh] overflow-y-auto space-y-5">
+          {activeTab === 'monitor' && (
+            <div className="space-y-4">
+              {/* Active Player Status Card */}
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${ status.activePlayer ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600' }`} /> <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400"> {status.activePlayer ? `Detected: ${status.activePlayer}` : 'No Active Player Detected'}
+                    </span>
+                    {status.trackingMode && (
+                      <span className="rounded bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 text-[10px] text-violet-300">
+                        {status.trackingMode === 'webui' ? 'Accurate Web UI Position' : 'OS Window Title Mode'}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={pollPlayerStatus}
+                    className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800/80 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+                  >
+                    <RefreshCw ${isPolling ''}`} 'animate-spin : ? className="{`h-3.5" text-cyan-400' w-3.5/>
+                    Poll Now
+                  </button>
+                </div>
+
+                {status.activePlayer ? (
+                  <div className="space-y-3 pt-1">
+                    <div>
+                      <div className="text-lg font-bold text-white">
+                        {status.parsedTitle || 'Playing Local Media'}
+                      </div>
+                      <div className="text-xs text-zinc-400 flex items-center gap-3 mt-0.5">
+                        <span>Season {status.season || 1}</span>
+                        <span>•</span>
+                        <span className="text-cyan-400 font-medium">Episode {status.episode || 1}</span>
+                      </div>
+                      {status.rawWindowTitle && (
+                        <div className="mt-1.5 truncate rounded bg-zinc-950/90 px-2.5 py-1 text-[11px] font-mono text-zinc-500 border border-zinc-800/80">
+                          Window: {status.rawWindowTitle}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="space-y-1.5 pt-2">
+                      <div className="flex justify-between text-xs text-zinc-400">
+                        <span>
+                          {formatSeconds(status.positionSeconds)} / {formatSeconds(status.durationSeconds)}
+                        </span>
+                        <span className="font-mono text-cyan-400">
+                          {progress.toFixed(1)}% (Target: {threshold}%)
+                        </span>
+                      </div>
+                      <div className="relative h-2.5 w-full rounded-full bg-zinc-800 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-violet-500 transition-all duration-500"
+                          style={{ width: `${Math.min(100, Math.max(5, progress))}\%` }} /> <div className="absolute top-0 bottom-0 w-0.5 bg-amber-400" style={{ left: `${threshold}%` }}
+                          title={`Auto-Scrobble Threshold (${threshold}%)`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                      <button
+                        onClick={handleManualScrobble}
+                        className="flex items-center gap-1.5 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-cyan-400 transition-colors"
+                      >
+                        <Sparkles className="h-4 w-4"/>
+                        Scrobble Episode Now
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-6 text-center text-xs text-zinc-500">
+                    Launch VLC, MPC-BE, MPC-HC, Windows Media Player, Stremio, Plex Desktop, or MPV to automatically detect and scrobble episodes.
+                  </div>
+                )}
+              </div>
+
+              {scrobbleMessage && (
+                <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-xs text-emerald-300">
+                  <Check className="h-4 w-4 shrink-0"/>
+                  {scrobbleMessage}
+                </div>
+              )}
+
+              {/* Quick Master Switches */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/40 p-3.5 cursor-pointer">
+                  <div>
+                    <div className="text-xs font-medium text-white">Local Media Detection</div>
+                    <div className="text-[11px] text-zinc-400">Monitor running Windows media players</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={daemonConfig.enableLocalMediaDetection}
+                    onChange={(e) =>
+                      setDaemonConfig((prev) => ({ ...prev, enableLocalMediaDetection: e.target.checked }))
+                    }
+                    className="h-4 w-4 accent-cyan-400"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/40 p-3.5 cursor-pointer">
+                  <div>
+                    <div className="text-xs font-medium text-white">Auto-Scrobble on Threshold</div>
+                    <div className="text-[11px] text-zinc-400">Automatically sync at {threshold}% progress</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={daemonConfig.autoScrobbleLocal}
+                    onChange={(e) =>
+                      setDaemonConfig((prev) => ({ ...prev, autoScrobbleLocal: e.target.checked }))
+                    }
+                    className="h-4 w-4 accent-cyan-400"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'players' && (
+            <div className="space-y-2.5">
+              <p className="text-xs text-zinc-400 mb-3">
+                Select which locally installed media players ASynX should monitor and scrobble from:
+              </p>
+              {playerList.map((player) => (
+                <label
+                  key={player.key}
+                  className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 hover:border-zinc-700 cursor-pointer transition-colors"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-white">{player.label}</span>
+                      <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400">
+                        {player.exe}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-zinc-400 mt-0.5">{player.desc}</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={daemonConfig.enabledPlayers[player.key]}
+                    onChange={(e) =>
+                      setDaemonConfig((prev) => ({
+                        ...prev,
+                        enabledPlayers: {
+                          ...prev.enabledPlayers,
+                          [player.key]: e.target.checked,
+                        },
+                      }))
+                    }
+                    className="h-4 w-4 accent-cyan-400"
+                  />
+                </label>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'webui' && (
+            <div className="space-y-4">
+              {/* Scrobble Threshold & Polling Interval */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-300">
+                    Auto-Scrobble Threshold ({daemonConfig.scrobbleThresholdPercent}%)
+                  </label>
+                  <input
+                    type="range"
+                    min={50}
+                    max={100}
+                    value={daemonConfig.scrobbleThresholdPercent}
+                    onChange={(e) =>
+                      setDaemonConfig((prev) => ({
+                        ...prev,
+                        scrobbleThresholdPercent: Number(e.target.value),
+                      }))
+                    }
+                    className="mt-2 w-full accent-cyan-400"
+                  />
+                  <span className="text-[11px] text-zinc-500">
+                    Matches ByteTrix completion threshold before marking watched
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-300">
+                    Polling Frequency (Seconds)
+                  </label>
+                  <input
+                    type="number"
+                    min={2}
+                    max={60}
+                    value={daemonConfig.pollingIntervalSeconds}
+                    onChange={(e) =>
+                      setDaemonConfig((prev) => ({
+                        ...prev,
+                        pollingIntervalSeconds: Math.max(2, Number(e.target.value)),
+                      }))
+                    }
+                    className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              {/* VLC Web Interface Config */}
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-semibold text-white">VLC HTTP Interface (Accurate Position)</div>
+                    <div className="text-[11px] text-zinc-400">
+                      VLC → Tools → Preferences → Show All → Interface → Main Interfaces → check &quot;Web&quot;
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={daemonConfig.playerWebUi.vlcEnabled}
+                    onChange={(e) =>
+                      setDaemonConfig((prev) => ({
+                        ...prev,
+                        playerWebUi: { ...prev.playerWebUi, vlcEnabled: e.target.checked },
+                      }))
+                    }
+                    className="h-4 w-4 accent-cyan-400"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-zinc-400">VLC HTTP Port</label>
+                    <input
+                      type="number"
+                      value={daemonConfig.playerWebUi.vlcPort}
+                      onChange={(e) =>
+                        setDaemonConfig((prev) => ({
+                          ...prev,
+                          playerWebUi: { ...prev.playerWebUi, vlcPort: Number(e.target.value) || 8080 },
+                        }))
+                      }
+                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-zinc-400">VLC Lua HTTP Password</label>
+                    <input
+                      type="password"
+                      placeholder="VLC Web UI password"
+                      value={daemonConfig.playerWebUi.vlcPassword || ''}
+                      onChange={(e) =>
+                        setDaemonConfig((prev) => ({
+                          ...prev,
+                          playerWebUi: { ...prev.playerWebUi, vlcPassword: e.target.value },
+                        }))
+                      }
+                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* MPC-HC / MPC-BE Web Interface Config */}
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-semibold text-white">MPC-BE / MPC-HC Web Interface</div>
+                    <div className="text-[11px] text-zinc-400">
+                      Options → Player → Web Interface → check &quot;Listen on port&quot; (default 13579)
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={daemonConfig.playerWebUi.mpcEnabled}
+                    onChange={(e) =>
+                      setDaemonConfig((prev) => ({
+                        ...prev,
+                        playerWebUi: { ...prev.playerWebUi, mpcEnabled: e.target.checked },
+                      }))
+                    }
+                    className="h-4 w-4 accent-cyan-400"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-zinc-400">MPC Web UI Port</label>
+                    <input
+                      type="number"
+                      value={daemonConfig.playerWebUi.mpcPort}
+                      onChange={(e) =>
+                        setDaemonConfig((prev) => ({
+                          ...prev,
+                          playerWebUi: { ...prev.playerWebUi, mpcPort: Number(e.target.value) || 13579 },
+                        }))
+                      }
+                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-zinc-400">Stremio Local Server Port</label>
+                    <input
+                      type="number"
+                      value={daemonConfig.playerWebUi.stremioPort}
+                      onChange={(e) =>
+                        setDaemonConfig((prev) => ({
+                          ...prev,
+                          playerWebUi: { ...prev.playerWebUi, stremioPort: Number(e.target.value) || 11470 },
+                        }))
+                      }
+                      className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-zinc-800 bg-zinc-900/60 px-6 py-3.5">
+          <div className="text-xs text-emerald-400">{saveMessage || ''}</div>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-700"
+            >
+              Close
+            </button>
+            <button
+              onClick={handleSaveConfig}
+              className="flex items-center gap-1.5 rounded-lg bg-cyan-500 px-4 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-cyan-400 transition-colors"
+            >
+              <Save className="h-3.5 w-3.5"/>
+              Save Scrobbler Settings
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+### 2. Mount `LocalPlayerScrobblerModal` in `src/components/ExtensionCompanionView.tsx` and `src/components/SettingsView.tsx`
+1. In `src/components/ExtensionCompanionView.tsx`:
+   - Import `LocalPlayerScrobblerModal` from `./LocalPlayerScrobblerModal`.
+   - Add `const [isScrobblerModalOpen, setIsScrobblerModalOpen] = useState(false);`.
+   - Add a prominent button in the header/controls area labeled **"Local Player Scrobbler (VLC / MPC / Stremio / WMP)"** that sets `setIsScrobblerModalOpen(true)`.
+   - Render `<LocalPlayerScrobblerModal isOpen={isScrobblerModalOpen} onClose={() => setIsScrobblerModalOpen(false)} />` at the bottom of the component.
+2. In `src/components/SettingsView.tsx`:
+   - Import `LocalPlayerScrobblerModal` from `./LocalPlayerScrobblerModal`.
+   - Add `const [isScrobblerModalOpen, setIsScrobblerModalOpen] = useState(false);`.
+   - In the Local Media / Background Daemon settings section, add a **"Configure Local Media Players & Position Tracking"** button that opens `<LocalPlayerScrobblerModal />`.

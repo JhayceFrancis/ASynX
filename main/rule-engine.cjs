@@ -16,15 +16,39 @@ class ScrobbleRuleEngine {
       return { status: 'rejected', reason: 'No filepath provided' };
     }
 
-    // Check ignore paths
-    for (const ignorePath of this.ignorePaths) {
-      if (playerData.filepath.toLowerCase().includes(ignorePath.toLowerCase())) {
-        return { status: 'rejected', reason: `Matched ignored path (${ignorePath})` };
-      }
+    const ignoreReason = this._checkIgnorePaths(playerData.filepath);
+    if (ignoreReason) {
+      return { status: 'rejected', reason: ignoreReason };
     }
 
-    // Parse filename with anitomy
-    const rawFilename = path.basename(playerData.filepath);
+    const parsedMeta = await this._parseMetadata(playerData.filepath);
+
+    const { position, duration, state } = playerData;
+    const action = this._determineAction(position, duration, state);
+
+    return {
+      status: 'accepted',
+      payload: {
+        filepath: playerData.filepath,
+        action,
+        position,
+        duration,
+        meta: parsedMeta
+      }
+    };
+  }
+
+  _checkIgnorePaths(filepath) {
+    for (const ignorePath of this.ignorePaths) {
+      if (filepath.toLowerCase().includes(ignorePath.toLowerCase())) {
+        return `Matched ignored path (${ignorePath})`;
+      }
+    }
+    return null;
+  }
+
+  async _parseMetadata(filepath) {
+    const rawFilename = path.basename(filepath);
     let parsedMeta = {
       title: rawFilename,
       episode: null,
@@ -74,27 +98,18 @@ class ScrobbleRuleEngine {
       // Fallback
     }
 
-    const { position, duration, state } = playerData;
-    let action = 'playing';
+    return parsedMeta;
+  }
 
+  _determineAction(position, duration, state) {
     if (duration > 0 && position / duration >= this.completionThreshold) {
-      action = 'completed';
+      return 'completed';
     } else if (state === 'paused') {
-      action = 'paused';
+      return 'paused';
     } else if (state === 'stopped') {
-      action = 'stopped';
+      return 'stopped';
     }
-
-    return {
-      status: 'accepted',
-      payload: {
-        filepath: playerData.filepath,
-        action,
-        position,
-        duration,
-        meta: parsedMeta
-      }
-    };
+    return 'playing';
   }
 }
 

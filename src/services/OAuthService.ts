@@ -3,16 +3,17 @@ import { AppSettings } from '../types';
 export class OAuthService {
   /**
    * Initiates the OAuth flow for the given provider by opening a popup window
-   * pointing to the backend login route.
+   * pointing to the backend login route with optional granular scopes.
    */
-  static initiateLogin(provider: string): void {
+  static initiateLogin(provider: string, scopes?: string[]): void {
     const width = 600;
     const height = 700;
     const left = window.innerWidth / 2 - width / 2 + window.screenX;
     const top = window.innerHeight / 2 - height / 2 + window.screenY;
 
+    const queryParams = scopes && scopes.length > 0 ? `?scopes=${encodeURIComponent(scopes.join(','))}` : '';
     const authWindow = window.open(
-      `/api/auth/${provider}/login`,
+      `/api/auth/${provider}/login${queryParams}`,
       'oauth_popup',
       `width=${width},height=${height},left=${left},top=${top}`
     );
@@ -30,7 +31,7 @@ export class OAuthService {
     currentSettings: AppSettings
   ): AppSettings | null {
     const origin = event.origin;
-    if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+    if (!origin || (!origin.endsWith('.run.app') && !origin.includes('localhost'))) {
       return null;
     }
 

@@ -1,11 +1,24 @@
-# ASynX — Cross-Platform Anime & Drama Sync Studio
+<div align="center" width="100%">
+  <table width="100%" style="border: 0 !important; border-collapse: collapse !important; background: transparent !important;">
+    <tr style="border: 0 !important; background: transparent !important;">
+      <td align="left" valign="top" style="border: 0 !important; width: 90%; padding: 0; background: transparent !important;">
+        <h1 style="border: 0 !important; margin: 0 0 15px 0; padding: 0;">ASynX — Cross-Platform Anime & Drama Sync Studio</h1>
+        <p style="line-height: 0; margin: 0;">
+          <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-00cec9.svg?style=for-the-badge&labelColor=09090b" alt="License: MIT"></a>
+          <a href="https://github.com/JhayceFrancis/ASynX/releases/latest"><img src="https://img.shields.io/github/v/release/JhayceFrancis/ASynX?style=for-the-badge&color=00cec9&labelColor=09090b" alt="Latest Release"></a>
+          <a href="https://github.com/JhayceFrancis/ASynX/actions"><img src="https://img.shields.io/badge/Build-Passing-00cec9.svg?style=for-the-badge&labelColor=09090b" alt="Build Status"></a>
+          <a href="https://github.com/JhayceFrancis/ASynX/actions/workflows/extension-build.yml"><img src="https://img.shields.io/badge/Extension%20Build-Passing-00cec9.svg?style=for-the-badge&labelColor=09090b" alt="Extension Build"></a><br>
+          <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Docker%20%7C%20Browser%20Plugin-00cec9.svg?style=for-the-badge&labelColor=09090b" alt="Platform">
+        </p>
+      </td>
+      <td align="right" valign="top" style="border: 0 !important; width: 20%; padding: 0; background: transparent !important;">
+        <img width="130px" src="https://pub-d39b3710ffb44c21bf92b1e9986c1734.r2.dev/asynx%20800x800%20transparent.png" alt="ASynX logo" style="display: block; border: 0 !important;">
+      </td>
+    </tr>
+  </table>
+</div>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-00cec9.svg?style=for-the-badge&labelColor=09090b)](LICENSE)
-[![Latest Release](https://img.shields.io/github/v/release/JhayceFrancis/ASynX?style=for-the-badge&color=00cec9&labelColor=09090b)](https://github.com/JhayceFrancis/ASynX/releases/latest)
-[![Build Status](https://img.shields.io/badge/Build-Passing-00cec9.svg?style=for-the-badge&labelColor=09090b)](https://github.com/JhayceFrancis/ASynX/actions)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Docker%20%7C%20Browser%20Plugin-00cec9.svg?style=for-the-badge&labelColor=09090b)]()
-
-**ASynX** is an open-source, offline-first, AES-256-GCM encrypted media tracking suite designed to bridge your local media servers (Plex, Tautulli) with cloud tracking platforms (Simkl, MyAnimeList, AniList). 
+## **ASynX** is an open-source, offline-first, AES-256-GCM encrypted media tracking suite designed to bridge your local media servers (Plex, Tautulli) with cloud tracking platforms (Simkl, MyAnimeList, AniList). 
 
 Packed into a modern Windows 11 Fluent dark-themed UI, ASynX acts as your unified source of truth for Anime and Drama progress.
 

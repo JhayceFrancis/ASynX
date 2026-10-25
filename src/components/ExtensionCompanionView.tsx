@@ -21,6 +21,7 @@ import {
   Terminal
 } from 'lucide-react';
 import { ASynXLogo } from './ASynXLogo';
+import { LocalPlayerScrobblerModal } from './LocalPlayerScrobblerModal';
 
 interface ExtensionCompanionViewProps {
   state: BrowserExtensionState;
@@ -54,6 +55,7 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
   const [editTitle, setEditTitle] = useState(state.currentMedia?.title || '');
   const [editSeason, setEditSeason] = useState(state.currentMedia?.season || 1);
   const [editEpisode, setEditEpisode] = useState(state.currentMedia?.episode || 1);
+  const [isScrobblerModalOpen, setIsScrobblerModalOpen] = useState(false);
 
   // Active status based on settings
   const isExtensionEngineActive = settings?.extensionEnabled ?? state.installed;
@@ -125,7 +127,15 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
             Simulates real-time video player detection & auto-scroobling on Windows desktop apps (MPC-BE, VLC, Plex, Stremio) and web streaming portals (Crunchyroll, Netflix, HiDive).
           </p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsScrobblerModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 text-xs font-semibold flex items-center space-x-1.5 shadow-sm transition-colors"
+          >
+            <Monitor className="w-3.5 h-3.5" />
+            <span>Local Player Scrobbler (VLC / MPC / Stremio / WMP)</span>
+          </button>
           {isExtensionEngineActive ? (
           <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-semibold flex items-center space-x-1.5">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
@@ -367,7 +377,6 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
                     value={backendUrl}
                     onChange={(e) => { setBackendUrl(e.target.value); setConnectionStatus('disconnected'); }}
                     className="flex-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-4 py-2.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                    placeholder={`http://localhost:${import.meta.env.VITE_PORT || 3000}`}
                   />
                 </div>
               </div>
@@ -381,7 +390,6 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
                     value={apiKey}
                     onChange={(e) => { setApiKey(e.target.value); setConnectionStatus('disconnected'); }}
                     className="flex-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-4 py-2.5 text-xs text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
-                    placeholder="Enter your sync API key"
                   />
                 </div>
               </div>
@@ -515,6 +523,12 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
           </div>
         </div>
       )}
+
+      <LocalPlayerScrobblerModal
+        isOpen={isScrobblerModalOpen}
+        onClose={() => setIsScrobblerModalOpen(false)}
+        settings={settings}
+      />
     </div>
   );
 };
