@@ -142,7 +142,6 @@ export const DashboardLayoutManager: React.FC<DashboardLayoutManagerProps> = ({
                     <input
                       type="text"
                       autoFocus
-                      placeholder="Name this layout..."
                       value={newLayoutName}
                       onChange={(e) => setNewLayoutName(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSaveCurrent()}

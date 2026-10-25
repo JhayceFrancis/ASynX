@@ -132,9 +132,12 @@ class SyncEngine {
    */
   async _fetchSimklExternalIds(simklId, mediaType = 'anime') {
     const endpoint = mediaType === 'movie' ? 'movies' : (mediaType === 'tv' ? 'tv' : 'anime');
+    const normalisedSimklId = String(simklId ?? '').trim();
+    if (!/^\d+$/.test(normalisedSimklId)) return {};
+
     try {
       const res = await fetch(
-        `https://api.simkl.com/${endpoint}/${simklId}?extended=full&client_id=${this.config.simklClientId}`
+        `https://api.simkl.com/${endpoint}/${Number(normalisedSimklId)}?extended=full&client_id=${this.config.simklClientId}`
       );
       if (!res.ok) return {};
       const data = await res.json();

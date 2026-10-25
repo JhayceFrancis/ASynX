@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, Zap, Compass, Settings, Calendar, MessageSquare, Layers, AlertTriangle, Tv, Sun, Moon, Terminal, Server, Activity, Database, Bookmark, LayoutDashboard, Palette, LogOut } from 'lucide-react';
+import { RefreshCw, Zap, Compass, Settings, Calendar, MessageSquare, Layers, AlertTriangle, Tv, Sun, Moon, Terminal, Server, Activity, Database, Bookmark, LayoutDashboard, Palette, LogOut, Network } from 'lucide-react';
 import { AppSettings, BrowserExtensionState, NotificationItem } from '../types';
 import NotificationTicker from './NotificationTicker';
 import { useAuth } from '../AuthContext';
@@ -59,6 +59,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       {(() => {
                 switch(activeTab) {
                   case 'matrix': return <><Layers className="w-5 h-5 text-indigo-500" /><span>Sync Matrix</span></>;
+                  case 'topology': return <><Network className="w-5 h-5 text-sky-500" /><span>Sync Topology</span></>;
                   case 'conflicts': return <><AlertTriangle className="w-5 h-5 text-amber-500" /><span>Conflict Resolution</span></>;
                   
                   case 'plex': return <><Tv className="w-5 h-5 text-purple-500" /><span>Plex & Tautulli Automation</span></>;
@@ -271,6 +272,12 @@ export const Navbar: React.FC<NavbarProps> = ({
     {'Sync Matrix'}
   </span>
 </motion.button>
+               <motion.button layoutId="tab-topology" onClick={() => setActiveTab('topology')} className={`group relative flex items-center p-1.5 rounded-xl transition-all cursor-pointer overflow-hidden ${activeTab === 'topology' ? 'bg-sky-600/20 text-sky-600 dark:text-sky-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}>
+  <Network className="w-4 h-4 flex-shrink-0" />
+  <span className="max-w-0 opacity-0 group-hover:max-w-[160px] group-active:max-w-[160px] group-hover:opacity-100 group-active:opacity-100 group-hover:ml-1.5 group-active:ml-1.5 transition-all duration-300 whitespace-nowrap text-[11px] font-semibold">
+    {'Sync Topology & Flow'}
+  </span>
+</motion.button>
 
                <motion.button layoutId="tab-schedule" onClick={() => setActiveTab('schedule')} className={`group relative flex items-center p-1.5 rounded-xl transition-all cursor-pointer overflow-hidden ${activeTab === 'schedule' ? 'bg-fuchsia-600/20 text-fuchsia-600 dark:text-fuchsia-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}>
   <Calendar className="w-4 h-4 flex-shrink-0" />
@@ -388,6 +395,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   <Layers className="w-4 h-4 flex-shrink-0" />
   <span className="max-w-0 opacity-0 group-hover:max-w-[160px] group-active:max-w-[160px] group-hover:opacity-100 group-active:opacity-100 group-hover:ml-1.5 group-active:ml-1.5 transition-all duration-300 whitespace-nowrap text-[11px] font-semibold">
     {'Sync Matrix'}
+  </span>
+</motion.button>
+               <motion.button layoutId="tab-topology" onClick={() => setActiveTab('topology')} className={`group relative flex items-center p-1.5 rounded-xl transition-all cursor-pointer overflow-hidden ${activeTab === 'topology' ? 'bg-sky-600/20 text-sky-600 dark:text-sky-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}>
+  <Network className="w-4 h-4 flex-shrink-0" />
+  <span className="max-w-0 opacity-0 group-hover:max-w-[160px] group-active:max-w-[160px] group-hover:opacity-100 group-active:opacity-100 group-hover:ml-1.5 group-active:ml-1.5 transition-all duration-300 whitespace-nowrap text-[11px] font-semibold">
+    {'Sync Topology & Flow'}
   </span>
 </motion.button>
                <motion.button layoutId="tab-conflicts" onClick={() => setActiveTab('conflicts')} className={`group relative flex items-center p-1.5 rounded-xl transition-all cursor-pointer overflow-hidden ${activeTab === 'conflicts' ? 'bg-amber-600/20 text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#111]'}`}>

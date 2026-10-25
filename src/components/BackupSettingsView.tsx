@@ -155,7 +155,6 @@ export const BackupSettingsView: React.FC<BackupSettingsViewProps> = ({ formStat
                 <label className="text-gray-600 dark:text-gray-400 font-medium text-xs">Auth Token (Personal Access Token / OAuth Refresh Token)</label>
                 <input
                   type="password"
-                  placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
                   value={formState.automatedBackups.token || ''}
                   onChange={(e) => setFormState(prev => ({ ...prev, automatedBackups: { ...prev.automatedBackups!, token: e.target.value } }))}
                   className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 font-mono text-xs"
@@ -166,7 +165,6 @@ export const BackupSettingsView: React.FC<BackupSettingsViewProps> = ({ formStat
                 <label className="text-gray-600 dark:text-gray-400 font-medium text-xs">Encryption Key (AES-256)</label>
                 <input
                   type="password"
-                  placeholder="Optional secret to encrypt backup as asynx_data.enc"
                   value={formState.automatedBackups.encryptionKey || ''}
                   onChange={(e) => setFormState(prev => ({ ...prev, automatedBackups: { ...prev.automatedBackups!, encryptionKey: e.target.value } }))}
                   className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 font-mono text-xs"
@@ -177,7 +175,6 @@ export const BackupSettingsView: React.FC<BackupSettingsViewProps> = ({ formStat
                 <label className="text-gray-600 dark:text-gray-400 font-medium text-xs">Target ID (Gist ID, Repo Name, or Folder ID)</label>
                 <input
                   type="text"
-                  placeholder="Leave blank to create new (Gist only)"
                   value={formState.automatedBackups.targetId || ''}
                   onChange={(e) => setFormState(prev => ({ ...prev, automatedBackups: { ...prev.automatedBackups!, targetId: e.target.value } }))}
                   className="w-full mt-1 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 font-mono text-xs"

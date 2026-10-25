@@ -52,29 +52,54 @@ function initDb() {
         updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    try { db.exec("ALTER TABLE oauth_credentials ADD COLUMN redirectUri TEXT"); } catch (e) {}
+    try { db.exec("ALTER TABLE oauth_credentials ADD COLUMN serverUri TEXT"); } catch (e) {}
+    try { db.exec("ALTER TABLE oauth_credentials ADD COLUMN token TEXT"); } catch (e) {}
+    try { db.exec("ALTER TABLE oauth_credentials ADD COLUMN configJson TEXT"); } catch (e) {}
   }
 }
 
-export function getOAuthCredentials(provider: string) {
+export function getOAuthCredentials(provider: string): Record<string, any> | null {
   initDb();
-  const row = db.prepare('SELECT clientId, clientSecret FROM oauth_credentials WHERE provider = ?').get(provider) as { clientId: string, clientSecret: string } | undefined;
+  const row = db.prepare('SELECT clientId, clientSecret, redirectUri, serverUri, token, configJson FROM oauth_credentials WHERE provider = ?').get(provider) as any;
   if (!row) return null;
+  let fullConfig: Record<string, any> = {};
+  if (row.configJson) {
+    try {
+      const decrypted = decryptString(row.configJson);
+      fullConfig = JSON.parse(decrypted);
+    } catch (e) {}
+  }
   return {
-    clientId: decryptString(row.clientId),
-    clientSecret: decryptString(row.clientSecret)
+    ...fullConfig,
+    clientId: row.clientId ? decryptString(row.clientId) : (fullConfig.clientId || undefined),
+    clientSecret: row.clientSecret ? decryptString(row.clientSecret) : (fullConfig.clientSecret || undefined),
+    redirectUri: row.redirectUri ? decryptString(row.redirectUri) : (fullConfig.redirectUri || undefined),
+    serverUri: row.serverUri ? decryptString(row.serverUri) : (fullConfig.serverUri || fullConfig.serverUrl || undefined),
+    serverUrl: row.serverUri ? decryptString(row.serverUri) : (fullConfig.serverUrl || fullConfig.serverUri || undefined),
+    token: row.token ? decryptString(row.token) : (fullConfig.token || fullConfig.apiKey || fullConfig.accessToken || fullConfig.secretKey || undefined)
   };
 }
 
-export function saveOAuthCredentials(provider: string, clientId: string, clientSecret: string) {
+export function saveOAuthCredentials(provider: string, creds: any) {
   initDb();
-  const encryptedId = encryptString(clientId);
-  const encryptedSecret = encryptString(clientSecret);
+  const encryptedId = creds.clientId ? encryptString(creds.clientId) : null;
+  const encryptedSecret = creds.clientSecret ? encryptString(creds.clientSecret) : null;
+  const encryptedRedirect = creds.redirectUri ? encryptString(creds.redirectUri) : null;
+  const encryptedServer = (creds.serverUri || creds.serverUrl) ? encryptString(creds.serverUri || creds.serverUrl) : null;
+  const encryptedToken = (creds.token || creds.apiKey || creds.accessToken || creds.secretKey) ? encryptString(creds.token || creds.apiKey || creds.accessToken || creds.secretKey) : null;
+  const encryptedConfig = encryptString(JSON.stringify(creds));
+  
   db.prepare(`
-    INSERT INTO oauth_credentials (provider, clientId, clientSecret, updatedAt)
-    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    INSERT INTO oauth_credentials (provider, clientId, clientSecret, redirectUri, serverUri, token, configJson, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(provider) DO UPDATE SET 
       clientId = excluded.clientId,
       clientSecret = excluded.clientSecret,
+      redirectUri = excluded.redirectUri,
+      serverUri = excluded.serverUri,
+      token = excluded.token,
+      configJson = excluded.configJson,
       updatedAt = excluded.updatedAt
-  `).run(provider, encryptedId, encryptedSecret);
+  `).run(provider, encryptedId, encryptedSecret, encryptedRedirect, encryptedServer, encryptedToken, encryptedConfig);
 }

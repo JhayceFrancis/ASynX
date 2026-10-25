@@ -28,6 +28,7 @@ const AccountView = React.lazy(() => import('./components/AccountView'));
 const DockerBackendView = React.lazy(() => import('./components/DockerBackendView').then(module => ({ default: module.DockerBackendView })));
 const SystemHealthView = React.lazy(() => import('./components/SystemHealthView').then(module => ({ default: module.SystemHealthView })));
 const SyncPerformanceView = React.lazy(() => import('./components/SyncPerformanceView').then(module => ({ default: module.SyncPerformanceView })));
+const SyncTopologyView = React.lazy(() => import('./components/SyncTopologyView').then(module => ({ default: module.SyncTopologyView })));
 const BookmarkTab = React.lazy(() => import('./components/bookmarks/BookmarkTab').then(module => ({ default: module.BookmarkTab })));
 import { OverrideModal } from './components/OverrideModal';
 import { ToastContainer, ToastMessage, ToastType } from './components/ToastContainer';
@@ -795,6 +796,20 @@ export default function App() {
               onUndoAction={handleUndoSync}
               isEditMode={isEditMode}
               onSaveSettings={handleSaveSettings}
+            />
+          )}
+
+          {activeTab === 'topology' && (
+            <SyncTopologyView
+              settings={settings}
+              items={items}
+              logs={syncLogs}
+              webhookLogs={webhookLogs}
+              extensionState={extensionState}
+              isSyncing={isSyncing}
+              onTriggerSync={handleTriggerSync}
+              onNavigateSettings={() => setActiveTab('settings')}
+              addToast={addToast}
             />
           )}
 

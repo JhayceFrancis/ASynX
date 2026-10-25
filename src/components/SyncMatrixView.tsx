@@ -813,10 +813,9 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
                   <Search className="w-4 h-4 text-gray-600 dark:text-gray-400 absolute left-3 top-2.5" />
                   <input
                     type="text"
-                    placeholder="Search anime or drama title..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500 placeholder:text-gray-500 dark:text-gray-500"
+                    className="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-900 rounded-xl text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
                 
