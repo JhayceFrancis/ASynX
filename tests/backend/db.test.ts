@@ -216,6 +216,53 @@ describe('db.ts encryption', () => {
     expect(() => decryptData(corruptedEncryptedStr)).toThrow();
   });
 
+  it('should fail to decrypt if invalid JSON string is passed', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    expect(() => decryptData('not a json string')).toThrow();
+  });
+
+  it('should fail to decrypt if iv is missing', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const data = { authTag: '00', encryptedData: '00' };
+    expect(() => decryptData(JSON.stringify(data))).toThrow();
+  });
+
+  it('should fail to decrypt if authTag is missing', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const data = { iv: '00', encryptedData: '00' };
+    expect(() => decryptData(JSON.stringify(data))).toThrow();
+  });
+
+  it('should fail to decrypt if encryptedData is missing', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const data = { iv: '00', authTag: '00' };
+    expect(() => decryptData(JSON.stringify(data))).toThrow();
+  });
+
+  it('should fail to decrypt if decrypted string is not a valid JSON', () => {
+    const predefinedKey = crypto.randomBytes(32);
+    vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
+
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-gcm', predefinedKey, iv);
+    let encrypted = cipher.update('not valid json', 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const authTag = cipher.getAuthTag().toString('hex');
+
+    expect(() => decryptData(JSON.stringify({
+      iv: iv.toString('hex'),
+      encryptedData: encrypted,
+      authTag: authTag
+    }))).toThrow();
+  });
   it('should fail to decrypt if payload is invalid JSON', () => {
     const predefinedKey = crypto.randomBytes(32);
     vi.mocked(fs.readFileSync).mockImplementation(() => predefinedKey);
