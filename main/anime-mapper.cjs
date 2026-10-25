@@ -49,7 +49,7 @@ class AnimeMapper {
           console.log(`[AnimeMapper] Fetched TheXEM mapping for TVDB ID ${tvdbId}`);
           return parsed.data;
       }
-    } catch {
+    } catch (_) {
       // Ignore
     }
     return null;
