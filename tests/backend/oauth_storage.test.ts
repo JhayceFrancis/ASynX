@@ -43,7 +43,7 @@ describe('OAuth Storage Module', () => {
   });
 
   it('saves and retrieves OAuth credentials', () => {
-    saveOAuthCredentials('github-test', 'gh-client-id', 'gh-client-secret');
+    saveOAuthCredentials('github-test', { clientId: 'gh-client-id', clientSecret: 'gh-client-secret' });
 
     const creds = getOAuthCredentials('github-test');
     expect(creds).not.toBeNull();
@@ -52,8 +52,8 @@ describe('OAuth Storage Module', () => {
   });
 
   it('updates existing OAuth credentials on conflict', () => {
-    saveOAuthCredentials('discord-test', 'discord-client-id', 'discord-client-secret');
-    saveOAuthCredentials('discord-test', 'new-client-id', 'new-client-secret');
+    saveOAuthCredentials('discord-test', { clientId: 'discord-client-id', clientSecret: 'discord-client-secret' });
+    saveOAuthCredentials('discord-test', { clientId: 'new-client-id', clientSecret: 'new-client-secret' });
 
     const creds = getOAuthCredentials('discord-test');
     expect(creds).not.toBeNull();
