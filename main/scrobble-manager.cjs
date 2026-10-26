@@ -167,8 +167,8 @@ class ScrobbleManager {
           }
         });
       }
-    } catch (e) {
-      console.error('[ScrobbleManager] Flush error:', e.message);
+    } catch {
+      console.error('[ScrobbleManager] Flush error');
     }
   }
 
