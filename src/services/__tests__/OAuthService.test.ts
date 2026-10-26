@@ -38,6 +38,51 @@ describe('OAuthService', () => {
       );
     });
 
+    it('should append single scope to query parameters', () => {
+      OAuthService.initiateLogin('simkl', ['read']);
+
+      const expectedWidth = 600;
+      const expectedHeight = 700;
+      const expectedLeft = 1024 / 2 - expectedWidth / 2 + 0;
+      const expectedTop = 768 / 2 - expectedHeight / 2 + 0;
+
+      expect(windowOpenSpy).toHaveBeenCalledWith(
+        '/api/auth/simkl/login?scopes=read',
+        'oauth_popup',
+        `width=${expectedWidth},height=${expectedHeight},left=${expectedLeft},top=${expectedTop}`
+      );
+    });
+
+    it('should append multiple scopes correctly URL-encoded to query parameters', () => {
+      OAuthService.initiateLogin('simkl', ['read', 'write']);
+
+      const expectedWidth = 600;
+      const expectedHeight = 700;
+      const expectedLeft = 1024 / 2 - expectedWidth / 2 + 0;
+      const expectedTop = 768 / 2 - expectedHeight / 2 + 0;
+
+      expect(windowOpenSpy).toHaveBeenCalledWith(
+        '/api/auth/simkl/login?scopes=read%2Cwrite',
+        'oauth_popup',
+        `width=${expectedWidth},height=${expectedHeight},left=${expectedLeft},top=${expectedTop}`
+      );
+    });
+
+    it('should not append scopes if scopes array is empty', () => {
+      OAuthService.initiateLogin('simkl', []);
+
+      const expectedWidth = 600;
+      const expectedHeight = 700;
+      const expectedLeft = 1024 / 2 - expectedWidth / 2 + 0;
+      const expectedTop = 768 / 2 - expectedHeight / 2 + 0;
+
+      expect(windowOpenSpy).toHaveBeenCalledWith(
+        '/api/auth/simkl/login',
+        'oauth_popup',
+        `width=${expectedWidth},height=${expectedHeight},left=${expectedLeft},top=${expectedTop}`
+      );
+    });
+
     it('should alert if popup is blocked', () => {
       windowOpenSpy.mockImplementation(() => null);
 
@@ -98,7 +143,7 @@ describe('OAuthService', () => {
       expect(result).toBeNull();
     });
 
-    it('should update simkl settings correctly', () => {
+    it('should update simkl settings correctly on successful handshake', () => {
       const event = new MessageEvent('message', {
         origin: 'https://app-name.run.app',
         data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'simkl', token: 'simkl-token' }
@@ -109,11 +154,12 @@ describe('OAuthService', () => {
       expect(result).not.toBeNull();
       expect(result?.simkl.accessToken).toBe('simkl-token');
       expect(result?.simkl.connected).toBe(true);
+      expect(result?.simkl.clientId).toBe('client_123'); // Should preserve existing properties
       // Verify other settings weren't mutated
       expect(result?.mal.connected).toBe(false);
     });
 
-    it('should update mal settings correctly', () => {
+    it('should update mal settings correctly on successful handshake', () => {
       const event = new MessageEvent('message', {
         origin: 'http://localhost:5173',
         data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'mal', token: 'mal-token' }
@@ -124,9 +170,10 @@ describe('OAuthService', () => {
       expect(result).not.toBeNull();
       expect(result?.mal.accessToken).toBe('mal-token');
       expect(result?.mal.connected).toBe(true);
+      expect(result?.mal.clientId).toBe('client_456'); // Should preserve existing properties
     });
 
-    it('should update anilist settings correctly', () => {
+    it('should update anilist settings correctly on successful handshake', () => {
       const event = new MessageEvent('message', {
         origin: 'http://localhost:8080',
         data: { type: 'OAUTH_AUTH_SUCCESS', provider: 'anilist', token: 'anilist-token' }
@@ -137,6 +184,7 @@ describe('OAuthService', () => {
       expect(result).not.toBeNull();
       expect(result?.anilist.accessToken).toBe('anilist-token');
       expect(result?.anilist.connected).toBe(true);
+      expect(result?.anilist.clientId).toBe('client_789'); // Should preserve existing properties
     });
 
     it('should ignore valid messages without matching provider', () => {
