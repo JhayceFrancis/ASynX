@@ -3897,6 +3897,11 @@ app.post("/api/remote-sync/receive", proxyLimiter, (req, res) => {
           ...incomingSettings?.plex,
           serverUrl: appSettings?.plex?.serverUrl
         },
+        karakeep: {
+          ...appSettings?.karakeep,
+          ...incomingSettings?.karakeep,
+          apiUrl: appSettings?.karakeep?.apiUrl
+        },
         jellyfin: {
           ...appSettings?.jellyfin,
           ...incomingSettings?.jellyfin,
@@ -4312,7 +4317,9 @@ async function synchroniseToKarakeep(mediaId: string, episodeProgress: number, a
   try {
     SystemLogger.info('Synchronisation', `Pushing episode update to Karakeep for Media ID: ${mediaId}`);
 
-    const karakeepRes = await fetch(createSafeUrl(`${apiUrl}/api/v1/sync`), {
+    const allowedKarakeepHost = new URL(appSettings.karakeep.apiUrl).hostname;
+    const syncUrl = new URL('/api/v1/sync', apiUrl).toString();
+    const karakeepRes = await fetch(createSafeUrl(syncUrl, allowedKarakeepHost), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
