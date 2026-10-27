@@ -88,7 +88,7 @@
     "recharts": "^3.10.1",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.4",
-    "tailwind-merge": "^3.6.0",
+    "tailwind-merge": "^3.7.0",
     "tiny-csrf": "^1.1.6"
   },
   "devDependencies": {
