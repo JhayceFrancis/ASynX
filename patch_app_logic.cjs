@@ -77,8 +77,8 @@ content = content.replace(
 );
 
 content = content.replace(
-  "try { return JSON.parse(saved); } catch (e) {}",
-  "try { return handlePushNotificationSupport(JSON.parse(saved)); } catch (e) {}"
+  "try { return JSON.parse(saved); } catch {}",
+  "try { return handlePushNotificationSupport(JSON.parse(saved)); } catch {}"
 );
 
 fs.writeFileSync('src/App.tsx', content);

@@ -97,7 +97,7 @@ export function loadDb(defaultData: any): any {
   try {
     fs.accessSync(dataDir, fs.constants.W_OK);
     logMaintenance('Storage directory write permissions verified successfully.');
-  } catch (err) {
+  } catch {
     logError('Storage directory write permission denied. Database mounting may fail.');
   }
   
@@ -107,7 +107,7 @@ export function loadDb(defaultData: any): any {
       const decrypted = decryptData(data);
       logMaintenance('Cryptographic integrity check passed.');
       return decrypted;
-    } catch (err) {
+    } catch {
       logWarn("Failed to decrypt DB (Cryptographic integrity check failed or file corrupted). Initiating automatic recovery...");
       logMaintenance("Cryptographic integrity check failed.");
       

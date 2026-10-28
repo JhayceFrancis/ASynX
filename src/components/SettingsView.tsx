@@ -149,7 +149,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             } else {
               setImportQueue(prev => prev.map(q => q.id === nextPending.id ? { ...q, status: 'error', error: 'No valid records found.' } : q));
             }
-          } catch (err) {
+          } catch {
             setImportQueue(prev => prev.map(q => q.id === nextPending.id ? { ...q, status: 'error', error: 'Failed to parse file.' } : q));
           }
         };
@@ -846,7 +846,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   } else {
                     alert(data.error || 'Failed to push');
                   }
-                } catch (err) {
+                } catch {
                   alert('Network error while pushing to remote server.');
                 }
               }}
@@ -865,7 +865,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   } else {
                     alert(data.error || 'Failed to pull');
                   }
-                } catch (err) {
+                } catch {
                   alert('Network error while pulling from remote server.');
                 }
               }}
@@ -966,7 +966,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   } else {
                     alert(data.error || 'Failed to connect. Invalid API Key or Server.');
                   }
-                } catch (err) {
+                } catch {
                   alert("Failed to connect to the server. Is it running and reachable?");
                 }
               }}
@@ -1411,7 +1411,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           alert('No valid records found in file.');
                         }
                         e.target.value = ''; // Reset input
-                      } catch (err) {
+                      } catch {
                         alert('Failed to parse file.');
                       }
                     };
@@ -1433,7 +1433,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         } else {
                           alert(data.error || 'Failed to import file.');
                         }
-                      } catch (err) {
+                      } catch {
                         alert('Network error while uploading file.');
                       }
                     };
@@ -2028,7 +2028,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   a.download = `asynx_gdpr_export_${new Date().toISOString().split('T')[0]}.json`;
                   a.click();
                   if (addToast) addToast('success', 'Data Exported', 'Your personal data archive has been downloaded.');
-                } catch (e: any) {
+                } catch {
                   // Fallback to local storage if API fails
                   const data = {
                     settings: JSON.parse(localStorage.getItem('asynx_settings') || '{}'),
@@ -2125,7 +2125,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               } else {
                 setImportQueue(prev => prev.map(q => q.id === currentId ? { ...q, status: 'error', error: data.error || 'Failed to import' } : q));
               }
-            } catch (err) {
+            } catch {
               if (importState) {
                 setImportQueue(prev => prev.map(q => q.id === importState.id ? { ...q, status: 'error', error: 'Network error.' } : q));
               }

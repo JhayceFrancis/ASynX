@@ -27,7 +27,7 @@ const oldSimklHandshake = `  // Validate Simkl Credentials
             }
             incomingSettings.simkl.connected = true;
             SystemLogger.success('Handshake', 'Simkl credentials validated successfully.');
-         } catch (e: any) {
+         } catch {
             return res.status(500).json({ success: false, error: "Failed to connect to Simkl API." });
          }
      }
@@ -57,7 +57,7 @@ const newSimklHandshake = `  // Validate Simkl Credentials
             }
             incomingSettings.simkl.connected = true;
             SystemLogger.success('Handshake', 'Simkl credentials validated successfully.');
-         } catch (e: any) {
+         } catch {
             clearTimeout(timeoutId);
             SystemLogger.error('Handshake', 'Network failure whilst validating Simkl credentials.');
             return res.status(500).json({ success: false, error: "Failed to connect to Simkl API." });

@@ -117,7 +117,7 @@ global.fetch = async (input, init) => {
                if (parsedUrl.hostname === new URL(settingUrl).hostname) {
                    isAllowed = true;
                }
-            } catch (e: any) {}
+            } catch {}
          }
        };
 
@@ -459,7 +459,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-chang
       const decoded = jwt.verify(token, JWT_SECRET);
       req.user = decoded;
       next();
-    } catch (err) {
+    } catch {
       return res.status(401).json({ error: 'Invalid token' });
     }
   };
@@ -1108,7 +1108,7 @@ app.get("/api/daemon/health", async (req, res) => {
       await fetch(createSafeUrl(pingUrl), { ...fetchOpts, signal: controller.signal });
       clearTimeout(id);
       return { connected: true, status: 'operational', latencyMs: Date.now() - start };
-    } catch (e: any) {
+    } catch {
       return { connected: true, status: 'degraded', latencyMs: 0 };
     }
   };
@@ -1270,7 +1270,7 @@ app.post("/api/settings", async (req, res) => {
             }
             incomingSettings.simkl.connected = true;
             SystemLogger.success('Handshake', 'Simkl credentials validated successfully.');
-         } catch (e: any) {
+         } catch {
             clearTimeout(timeoutId);
             SystemLogger.error('Handshake', 'Network failure whilst validating Simkl credentials.');
             return res.status(500).json({ success: false, error: "Failed to connect to Simkl API." });
@@ -1303,7 +1303,7 @@ app.post("/api/settings", async (req, res) => {
             }
             incomingSettings.mal.connected = true;
             SystemLogger.success('Handshake', 'MyAnimeList credentials validated successfully.');
-         } catch (e: any) {
+         } catch {
             clearTimeout(timeoutId);
             SystemLogger.error('Handshake', 'Network failure whilst validating MyAnimeList credentials.');
             return res.status(500).json({ success: false, error: "Failed to connect to MyAnimeList API." });
@@ -1348,7 +1348,7 @@ app.post("/api/settings", async (req, res) => {
             }
             incomingSettings.anilist.connected = true;
             SystemLogger.success('Handshake', 'AniList credentials validated successfully.');
-         } catch (e: any) {
+         } catch {
             clearTimeout(timeoutId);
             SystemLogger.error('Handshake', 'Network failure whilst validating AniList credentials.');
             return res.status(500).json({ success: false, error: "Failed to connect to AniList API." });
@@ -1391,7 +1391,7 @@ app.post("/api/settings", async (req, res) => {
 
             incomingSettings.plex.connected = true;
             SystemLogger.success('Handshake', 'Plex server validated successfully.');
-         } catch (e: any) {
+         } catch {
             SystemLogger.error('Handshake', 'Plex server unreachable.');
             return res.status(500).json({ success: false, error: "Failed to connect to Plex server." });
          }
@@ -1419,7 +1419,7 @@ app.post("/api/settings", async (req, res) => {
             }
             incomingSettings.jellyfin.connected = true;
             SystemLogger.success('Handshake', 'Jellyfin server validated successfully.');
-         } catch (e: any) {
+         } catch {
             SystemLogger.error('Handshake', 'Jellyfin server unreachable.');
             return res.status(500).json({ success: false, error: "Failed to connect to Jellyfin server." });
          }
@@ -1447,7 +1447,7 @@ app.post("/api/settings", async (req, res) => {
             }
             incomingSettings.emby.connected = true;
             SystemLogger.success('Handshake', 'Emby server validated successfully.');
-         } catch (e: any) {
+         } catch {
             SystemLogger.error('Handshake', 'Emby server unreachable.');
             return res.status(500).json({ success: false, error: "Failed to connect to Emby server." });
          }
@@ -1478,7 +1478,7 @@ app.post("/api/settings", async (req, res) => {
             }
             incomingSettings.karakeep.connected = true;
             SystemLogger.success('Handshake', 'Karakeep server validated successfully.');
-         } catch (e: any) {
+         } catch {
             SystemLogger.error('Handshake', 'Karakeep server unreachable.');
             return res.status(500).json({ success: false, error: "Failed to connect to Karakeep server." });
          }
@@ -2197,7 +2197,7 @@ Respond ONLY with valid JSON in this exact structure:
 
     const parsed = JSON.parse(response.text || "{}");
     res.json(parsed);
-  } catch (err: any) {
+  } catch {
     res.json({
       recommendation: {
         sourceOfTruth: "anilist",
@@ -2268,7 +2268,7 @@ Return JSON in this format:
       ...parsed,
       matchedItem
     });
-  } catch (err: unknown) {
+  } catch {
     res.json({
       parsedTitle: filename,
       season: 1,
@@ -2290,7 +2290,7 @@ app.post("/api/webhooks/plex", (req, res) => {
   if (typeof payload.payload === 'string') {
     try {
       payload = JSON.parse(payload.payload);
-    } catch (e: any) {
+    } catch {
       // payload stays as is
     }
   }
@@ -2614,7 +2614,7 @@ app.post("/api/webhooks/emby", (req, res) => {
   if (typeof payload.data === 'string') {
     try {
       payload = JSON.parse(payload.data);
-    } catch (e: any) {}
+    } catch {}
   }
   
   const event = payload.Event || "playback.stop";
@@ -2776,7 +2776,7 @@ async function dispatchPushNotifications(title: string, message: string, type: "
           }]
         })
       });
-    } catch (e) {
+    } catch {
       SystemLogger.error('Notification', 'Failed to send Discord webhook.');
     }
   }
@@ -2793,7 +2793,7 @@ async function dispatchPushNotifications(title: string, message: string, type: "
           type: type === 'error' ? 'failure' : type // apprise types: info, success, warning, failure
         })
       });
-    } catch (e) {
+    } catch {
       SystemLogger.error('Notification', 'Failed to send Apprise webhook.');
     }
   }
@@ -2814,7 +2814,7 @@ async function triggerOutboundSync(item: LibraryItem, targetEpisode: number) {
         item.platforms.simkl.episode = targetEpisode;
         item.platforms.simkl.synced = true;
       }
-    } catch (e) { errors.push('Simkl'); }
+    } catch { errors.push('Simkl'); }
   }
 
   // 2. MAL
@@ -2827,7 +2827,7 @@ async function triggerOutboundSync(item: LibraryItem, targetEpisode: number) {
         item.platforms.mal.episode = targetEpisode;
         item.platforms.mal.synced = true;
       }
-    } catch (e) { errors.push('MAL'); }
+    } catch { errors.push('MAL'); }
   }
 
   // 3. Anilist
@@ -2840,7 +2840,7 @@ async function triggerOutboundSync(item: LibraryItem, targetEpisode: number) {
         item.platforms.anilist.episode = targetEpisode;
         item.platforms.anilist.synced = true;
       }
-    } catch (e) { errors.push('Anilist'); }
+    } catch { errors.push('Anilist'); }
   }
 
   // 4. Karakeep
@@ -2853,7 +2853,7 @@ async function triggerOutboundSync(item: LibraryItem, targetEpisode: number) {
         item.platforms.karakeep.episode = targetEpisode;
         item.platforms.karakeep.synced = true;
       }
-    } catch (e) { errors.push('Karakeep'); }
+    } catch { errors.push('Karakeep'); }
   }
 
   if (platformsSynced.length > 0) {

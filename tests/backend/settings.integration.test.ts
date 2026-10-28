@@ -33,7 +33,7 @@ app.post('/api/settings', async (req, res) => {
       }
       incomingSettings.mal.connected = true;
       mockSystemLogger.success('Handshake', 'MyAnimeList credentials validated successfully.');
-    } catch (e) {
+    } catch {
       return res.status(500).json({ success: false, error: "Failed to connect to MyAnimeList API." });
     }
   }

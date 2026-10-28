@@ -12,7 +12,7 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
          const res = await window.fetch('/api/csrf-token');
          const data = await res.json();
          if (data.csrfToken) csrfToken = data.csrfToken;
-       } catch (e) {}
+       } catch {}
     }
     if (csrfToken) {
        init = init || {};

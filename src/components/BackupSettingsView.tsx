@@ -27,7 +27,7 @@ export const BackupSettingsView: React.FC<BackupSettingsViewProps> = ({ formStat
       } else {
         alert(data.error || 'Backup failed');
       }
-    } catch (err) {
+    } catch {
       alert("Network error.");
     } finally {
       setIsProcessing(false);
@@ -45,7 +45,7 @@ export const BackupSettingsView: React.FC<BackupSettingsViewProps> = ({ formStat
       } else {
         alert(data.error || 'Restore failed');
       }
-    } catch (err) {
+    } catch {
       alert("Network error.");
     } finally {
       setIsProcessing(false);

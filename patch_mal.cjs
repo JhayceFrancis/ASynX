@@ -21,7 +21,7 @@ const oldMalHandshake = `  // Validate MyAnimeList Credentials
             }
             incomingSettings.mal.connected = true;
             SystemLogger.success('Handshake', 'MyAnimeList credentials validated successfully.');
-         } catch (e: any) {
+         } catch {
             return res.status(500).json({ success: false, error: "Failed to connect to MyAnimeList API." });
          }
      }
@@ -52,7 +52,7 @@ const newMalHandshake = `  // Validate MyAnimeList Credentials
             }
             incomingSettings.mal.connected = true;
             SystemLogger.success('Handshake', 'MyAnimeList credentials validated successfully.');
-         } catch (e: any) {
+         } catch {
             clearTimeout(timeoutId);
             SystemLogger.error('Handshake', 'Network failure whilst validating MyAnimeList credentials.');
             return res.status(500).json({ success: false, error: "Failed to connect to MyAnimeList API." });

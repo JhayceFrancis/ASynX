@@ -27,7 +27,7 @@ window.fetch = async (...args) => {
          const res = await originalFetch('/api/csrf-token');
          const data = await res.json();
          if (data.csrfToken) csrfToken = data.csrfToken;
-       } catch (e) {}
+       } catch {}
     }
     if (csrfToken) {
        const headers = new Headers(config?.headers || {});

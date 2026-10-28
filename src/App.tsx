@@ -105,7 +105,7 @@ export default function App() {
         } else {
           ipcRenderer.send('sync-stopped');
         }
-      } catch (err) {
+      } catch {
         // Not running in Electron environment
       }
     }

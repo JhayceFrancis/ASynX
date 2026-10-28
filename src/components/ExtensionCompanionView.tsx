@@ -105,7 +105,7 @@ export const ExtensionCompanionView: React.FC<ExtensionCompanionViewProps> = ({
       } else {
         setConnectionStatus('disconnected');
       }
-    } catch (e) {
+    } catch {
       setConnectionStatus('disconnected');
     }
   };

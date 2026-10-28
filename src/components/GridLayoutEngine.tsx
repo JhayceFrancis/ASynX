@@ -31,7 +31,7 @@ export const GridLayoutEngine: React.FC<GridLayoutEngineProps> = ({
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch (e) {}
+      } catch {}
     }
     return defaultLayout;
   });

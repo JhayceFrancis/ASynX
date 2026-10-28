@@ -34,7 +34,7 @@ const oldAnilistHandshake = `  // Validate AniList Credentials
             }
             incomingSettings.anilist.connected = true;
             SystemLogger.success('Handshake', 'AniList credentials validated successfully.');
-         } catch (e: any) {
+         } catch {
             return res.status(500).json({ success: false, error: "Failed to connect to AniList API." });
          }
      }
@@ -77,7 +77,7 @@ const newAnilistHandshake = `  // Validate AniList Credentials
             }
             incomingSettings.anilist.connected = true;
             SystemLogger.success('Handshake', 'AniList credentials validated successfully.');
-         } catch (e: any) {
+         } catch {
             clearTimeout(timeoutId);
             SystemLogger.error('Handshake', 'Network failure whilst validating AniList credentials.');
             return res.status(500).json({ success: false, error: "Failed to connect to AniList API." });

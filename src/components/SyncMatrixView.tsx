@@ -226,7 +226,7 @@ export const SyncMatrixView: React.FC<SyncMatrixViewProps> = ({
     if (settings?.dashboardLayout) return settings.dashboardLayout;
     const saved = localStorage.getItem(storageKey);
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try { return JSON.parse(saved); } catch {}
     }
     return [
       { i: 'metrics', x: 0, y: 0, w: 12, h: 4 },

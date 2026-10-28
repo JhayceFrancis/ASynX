@@ -32,7 +32,7 @@ async function dispatchPushNotifications(title, message, type) {
           }]
         })
       });
-    } catch (e) {
+    } catch {
       SystemLogger.error('Notification', 'Failed to send Discord webhook.');
     }
   }
@@ -49,7 +49,7 @@ async function dispatchPushNotifications(title, message, type) {
           type: type === 'error' ? 'failure' : type // apprise types: info, success, warning, failure
         })
       });
-    } catch (e) {
+    } catch {
       SystemLogger.error('Notification', 'Failed to send Apprise webhook.');
     }
   }
@@ -70,7 +70,7 @@ async function triggerOutboundSync(item, targetEpisode) {
         item.platforms.simkl.episode = targetEpisode;
         item.platforms.simkl.synced = true;
       }
-    } catch (e) { errors.push('Simkl'); }
+    } catch { errors.push('Simkl'); }
   }
 
   // 2. MAL
@@ -83,7 +83,7 @@ async function triggerOutboundSync(item, targetEpisode) {
         item.platforms.mal.episode = targetEpisode;
         item.platforms.mal.synced = true;
       }
-    } catch (e) { errors.push('MAL'); }
+    } catch { errors.push('MAL'); }
   }
 
   // 3. Anilist
@@ -96,7 +96,7 @@ async function triggerOutboundSync(item, targetEpisode) {
         item.platforms.anilist.episode = targetEpisode;
         item.platforms.anilist.synced = true;
       }
-    } catch (e) { errors.push('Anilist'); }
+    } catch { errors.push('Anilist'); }
   }
 
   // 4. Karakeep
@@ -109,7 +109,7 @@ async function triggerOutboundSync(item, targetEpisode) {
         item.platforms.karakeep.episode = targetEpisode;
         item.platforms.karakeep.synced = true;
       }
-    } catch (e) { errors.push('Karakeep'); }
+    } catch { errors.push('Karakeep'); }
   }
 
   if (platformsSynced.length > 0) {
